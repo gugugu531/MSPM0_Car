@@ -1,0 +1,11 @@
+Debug/
+.settings/
+.theia/
+targetConfigs/
+!targetConfigs/
+!targetConfigs/*.ccxml
+!targetConfigs/readme.txt
+**/*.map
+**/*.obj
+**/*.o
+**/*.out
