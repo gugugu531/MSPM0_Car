@@ -1,8 +1,12 @@
+/**
+ * @file  SensorProc.h
+ * @brief 传感信息处理与目标坐标换算接口
+ */
 #ifndef SENSOR_PROC_H
 #define SENSOR_PROC_H
 
-#include <stdbool.h>
 #include "BspCommon.h"
+#include <stdbool.h>
 
 #define PAPERWIDE 315
 #define PAPERHIGHT 212

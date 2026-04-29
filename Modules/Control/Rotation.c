@@ -5,8 +5,7 @@
 #include "Rotation.h"
 #include <math.h>
 
-void rotation_matrix(RotationAngles angles, float matrix[3][3])
-{
+void rotation_matrix(RotationAngles angles, float matrix[3][3]){
     // Calculate the rotation matrix based on yaw, pitch, and roll angles
     float cy = cosf(DEG_TO_RAD(angles.yaw));
     float sy = sinf(DEG_TO_RAD(angles.yaw));
@@ -28,34 +27,26 @@ void rotation_matrix(RotationAngles angles, float matrix[3][3])
     matrix[2][2] = cp * cr;
 }
 
-void matrix_multiplication(float mat1[3][3], float mat2[3][3], float result[3][3])
-{
-    for (int i = 0; i < 3; i++)
-    {
-        for (int j = 0; j < 3; j++)
-        {
+void matrix_multiplication(float mat1[3][3], float mat2[3][3], float result[3][3]){
+    for (int i = 0; i < 3; i++){
+        for (int j = 0; j < 3; j++){
             result[i][j] = 0;
-            for (int k = 0; k < 3; k++)
-            {
+            for (int k = 0; k < 3; k++){
                 result[i][j] += mat1[i][k] * mat2[k][j];
             }
         }
     }
 }
 
-void matrix_transpose(float matrix[3][3], float result[3][3])
-{
-    for (int i = 0; i < 3; i++)
-    {
-        for (int j = 0; j < 3; j++)
-        {
+void matrix_transpose(float matrix[3][3], float result[3][3]){
+    for (int i = 0; i < 3; i++){
+        for (int j = 0; j < 3; j++){
             result[j][i] = matrix[i][j];
         }
     }
 }
 
-void matrix_to_angles(float matrix[3][3], RotationAngles *angles)
-{
+void matrix_to_angles(float matrix[3][3], RotationAngles *angles){
     angles->yaw = RAD_TO_DEG(atan2f(matrix[1][0], matrix[0][0]));
     angles->pitch = RAD_TO_DEG(atan2f(-matrix[2][0], sqrtf(matrix[2][1] * matrix[2][1] + matrix[2][2] * matrix[2][2])));
     angles->roll = RAD_TO_DEG(atan2f(matrix[2][1], matrix[2][2]));

@@ -4,10 +4,10 @@ BSP_Status Motor_Init(Motor *M,
         GPIO_Regs *p_port, uint32_t p_pin,
         GPIO_Regs *n_port, uint32_t n_pin,
         GPTIMER_Regs *pwm_timer, DL_TIMER_CC_INDEX pwm_channel,
-        uint16_t initial_duty)
-{
-    if (M == NULL || pwm_timer == NULL)
+        uint16_t initial_duty){
+    if (M == NULL || pwm_timer == NULL){
         return BSP_ERR_NULL;
+    }
 
     M->p.port = p_port;
     M->p.pin = p_pin;
@@ -25,10 +25,10 @@ BSP_Status Motor_Init(Motor *M,
 }
 
 BSP_Status Motor_ParamInit(Motor *M,
-        double reduce, double full_speed_rpm, int wheel_diameter)
-{
-    if (M == NULL)
+        double reduce, double full_speed_rpm, int wheel_diameter){
+    if (M == NULL){
         return BSP_ERR_NULL;
+    }
 
     M->param.reduce = reduce;
     M->param.full_speed_rpm = full_speed_rpm;
@@ -36,12 +36,12 @@ BSP_Status Motor_ParamInit(Motor *M,
     return BSP_OK;
 }
 
-BSP_Status Motor_SetDuty(MotorMoveType type, uint16_t duty, Motor *M)
-{
-    if (M == NULL)
+BSP_Status Motor_SetDuty(MotorMoveType type, uint16_t duty, Motor *M){
+    if (M == NULL){
         return BSP_ERR_NULL;
+    }
 
-    switch (type) {
+    switch (type){
         case MOTOR_FORWARD:
             DL_GPIO_setPins(M->p.port, M->p.pin);
             DL_GPIO_clearPins(M->n.port, M->n.pin);
@@ -66,24 +66,31 @@ BSP_Status Motor_SetDuty(MotorMoveType type, uint16_t duty, Motor *M)
     return BSP_OK;
 }
 
-int Motor_SpeedToDuty(double speed, Motor *M)
-{
-    if (M == NULL)
+int Motor_SpeedToDuty(double speed, Motor *M){
+    if (M == NULL){
         return 0;
+    }
     double max_speed = M->param.full_speed_rpm / 60.0 * M->param.wheel_diameter * 3.14159 / 1000.0;
-    if (max_speed <= 0)
+    if (max_speed <= 0){
         return 0;
+    }
     int duty = (int)(speed / max_speed * 1000.0);
-    if (duty > 1000) duty = 1000;
-    if (duty < -1000) duty = -1000;
+    if (duty > 1000){
+        duty = 1000;
+    }
+    if (duty < -1000){
+        duty = -1000;
+    }
     return duty;
 }
 
-BSP_Status Motor_SetSpeed(MotorMoveType type, double speed, Motor *M)
-{
-    if (M == NULL)
+BSP_Status Motor_SetSpeed(MotorMoveType type, double speed, Motor *M){
+    if (M == NULL){
         return BSP_ERR_NULL;
+    }
     int duty = Motor_SpeedToDuty(speed, M);
-    if (duty < 0) duty = -duty;
+    if (duty < 0){
+        duty = -duty;
+    }
     return Motor_SetDuty(type, (uint16_t)duty, M);
 }

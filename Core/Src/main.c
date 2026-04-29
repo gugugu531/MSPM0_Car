@@ -1,18 +1,21 @@
+/**
+ * @file  main.c
+ * @brief 系统主入口，完成基础外设初始化并启动应用流程
+ */
 #include "AppState.h"
 #include "SystemTime.h"
 #include "TrackingRuntime.h"
-#include "ti_msp_dl_config.h"
 #include "HallEncoder.h"
 #include "Initialize.h"
 #include "Key.h"
 #include "LaserUsart.h"
 #include "Mode.h"
 #include "Oled.h"
+#include "ti_msp_dl_config.h"
 
 uint32_t tick;
 
-int main(void)
-{
+int main(void){
     SYSCFG_DL_init();
     __enable_irq();
 
@@ -27,14 +30,12 @@ int main(void)
 
     mode_problem_h_2();
 
-    while (1)
-    {
+    while (1){
     }
 }
 
-void UART2_IRQHandler(void)
-{
-    switch (DL_UART_getPendingInterrupt(LASER_UART)) {
+void UART2_IRQHandler(void){
+    switch (DL_UART_getPendingInterrupt(LASER_UART)){
         case DL_UART_IIDX_RX:
             CanMV_Process();
             break;
@@ -43,13 +44,14 @@ void UART2_IRQHandler(void)
     }
 }
 
-void SysTick_Handler(void)
-{
-    static int k = 0;
-    k++;
+void SysTick_Handler(void){
+    static int scan_divider = 0;
+
+    scan_divider++;
     tick++;
-    if (k == 10) {
+
+    if (scan_divider == 10){
         Key_Scan();
-        k = 0;
+        scan_divider = 0;
     }
 }

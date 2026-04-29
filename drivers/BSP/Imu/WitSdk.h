@@ -40,15 +40,13 @@ void WitSerialDataIn(uint8_t ucData);
 /*
     i2c write function example
 
-    int32_t WitI2cWrite(uint8_t ucAddr, uint8_t ucReg, uint8_t *p_ucVal, uint32_t uiLen)
-    {
+    int32_t WitI2cWrite(uint8_t ucAddr, uint8_t ucReg, uint8_t *p_ucVal, uint32_t uiLen){
         i2c_start();
         i2c_send(ucAddr);
         if(i2c_wait_ask() != SUCCESS)return 0;
         i2c_send(ucReg);
         if(i2c_wait_ask() != SUCCESS)return 0;
-        for(uint32_t i = 0; i < uiLen; i++)
-        {
+        for(uint32_t i = 0; i < uiLen; i++){
             i2c_send(*p_ucVal++); 
             if(i2c_wait_ask() != SUCCESS)return 0;
         }
@@ -60,8 +58,7 @@ typedef int32_t (*WitI2cWrite)(uint8_t ucAddr, uint8_t ucReg, uint8_t *p_ucVal, 
 /*
     i2c read function example
 
-    int32_t WitI2cRead(uint8_t ucAddr, uint8_t ucReg, uint8_t *p_ucVal, uint32_t uiLen)
-    {
+    int32_t WitI2cRead(uint8_t ucAddr, uint8_t ucReg, uint8_t *p_ucVal, uint32_t uiLen){
         i2c_start();
         i2c_send(ucAddr);
         if(i2c_wait_ask() != SUCCESS)return 0;
@@ -70,8 +67,7 @@ typedef int32_t (*WitI2cWrite)(uint8_t ucAddr, uint8_t ucReg, uint8_t *p_ucVal, 
         
         i2c_start();
         i2c_send(ucAddr+1);
-        for(uint32_t i = 0; i < uiLen; i++)
-        {
+        for(uint32_t i = 0; i < uiLen; i++){
             if(i+1 == uiLen)*p_ucVal++ = i2c_read(0);  //last byte no ask
             else *p_ucVal++ = i2c_read(1);  //  ask
         }

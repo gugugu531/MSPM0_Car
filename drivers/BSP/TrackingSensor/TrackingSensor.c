@@ -5,8 +5,7 @@
 #include "TrackingSensor.h"
 #include "ti_msp_dl_config.h"
 
-void TrackingSensor_Read(uint8_t digitalArray[8])
-{
+void TrackingSensor_Read(uint8_t digitalArray[8]){
     digitalArray[7] = (DL_GPIO_readPins(Tracking_Tracking_1_PORT, Tracking_Tracking_1_PIN) == 0);
     digitalArray[6] = (DL_GPIO_readPins(Tracking_Tracking_2_PORT, Tracking_Tracking_2_PIN) == 0);
     digitalArray[5] = (DL_GPIO_readPins(Tracking_Tracking_3_PORT, Tracking_Tracking_3_PIN) == 0);

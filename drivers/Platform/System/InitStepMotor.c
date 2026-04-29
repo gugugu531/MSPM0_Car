@@ -14,7 +14,7 @@
 SMotor yawMotor = {0};      // YAW偏航电机
 SMotor pitchMotor = {0};    // PITCH俯仰电机
 
-void YP_SMotor_Init(void) {
+void YP_SMotor_Init(void){
     // 初始化YAW步进电机 (偏航控制)
     DL_GPIO_setPins(SMotor_IO_PORT, SMotor_IO_EN1_PIN);
     DL_GPIO_setPins(SMotor_IO_PORT, SMotor_IO_EN2_PIN);
@@ -44,9 +44,9 @@ void YP_SMotor_Init(void) {
                      PITCH_SMOTOR_STEP_DIVISOR);
 }
 
-void YP_SMotor_SetSpeed(float yaw_speed, float pitch_speed) {
+void YP_SMotor_SetSpeed(float yaw_speed, float pitch_speed){
     // 设置YAW电机速度 (偏航控制)
-	if(pitchMotor.state.current_position > 45 || pitchMotor.state.current_position < -45) {
+	if(pitchMotor.state.current_position > 45 || pitchMotor.state.current_position < -45){
         SMotor_SetSpeed(&pitchMotor,0);
 				SMotor_SetSpeed(&yawMotor, 0);
         return; // 如果俯仰角度超过限制，停止电机
@@ -55,18 +55,18 @@ void YP_SMotor_SetSpeed(float yaw_speed, float pitch_speed) {
     SMotor_SetSpeed(&pitchMotor, pitch_speed);
 }
 
-void YP_SMotor_UpdateState(void) {
+void YP_SMotor_UpdateState(void){
     // 更新两个电机的状态
     SMotor_UpdateState(&yawMotor);
     SMotor_UpdateState(&pitchMotor);
 }
 
-double GetYaw(void) {
+double GetYaw(void){
     // 返回YAW电机当前位置 (偏航角度)
     return (double)yawMotor.state.current_position;
 }
 
-double GetPitch(void) {
+double GetPitch(void){
     // 返回PITCH电机当前位置 (俯仰角度)
     return (double)pitchMotor.state.current_position;
 }
