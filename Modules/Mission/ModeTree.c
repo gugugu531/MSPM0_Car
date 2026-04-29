@@ -1,6 +1,6 @@
 #include "ModeTree.h"
-#include "stdio.h"
-#include "AllHeader.h"
+#include <stdio.h>
+#include "Initialize.h"
 
 // Static memory pool for tree nodes
 static ModeTree tree_pool[MAX_TREE_NODES];
@@ -34,9 +34,7 @@ ModeTree *createModeTree(ModeNode node) {
     }
     
     // No free nodes available
-    #ifdef INITIALIZE_H
     sprintf(error_message, "No free tree nodes available");
-    #endif
     error_handler();
     return NULL;
 }

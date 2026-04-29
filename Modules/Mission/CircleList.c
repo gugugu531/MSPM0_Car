@@ -3,7 +3,8 @@
  * @brief 循环链表实现，基于静态内存池分配节点
  */
 #include "CircleList.h"
-#include "AllHeader.h"
+#include <stdio.h>
+#include "Initialize.h"
 
 // Static memory pool for circular list nodes
 static CircleListNode circle_pool[MAX_CIRCLE_LIST_NODES];
@@ -50,9 +51,7 @@ void CircleList_Init(CircleList *list) {
 int CircleList_Insert(CircleList *list, ModeTree *data) {
     CircleListNode *new_node = allocateCircleListNode();
     if (new_node == NULL) {
-        #ifdef INITIALIZE_H
         sprintf(error_message, "No free circle list nodes available");
-        #endif
         error_handler();
         return -1; // No free nodes available
     }

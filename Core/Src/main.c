@@ -1,12 +1,11 @@
-#include "AllHeader.h"
+#include "ti_msp_dl_config.h"
+#include "HallEncoder.h"
+#include "Initialize.h"
+#include "Key.h"
 #include "LaserUsart.h"
+#include "Mode.h"
+#include "Oled.h"
 
-extern CanMV_Error Laser_error;
-extern CanMV_Error Rect_error;
-extern uint16_t Laser_Loc[Laser_RX_Num / 2];
-extern uint16_t Rect_Loc[Rect_RX_Num / 2];
-
-uint8_t Digtal[8];
 uint32_t tick;
 
 int main(void)

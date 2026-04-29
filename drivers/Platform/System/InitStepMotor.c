@@ -9,7 +9,6 @@
  */
 
 #include "InitStepMotor.h"
-#include "AllHeader.h"
 
 // 全局步进电机实例
 SMotor yawMotor = {0};      // YAW偏航电机

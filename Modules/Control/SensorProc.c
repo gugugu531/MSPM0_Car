@@ -6,11 +6,10 @@
  *  Description: Source file for sensor processing functions
  */
 #include "SensorProc.h"
-#include "AllHeader.h"
+#include <math.h>
+#include "Initialize.h"
 
 Coordinate paperCornerC[4];
-extern int edge;
-extern float sInedge;
 
 //以下函数用于处理视觉模块，主要在绘图的时候使用(未测)
 Coordinate paper_to_camera(Coordinate paper)

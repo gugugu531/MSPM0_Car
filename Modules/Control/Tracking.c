@@ -1,5 +1,5 @@
 #include "Tracking.h"
-#include "AllHeader.h"
+#include "Initialize.h"
 
 #define IRR_SPEED_HIGH  300
 #define IRR_SPEED_LOW   350
@@ -16,7 +16,6 @@ static const float pid_out_max = 5000.0f;
 static const float Integral_max = 500.0f;
 static int pid_output_IRR = 0;
 static int8_t err = 0;
-extern uint8_t Digital[8];
 
 float PID_IR_Calc_Custom(int16_t actual_value, float kp, float ki, float kd)
 {

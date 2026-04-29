@@ -1,5 +1,8 @@
 #include "Menu.h"
-#include "AllHeader.h"
+#include <stdio.h>
+#include "Initialize.h"
+#include "Key.h"
+#include "Mode.h"
 /**
   ******************************************************************************
   * @author  Qinghan Yang
@@ -40,9 +43,7 @@ void menu_init(void)
     ModeNode rootNode = {NULL, "Root"}; // Create the root node
     now_mode_tree = createModeTree(rootNode); // Create the mode tree with the root node
     if (now_mode_tree == NULL) {
-        #ifdef INITIALIZE_H
         sprintf(error_message, "Failed to create mode tree");
-        #endif
         error_handler(); // Handle error if tree creation fails
     }
     now_mode_tree->parent = NULL; // Set the parent of the root node to NULL 
@@ -111,9 +112,7 @@ void menu_init(void)
         ModeTree *circleMenu = createModeTree(CircleNode); // Create a circle menu node
         addChild(ProBMenu1, circleMenu); // Add the circle menu to the Problem B menu
         if (circleMenu == NULL) {
-            #ifdef INITIALIZE_H
             sprintf(error_message, "Failed to create circle menu %d", i + 1);
-            #endif
             error_handler(); // Handle error if circle menu creation fails
         }
     }
@@ -124,9 +123,7 @@ void menu_init(void)
         ModeTree *circleMenu = createModeTree(CircleNode); // Create a circle menu node
         addChild(ProHMenu1, circleMenu); // Add the circle menu to the Problem H menu
         if (circleMenu == NULL) {
-            #ifdef INITIALIZE_H
             sprintf(error_message, "Failed to create circle menu %d", i + 1);
-            #endif
             error_handler(); // Handle error if circle menu creation fails
         }
     }
