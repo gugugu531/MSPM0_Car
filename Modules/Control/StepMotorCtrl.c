@@ -1,7 +1,12 @@
 #include "StepMotorCtrl.h"
 #include <math.h>
+#include <stdio.h>
 #include <stdbool.h>
-#include "AllHeader.h"
+#include "HallEncoder.h"
+#include "Initialize.h"
+#include "Mode.h"
+#include "Oled.h"
+#include "SensorProc.h"
 
 Coordinate laser_position = {0.0f, 0.0f}; // 激光雷达位置
 Coordinate target_position = {0.0f, 0.0f}; // 目标位置

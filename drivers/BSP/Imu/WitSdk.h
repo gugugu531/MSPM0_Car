@@ -9,7 +9,8 @@
 extern "C" {
 #endif
 
-#include "AllHeader.h"
+#include <stdint.h>
+#include "ti_msp_dl_config.h"
 #include "Reg.h"
 
 

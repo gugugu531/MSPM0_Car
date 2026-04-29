@@ -7,12 +7,12 @@ Project/Keil/*.axf
 Project/Keil/*.hex
 Project/Keil/*.htm
 Project/Keil/*.dep
+Project/Keil/*.uvoptx
+Project/Keil/*.uvguix.*
 keil/
 !Project/
 !Project/Keil/
 !Project/Keil/*.uvprojx
-!Project/Keil/*.uvoptx
-!Project/Keil/*.uvguix.*
 **/*.map
 **/*.obj
 **/*.o

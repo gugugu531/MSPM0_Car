@@ -10,11 +10,7 @@
 #include "Oled.h"
 #include "OledFont.h"
 #include <stdint.h>
-
-// 外部依赖一个微秒延时函数，请确保其已在项目中实现
-// extern void Delay_us(uint32_t us);
-// 如果您的延时函数在AllHeader.h中，请包含它
-#include "AllHeader.h"
+#include "Delay.h"
 
 
 //OLED的显存

@@ -28,7 +28,7 @@
   */
 
 #include "Key.h"
-#include "AllHeader.h"
+#include "Initialize.h"
 // 全局变量
 static key_info_t keys[KEY_ID_MAX];     // 按键信息数组
 static key_event_t key_events[KEY_ID_MAX]; // 按键事件数组
@@ -302,4 +302,3 @@ void Key_ClearAllEvents(void)
         key_events[i] = KEY_EVENT_NONE;
     }
 }
-

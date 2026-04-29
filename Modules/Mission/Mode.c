@@ -1,5 +1,13 @@
 #include "Mode.h"
-#include "AllHeader.h"
+#include <stdio.h>
+#include "Delay.h"
+#include "Initialize.h"
+#include "Kinematics.h"
+#include "Oled.h"
+#include "SensorProc.h"
+#include "StepMotorCtrl.h"
+#include "Tracking.h"
+#include "TrackingSensor.h"
 
 extern char CircleNum; // Variable to hold the current circle number
 //Test function for the mode system

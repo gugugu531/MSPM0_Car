@@ -1,5 +1,8 @@
 #include "WitSdk.h"
-#include "AllHeader.h"
+#include <stdio.h>
+#include <string.h>
+#include "Delay.h"
+#include "Initialize.h"
 
 #define GYROSCOPE_BUFFER_SIZE    33
 #define GYROSCOPE_CH_DATA_SIZE   10

@@ -1,5 +1,6 @@
 #include "Initialize.h"
-#include "AllHeader.h"
+#include "HallEncoder.h"
+#include "Oled.h"
 
 Motor g_motor_left, g_motor_right;
 CarState car;
