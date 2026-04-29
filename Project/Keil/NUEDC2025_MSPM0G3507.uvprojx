@@ -407,7 +407,7 @@
             <File>
               <FileName>startup_mspm0g350x_uvision.s</FileName>
               <FileType>2</FileType>
-              <FilePath>..\..\Board\Startup\startup_mspm0g350x_uvision.s</FilePath>
+              <FilePath>Startup\startup_mspm0g350x_uvision.s</FilePath>
             </File>
           </Files>
         </Group>

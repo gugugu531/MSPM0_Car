@@ -69,42 +69,44 @@ static const uint8_t __auchCRCLo[256] = {
 };
 
 
-static uint16_t __CRC16(uint8_t *puchMsg, uint16_t usDataLen){
+static uint16_t __CRC16(uint8_t *puchMsg, uint16_t usDataLen)
+{
     uint8_t uchCRCHi = 0xFF;
     uint8_t uchCRCLo = 0xFF;
     uint8_t uIndex;
     int i = 0;
     uchCRCHi = 0xFF;
     uchCRCLo = 0xFF;
-    for (; i<usDataLen; i++){
+    for (; i<usDataLen; i++)
+    {
         uIndex = uchCRCHi ^ puchMsg[i];
         uchCRCHi = uchCRCLo ^ __auchCRCHi[uIndex];
         uchCRCLo = __auchCRCLo[uIndex] ;
     }
     return (uint16_t)(((uint16_t)uchCRCHi << 8) | (uint16_t)uchCRCLo) ;
 }
-static uint8_t __CaliSum(uint8_t *data, uint32_t len){
+static uint8_t __CaliSum(uint8_t *data, uint32_t len)
+{
     uint32_t i;
     uint8_t ucCheck = 0;
-    for(i=0; i<len; i++){
-        ucCheck += *(data + i);
-    }
+    for(i=0; i<len; i++) ucCheck += *(data + i);
     return ucCheck;
 }
-int32_t WitSerialWriteRegister(SerialWrite Write_func){
-    if(!Write_func){
-        return WIT_HAL_INVAL;
-    }
+int32_t WitSerialWriteRegister(SerialWrite Write_func)
+{
+    if(!Write_func)return WIT_HAL_INVAL;
     p_WitSerialWriteFunc = Write_func;
     return WIT_HAL_OK;
 }
-static void CopeWitData(uint8_t ucIndex, uint16_t *p_data, uint32_t uiLen){
+static void CopeWitData(uint8_t ucIndex, uint16_t *p_data, uint32_t uiLen)
+{
     uint32_t uiReg1 = 0, uiReg2 = 0, uiReg1Len = 0, uiReg2Len = 0;
     uint16_t *p_usReg1Val = p_data;
     uint16_t *p_usReg2Val = p_data+3;
     
     uiReg1Len = 4;
-    switch(ucIndex){
+    switch(ucIndex)
+    {
         case WIT_ACC:   uiReg1 = AX;    uiReg1Len = 3;  uiReg2 = TEMP;  uiReg2Len = 1;  break;
         case WIT_ANGLE: uiReg1 = Roll;  uiReg1Len = 3;  uiReg2 = VERSION;  uiReg2Len = 1;  break;
         case WIT_TIME:  uiReg1 = YYMM;	break;
@@ -121,40 +123,44 @@ static void CopeWitData(uint8_t ucIndex, uint16_t *p_data, uint32_t uiLen){
 			return ;
 
     }
-    if(uiLen == 3){
+    if(uiLen == 3)
+    {
         uiReg1Len = 3;
         uiReg2Len = 0;
     }
-    if(uiReg1Len){
+    if(uiReg1Len)
+	{
 		memcpy(&sReg[uiReg1], p_usReg1Val, uiReg1Len<<1);
 		p_WitRegUpdateCbFunc(uiReg1, uiReg1Len);
 	}
-    if(uiReg2Len){
+    if(uiReg2Len)
+	{
 		memcpy(&sReg[uiReg2], p_usReg2Val, uiReg2Len<<1);
 		p_WitRegUpdateCbFunc(uiReg2, uiReg2Len);
 	}
 }
 
-void WitSerialDataIn(uint8_t ucData){
+void WitSerialDataIn(uint8_t ucData)
+{
     uint16_t usCRC16, usTemp, i, usData[4];
     uint8_t ucSum;
 
-    if(p_WitRegUpdateCbFunc == NULL){
-
-        return ;
-
-    }
+    if(p_WitRegUpdateCbFunc == NULL)return ;
     s_ucWitDataBuff[s_uiWitDataCnt++] = ucData;
-    switch(s_uiProtoclo){
+    switch(s_uiProtoclo)
+    {
         case WIT_PROTOCOL_NORMAL:
-            if(s_ucWitDataBuff[0] != 0x55){
+            if(s_ucWitDataBuff[0] != 0x55)
+            {
                 s_uiWitDataCnt--;
                 memcpy(s_ucWitDataBuff, &s_ucWitDataBuff[1], s_uiWitDataCnt);
                 return ;
             }
-            if(s_uiWitDataCnt >= 11){
+            if(s_uiWitDataCnt >= 11)
+            {
                 ucSum = __CaliSum(s_ucWitDataBuff, 10);
-                if(ucSum != s_ucWitDataBuff[10]){
+                if(ucSum != s_ucWitDataBuff[10])
+                {
                     s_uiWitDataCnt--;
                     memcpy(s_ucWitDataBuff, &s_ucWitDataBuff[1], s_uiWitDataCnt);
                     return ;
@@ -168,24 +174,26 @@ void WitSerialDataIn(uint8_t ucData){
             }
         break;
         case WIT_PROTOCOL_MODBUS:
-            if(s_uiWitDataCnt > 2){
-                if(s_ucWitDataBuff[1] != FuncR){
+            if(s_uiWitDataCnt > 2)
+            {
+                if(s_ucWitDataBuff[1] != FuncR)
+                {
                     s_uiWitDataCnt--;
                     memcpy(s_ucWitDataBuff, &s_ucWitDataBuff[1], s_uiWitDataCnt);
                     return ;
                 }
-                if(s_uiWitDataCnt < (s_ucWitDataBuff[2] + 5)){
-                    return ;
-                }
+                if(s_uiWitDataCnt < (s_ucWitDataBuff[2] + 5))return ;
                 usTemp = ((uint16_t)s_ucWitDataBuff[s_uiWitDataCnt-2] << 8) | s_ucWitDataBuff[s_uiWitDataCnt-1];
                 usCRC16 = __CRC16(s_ucWitDataBuff, s_uiWitDataCnt-2);
-                if(usTemp != usCRC16){
+                if(usTemp != usCRC16)
+                {
                     s_uiWitDataCnt--;
                     memcpy(s_ucWitDataBuff, &s_ucWitDataBuff[1], s_uiWitDataCnt);
                     return ;
                 }
                 usTemp = s_ucWitDataBuff[2] >> 1;
-                for(i = 0; i < usTemp; i++){
+                for(i = 0; i < usTemp; i++)
+                {
                     sReg[i+s_uiReadRegIndex] = ((uint16_t)s_ucWitDataBuff[(i<<1)+3] << 8) | s_ucWitDataBuff[(i<<1)+4];
                 }
                 p_WitRegUpdateCbFunc(s_uiReadRegIndex, usTemp);
@@ -197,41 +205,31 @@ void WitSerialDataIn(uint8_t ucData){
         s_uiWitDataCnt = 0;
         break;
     }
-    if(s_uiWitDataCnt == WIT_DATA_BUFF_SIZE){
-        s_uiWitDataCnt = 0;
-    }
+    if(s_uiWitDataCnt == WIT_DATA_BUFF_SIZE)s_uiWitDataCnt = 0;
 }
-int32_t WitI2cFuncRegister(WitI2cWrite write_func, WitI2cRead read_func){
-    if(!write_func){
-        return WIT_HAL_INVAL;
-    }
-    if(!read_func){
-        return WIT_HAL_INVAL;
-    }
+int32_t WitI2cFuncRegister(WitI2cWrite write_func, WitI2cRead read_func)
+{
+    if(!write_func)return WIT_HAL_INVAL;
+    if(!read_func)return WIT_HAL_INVAL;
     p_WitI2cWriteFunc = write_func;
     p_WitI2cReadFunc = read_func;
     return WIT_HAL_OK;
 }
-int32_t WitCanWriteRegister(CanWrite Write_func){
-    if(!Write_func){
-        return WIT_HAL_INVAL;
-    }
+int32_t WitCanWriteRegister(CanWrite Write_func)
+{
+    if(!Write_func)return WIT_HAL_INVAL;
     p_WitCanWriteFunc = Write_func;
     return WIT_HAL_OK;
 }
-void WitCanDataIn(uint8_t ucData[8], uint8_t ucLen){
+void WitCanDataIn(uint8_t ucData[8], uint8_t ucLen)
+{
 	uint16_t usData[3];
-    if(p_WitRegUpdateCbFunc == NULL){
-        return ;
-    }
-    if(ucLen < 8){
-        return ;
-    }
-    switch(s_uiProtoclo){
+    if(p_WitRegUpdateCbFunc == NULL)return ;
+    if(ucLen < 8)return ;
+    switch(s_uiProtoclo)
+    {
         case WIT_PROTOCOL_CAN:
-            if(ucData[0] != 0x55){
-                return ;
-            }
+            if(ucData[0] != 0x55)return ;
             usData[0] = ((uint16_t)ucData[3] << 8) | ucData[2];
             usData[1] = ((uint16_t)ucData[5] << 8) | ucData[4];
             usData[2] = ((uint16_t)ucData[7] << 8) | ucData[6];
@@ -243,24 +241,21 @@ void WitCanDataIn(uint8_t ucData[8], uint8_t ucLen){
             break;
     }
 }
-int32_t WitRegisterCallBack(RegUpdateCb update_func){
-    if(!update_func){
-        return WIT_HAL_INVAL;
-    }
+int32_t WitRegisterCallBack(RegUpdateCb update_func)
+{
+    if(!update_func)return WIT_HAL_INVAL;
     p_WitRegUpdateCbFunc = update_func;
     return WIT_HAL_OK;
 }
-int32_t WitWriteReg(uint32_t uiReg, uint16_t usData){
+int32_t WitWriteReg(uint32_t uiReg, uint16_t usData)
+{
     uint16_t usCRC;
     uint8_t ucBuff[8];
-    if(uiReg >= REGSIZE){
-        return WIT_HAL_INVAL;
-    }
-    switch(s_uiProtoclo){
+    if(uiReg >= REGSIZE)return WIT_HAL_INVAL;
+    switch(s_uiProtoclo)
+    {
         case WIT_PROTOCOL_NORMAL:
-            if(p_WitSerialWriteFunc == NULL){
-                return WIT_HAL_EMPTY;
-            }
+            if(p_WitSerialWriteFunc == NULL)return WIT_HAL_EMPTY;
             ucBuff[0] = 0xFF;
             ucBuff[1] = 0xAA;
             ucBuff[2] = uiReg & 0xFF;
@@ -269,9 +264,7 @@ int32_t WitWriteReg(uint32_t uiReg, uint16_t usData){
             p_WitSerialWriteFunc(ucBuff, 5);
             break;
         case WIT_PROTOCOL_MODBUS:
-            if(p_WitSerialWriteFunc == NULL){
-                return WIT_HAL_EMPTY;
-            }
+            if(p_WitSerialWriteFunc == NULL)return WIT_HAL_EMPTY;
             ucBuff[0] = s_ucAddr;
             ucBuff[1] = FuncW;
             ucBuff[2] = uiReg >> 8;
@@ -284,9 +277,7 @@ int32_t WitWriteReg(uint32_t uiReg, uint16_t usData){
             p_WitSerialWriteFunc(ucBuff, 8);
             break;
         case WIT_PROTOCOL_CAN:
-            if(p_WitCanWriteFunc == NULL){
-                return WIT_HAL_EMPTY;
-            }
+            if(p_WitCanWriteFunc == NULL)return WIT_HAL_EMPTY;
             ucBuff[0] = 0xFF;
             ucBuff[1] = 0xAA;
             ucBuff[2] = uiReg & 0xFF;
@@ -295,12 +286,11 @@ int32_t WitWriteReg(uint32_t uiReg, uint16_t usData){
             p_WitCanWriteFunc(s_ucAddr, ucBuff, 5);
             break;
         case WIT_PROTOCOL_I2C:
-            if(p_WitI2cWriteFunc == NULL){
-                return WIT_HAL_EMPTY;
-            }
+            if(p_WitI2cWriteFunc == NULL)return WIT_HAL_EMPTY;
             ucBuff[0] = usData & 0xff;
             ucBuff[1] = usData >> 8;
-			if(p_WitI2cWriteFunc(s_ucAddr << 1, uiReg, ucBuff, 2) != 1){
+			if(p_WitI2cWriteFunc(s_ucAddr << 1, uiReg, ucBuff, 2) != 1)
+			{
 				//printf("i2c write fail\r\n");
 			}
         break;
@@ -309,20 +299,16 @@ int32_t WitWriteReg(uint32_t uiReg, uint16_t usData){
     }
     return WIT_HAL_OK;
 }
-int32_t WitReadReg(uint32_t uiReg, uint32_t uiReadNum){
+int32_t WitReadReg(uint32_t uiReg, uint32_t uiReadNum)
+{
     uint16_t usTemp, i;
     uint8_t ucBuff[8];
-    if((uiReg + uiReadNum){
-        >= REGSIZE)return WIT_HAL_INVAL;
-    }
-    switch(s_uiProtoclo){
+    if((uiReg + uiReadNum) >= REGSIZE)return WIT_HAL_INVAL;
+    switch(s_uiProtoclo)
+    {
         case WIT_PROTOCOL_NORMAL:
-            if(uiReadNum > 4){
-                return WIT_HAL_INVAL;
-            }
-            if(p_WitSerialWriteFunc == NULL){
-                return WIT_HAL_EMPTY;
-            }
+            if(uiReadNum > 4)return WIT_HAL_INVAL;
+            if(p_WitSerialWriteFunc == NULL)return WIT_HAL_EMPTY;
             ucBuff[0] = 0xFF;
             ucBuff[1] = 0xAA;
             ucBuff[2] = 0x27;
@@ -331,13 +317,9 @@ int32_t WitReadReg(uint32_t uiReg, uint32_t uiReadNum){
             p_WitSerialWriteFunc(ucBuff, 5);
             break;
         case WIT_PROTOCOL_MODBUS:
-            if(p_WitSerialWriteFunc == NULL){
-                return WIT_HAL_EMPTY;
-            }
+            if(p_WitSerialWriteFunc == NULL)return WIT_HAL_EMPTY;
             usTemp = uiReadNum << 1;
-            if((usTemp + 5){
-                > WIT_DATA_BUFF_SIZE)return WIT_HAL_NOMEM;
-            }
+            if((usTemp + 5) > WIT_DATA_BUFF_SIZE)return WIT_HAL_NOMEM;
             ucBuff[0] = s_ucAddr;
             ucBuff[1] = FuncR;
             ucBuff[2] = uiReg >> 8;
@@ -350,12 +332,8 @@ int32_t WitReadReg(uint32_t uiReg, uint32_t uiReadNum){
             p_WitSerialWriteFunc(ucBuff, 8);
             break;
         case WIT_PROTOCOL_CAN:
-            if(uiReadNum > 3){
-                return WIT_HAL_INVAL;
-            }
-            if(p_WitCanWriteFunc == NULL){
-                return WIT_HAL_EMPTY;
-            }
+            if(uiReadNum > 3)return WIT_HAL_INVAL;
+            if(p_WitCanWriteFunc == NULL)return WIT_HAL_EMPTY;
             ucBuff[0] = 0xFF;
             ucBuff[1] = 0xAA;
             ucBuff[2] = 0x27;
@@ -364,18 +342,14 @@ int32_t WitReadReg(uint32_t uiReg, uint32_t uiReadNum){
             p_WitCanWriteFunc(s_ucAddr, ucBuff, 5);
             break;
         case WIT_PROTOCOL_I2C:
-            if(p_WitI2cReadFunc == NULL){
-                return WIT_HAL_EMPTY;
-            }
+            if(p_WitI2cReadFunc == NULL)return WIT_HAL_EMPTY;
             usTemp = uiReadNum << 1;
-            if(WIT_DATA_BUFF_SIZE < usTemp){
-                return WIT_HAL_NOMEM;
-            }
-            if(p_WitI2cReadFunc(s_ucAddr << 1, uiReg, s_ucWitDataBuff, usTemp) == 1){
-                if(p_WitRegUpdateCbFunc == NULL){
-                    return WIT_HAL_EMPTY;
-                }
-                for(i = 0; i < uiReadNum; i++){
+            if(WIT_DATA_BUFF_SIZE < usTemp)return WIT_HAL_NOMEM;
+            if(p_WitI2cReadFunc(s_ucAddr << 1, uiReg, s_ucWitDataBuff, usTemp) == 1)
+            {
+                if(p_WitRegUpdateCbFunc == NULL)return WIT_HAL_EMPTY;
+                for(i = 0; i < uiReadNum; i++)
+                {
                     sReg[i+uiReg] = ((uint16_t)s_ucWitDataBuff[(i<<1)+1] << 8) | s_ucWitDataBuff[i<<1];
                 }
                 p_WitRegUpdateCbFunc(uiReg, uiReadNum);
@@ -389,16 +363,16 @@ int32_t WitReadReg(uint32_t uiReg, uint32_t uiReadNum){
 
     return WIT_HAL_OK;
 }
-int32_t WitInit(uint32_t uiProtocol, uint8_t ucAddr){
-	if(uiProtocol > WIT_PROTOCOL_I2C){
-	    return WIT_HAL_INVAL;
-	}
+int32_t WitInit(uint32_t uiProtocol, uint8_t ucAddr)
+{
+	if(uiProtocol > WIT_PROTOCOL_I2C)return WIT_HAL_INVAL;
     s_uiProtoclo = uiProtocol;
     s_ucAddr = ucAddr;
     s_uiWitDataCnt = 0;
     return WIT_HAL_OK;
 }
-void WitDeInit(void){
+void WitDeInit(void)
+{
     p_WitSerialWriteFunc = NULL;
     p_WitI2cWriteFunc = NULL;
     p_WitI2cReadFunc = NULL;
@@ -409,220 +383,160 @@ void WitDeInit(void){
     s_uiProtoclo = 0;
 }
 
-int32_t WitDelayMsRegister(DelaymsCb delayms_func){
-    if(!delayms_func){
-        return WIT_HAL_INVAL;
-    }
+int32_t WitDelayMsRegister(DelaymsCb delayms_func)
+{
+    if(!delayms_func)return WIT_HAL_INVAL;
     p_WitDelaymsFunc = delayms_func;
     return WIT_HAL_OK;
 }
 
-char CheckRange(short sTemp,short sMin,short sMax){
-    if ((sTemp>=sMin)&&(sTemp<=sMax)){
-        return 1;
-    }
-    else{
-        return 0;
-    }
+char CheckRange(short sTemp,short sMin,short sMax)
+{
+    if ((sTemp>=sMin)&&(sTemp<=sMax)) return 1;
+    else return 0;
 }
 /*Acceleration calibration demo*/
-int32_t WitStartAccCali(void){
+int32_t WitStartAccCali(void)
+{
 /*
 	First place the equipment horizontally, and then perform the following operations
 */
 	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK)	    return  WIT_HAL_ERROR;// unlock reg
-	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS){
-	    p_WitDelaymsFunc(20);
-	}
-	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL){
-	    p_WitDelaymsFunc(1);
-	}
+	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS)	p_WitDelaymsFunc(20);
+	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL) p_WitDelaymsFunc(1);
 	else ;
-	if(WitWriteReg(CALSW, CALGYROACC) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
+	if(WitWriteReg(CALSW, CALGYROACC) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
 	return WIT_HAL_OK;
 }
-int32_t WitStopAccCali(void){
-	if(WitWriteReg(CALSW, NORMAL) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
-	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS){
-	    p_WitDelaymsFunc(20);
-	}
-	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL){
-	    p_WitDelaymsFunc(1);
-	}
+int32_t WitStopAccCali(void)
+{
+	if(WitWriteReg(CALSW, NORMAL) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
+	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS)	p_WitDelaymsFunc(20);
+	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL) p_WitDelaymsFunc(1);
 	else ;
-	if(WitWriteReg(SAVE, SAVE_PARAM) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
+	if(WitWriteReg(SAVE, SAVE_PARAM) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
 	return WIT_HAL_OK;
 }
 /*Magnetic field calibration*/
-int32_t WitStartMagCali(void){
-	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
-	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS){
-	    p_WitDelaymsFunc(20);
-	}
-	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL){
-	    p_WitDelaymsFunc(1);
-	}
+int32_t WitStartMagCali(void)
+{
+	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
+	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS)	p_WitDelaymsFunc(20);
+	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL) p_WitDelaymsFunc(1);
 	else ;
-	if(WitWriteReg(CALSW, CALMAGMM) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
+	if(WitWriteReg(CALSW, CALMAGMM) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
 	return WIT_HAL_OK;
 }
-int32_t WitStopMagCali(void){
-	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
-	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS){
-	    p_WitDelaymsFunc(20);
-	}
-	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL){
-	    p_WitDelaymsFunc(1);
-	}
+int32_t WitStopMagCali(void)
+{
+	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
+	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS)	p_WitDelaymsFunc(20);
+	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL) p_WitDelaymsFunc(1);
 	else ;
-	if(WitWriteReg(CALSW, NORMAL) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
+	if(WitWriteReg(CALSW, NORMAL) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
 	return WIT_HAL_OK;
 }
 /*change Band*/
-int32_t WitSetUartBaud(int32_t uiBaudIndex){
-	if(!CheckRange(uiBaudIndex,WIT_BAUD_4800,WIT_BAUD_230400)){
+int32_t WitSetUartBaud(int32_t uiBaudIndex)
+{
+	if(!CheckRange(uiBaudIndex,WIT_BAUD_4800,WIT_BAUD_230400))
+	{
 		return WIT_HAL_INVAL;
 	}
-	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
-	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS){
-	    p_WitDelaymsFunc(20);
-	}
-	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL){
-	    p_WitDelaymsFunc(1);
-	}
+	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
+	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS)	p_WitDelaymsFunc(20);
+	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL) p_WitDelaymsFunc(1);
 	else ;
-	if(WitWriteReg(BAUD, uiBaudIndex) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
+	if(WitWriteReg(BAUD, uiBaudIndex) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
 	return WIT_HAL_OK;
 }
 /*change Can Band*/
-int32_t WitSetCanBaud(int32_t uiBaudIndex){
-	if(!CheckRange(uiBaudIndex,CAN_BAUD_1000000,CAN_BAUD_3000)){
+int32_t WitSetCanBaud(int32_t uiBaudIndex)
+{
+	if(!CheckRange(uiBaudIndex,CAN_BAUD_1000000,CAN_BAUD_3000))
+	{
 		return WIT_HAL_INVAL;
 	}
-	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
-	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS){
-	    p_WitDelaymsFunc(20);
-	}
-	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL){
-	    p_WitDelaymsFunc(1);
-	}
+	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
+	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS)	p_WitDelaymsFunc(20);
+	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL) p_WitDelaymsFunc(1);
 	else ;
-	if(WitWriteReg(BAUD, uiBaudIndex) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
+	if(WitWriteReg(BAUD, uiBaudIndex) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
 	return WIT_HAL_OK;
 }
 /*change Bandwidth*/
-int32_t WitSetBandwidth(int32_t uiBaudWidth){	
-	if(!CheckRange(uiBaudWidth,BANDWIDTH_256HZ,BANDWIDTH_5HZ)){
+int32_t WitSetBandwidth(int32_t uiBaudWidth)
+{	
+	if(!CheckRange(uiBaudWidth,BANDWIDTH_256HZ,BANDWIDTH_5HZ))
+	{
 		return WIT_HAL_INVAL;
 	}
-	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
-	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS){
-	    p_WitDelaymsFunc(20);
-	}
-	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL){
-	    p_WitDelaymsFunc(1);
-	}
+	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
+	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS)	p_WitDelaymsFunc(20);
+	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL) p_WitDelaymsFunc(1);
 	else ;
-	if(WitWriteReg(BANDWIDTH, uiBaudWidth) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
+	if(WitWriteReg(BANDWIDTH, uiBaudWidth) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
 	return WIT_HAL_OK;
 }
 
 /*change output rate */
-int32_t WitSetOutputRate(int32_t uiRate){	
-	if(!CheckRange(uiRate,RRATE_02HZ,RRATE_NONE)){
+int32_t WitSetOutputRate(int32_t uiRate)
+{	
+	if(!CheckRange(uiRate,RRATE_02HZ,RRATE_NONE))
+	{
 		return WIT_HAL_INVAL;
 	}
-	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
-	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS){
-	    p_WitDelaymsFunc(20);
-	}
-	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL){
-	    p_WitDelaymsFunc(1);
-	}
+	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
+	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS)	p_WitDelaymsFunc(20);
+	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL) p_WitDelaymsFunc(1);
 	else ;
-	if(WitWriteReg(RRATE, uiRate) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
+	if(WitWriteReg(RRATE, uiRate) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
 	return WIT_HAL_OK;
 }
 
 /*change WitSetContent */
-int32_t WitSetContent(int32_t uiRsw){	
-	if(!CheckRange(uiRsw,RSW_TIME,RSW_MASK)){
+int32_t WitSetContent(int32_t uiRsw)
+{	
+	if(!CheckRange(uiRsw,RSW_TIME,RSW_MASK))
+	{
 		return WIT_HAL_INVAL;
 	}
-	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
-	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS){
-	    p_WitDelaymsFunc(20);
-	}
-	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL){
-	    p_WitDelaymsFunc(1);
-	}
+	if(WitWriteReg(KEY, KEY_UNLOCK) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
+	if(s_uiProtoclo == WIT_PROTOCOL_MODBUS)	p_WitDelaymsFunc(20);
+	else if(s_uiProtoclo == WIT_PROTOCOL_NORMAL) p_WitDelaymsFunc(1);
 	else ;
-	if(WitWriteReg(RSW, uiRsw) != WIT_HAL_OK){
-	    return  WIT_HAL_ERROR;
-	}
+	if(WitWriteReg(RSW, uiRsw) != WIT_HAL_OK)	return  WIT_HAL_ERROR;
 	return WIT_HAL_OK;
 }
 
 void IT_JY61P(void){
-    if(GyroscopeUsart3RxBuffer[0] == 0x55){
+    if(GyroscopeUsart3RxBuffer[0] == 0x55)
+    {
         uint16_t AccelerationSumData = 0, AngularSumData = 0, AngleSumData = 0;
-        for(uint8_t index = 0; index < GYROSCOPE_BUFFER_SIZE/3-1; index++){
+        for(uint8_t index = 0; index < GYROSCOPE_BUFFER_SIZE/3-1; index++)
             AccelerationSumData += GyroscopeUsart3RxBuffer[index];
-        }
-        for(uint8_t index = GYROSCOPE_BUFFER_SIZE/3; index < 2*GYROSCOPE_BUFFER_SIZE/3-1; index++){
 
+        for(uint8_t index = GYROSCOPE_BUFFER_SIZE/3; index < 2*GYROSCOPE_BUFFER_SIZE/3-1; index++)
             AngularSumData += GyroscopeUsart3RxBuffer[index];
 
-        }
-        for(uint8_t index = 2*GYROSCOPE_BUFFER_SIZE/3; index < GYROSCOPE_BUFFER_SIZE-1; index++){
-
+        for(uint8_t index = 2*GYROSCOPE_BUFFER_SIZE/3; index < GYROSCOPE_BUFFER_SIZE-1; index++)
             AngleSumData += GyroscopeUsart3RxBuffer[index];
 
-        }
         if(GyroscopeUsart3RxBuffer[GYROSCOPE_BUFFER_SIZE/3-1] == (uint8_t)(AccelerationSumData & 0x00FF)
         && GyroscopeUsart3RxBuffer[2*GYROSCOPE_BUFFER_SIZE/3-1] == (uint8_t)(AngularSumData & 0x00FF)
-        && GyroscopeUsart3RxBuffer[GYROSCOPE_BUFFER_SIZE-1] == (uint8_t)(AngleSumData & 0x00FF)){
+        && GyroscopeUsart3RxBuffer[GYROSCOPE_BUFFER_SIZE-1] == (uint8_t)(AngleSumData & 0x00FF))
+        {
             GYROSCOPE_DATA_Decoder(GyroscopeUsart3RxBuffer);
         }
     }
-    else{
+    else
+    {
         memset(GyroscopeUsart3RxBuffer, 0x00, sizeof(GyroscopeUsart3RxBuffer));
     }
 }
 
-void GYROSCOPE_DATA_Decoder(uint8_t *buf){
+void GYROSCOPE_DATA_Decoder(uint8_t *buf)
+{
     if(buf[1] == 0x51)//����X��Y��Z���ٶ�����
     {
         GyroscopeChannelData[0] = (int16_t)((int16_t)buf[3]<<8|buf[2])/32768.0*16.0;//X����ٶȣ�m/s*s��
@@ -651,8 +565,8 @@ void GYROSCOPE_DATA_Decoder(uint8_t *buf){
 void JY61P_Init(UART_Regs *uart){
     Delay_ms(100);
     uint32_t init_time = tick;
-    while(GyroscopeUsart3RxBuffer[0] != 0x55){
-        if(tick - init_time > 500){
+    while(GyroscopeUsart3RxBuffer[0] != 0x55) {
+        if(tick - init_time > 500) {
             snprintf(error_message, sizeof(error_message), "JY61P Init Failed");
             error_handler();
             break;
