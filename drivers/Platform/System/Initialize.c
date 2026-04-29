@@ -1,5 +1,6 @@
 #include "AppState.h"
 #include "SystemTime.h"
+#include "TrackingRuntime.h"
 #include "Initialize.h"
 #include "HallEncoder.h"
 

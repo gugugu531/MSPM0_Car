@@ -2,6 +2,7 @@
 #include "AppState.h"
 #include "LaserUsart.h"
 #include "SystemTime.h"
+#include "TrackingRuntime.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdbool.h>

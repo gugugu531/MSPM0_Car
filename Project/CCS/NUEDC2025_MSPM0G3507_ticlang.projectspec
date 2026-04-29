@@ -77,6 +77,7 @@
 
         <file path="../../Core/Inc/AppState.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
         <file path="../../Core/Inc/SystemTime.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="../../Core/Inc/TrackingRuntime.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
         <file path="../../Core/Inc/project_build_config.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
         <file path="../../drivers/Platform/Common/BspCommon.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
 
