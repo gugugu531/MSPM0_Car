@@ -4,8 +4,8 @@
  */
 #include "CircleList.h"
 #include "AppState.h"
+#include "ErrorHandler.h"
 #include <stdio.h>
-#include "Initialize.h"
 
 // Static memory pool for circular list nodes
 static CircleListNode circle_pool[MAX_CIRCLE_LIST_NODES];

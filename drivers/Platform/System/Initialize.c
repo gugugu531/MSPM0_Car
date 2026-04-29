@@ -2,7 +2,6 @@
 #include "SystemTime.h"
 #include "Initialize.h"
 #include "HallEncoder.h"
-#include "Oled.h"
 
 Motor g_motor_left, g_motor_right;
 CarState car;
@@ -62,15 +61,6 @@ void Motor_Brake(void)
 {
     Motor_SetLeftRaw(MOTOR_BRAKE, 0);
     Motor_SetRightRaw(MOTOR_BRAKE, 0);
-}
-
-void error_handler(void)
-{
-    Motor_Brake();
-    OLED_Clear();
-    OLED_ShowString(0, 0, error_message, 8);
-    while (1)
-        ;
 }
 
 void UpdateSInedge(void)

@@ -420,6 +420,11 @@
               <FilePath>..\..\drivers\Platform\System\Delay.c</FilePath>
             </File>
             <File>
+              <FileName>ErrorHandler.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\drivers\Platform\System\ErrorHandler.c</FilePath>
+            </File>
+            <File>
               <FileName>Initialize.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\drivers\Platform\System\Initialize.c</FilePath>

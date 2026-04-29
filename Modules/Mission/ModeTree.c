@@ -1,7 +1,7 @@
 #include "ModeTree.h"
 #include "AppState.h"
+#include "ErrorHandler.h"
 #include <stdio.h>
-#include "Initialize.h"
 
 // Static memory pool for tree nodes
 static ModeTree tree_pool[MAX_TREE_NODES];

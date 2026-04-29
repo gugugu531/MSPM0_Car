@@ -1,5 +1,6 @@
 #include "Menu.h"
 #include "AppState.h"
+#include "ErrorHandler.h"
 #include <stdio.h>
 #include "Initialize.h"
 #include "Key.h"

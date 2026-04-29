@@ -3,6 +3,7 @@
 #include <string.h>
 #include "AppState.h"
 #include "Delay.h"
+#include "ErrorHandler.h"
 #include "Initialize.h"
 #include "SystemTime.h"
 

@@ -45,8 +45,6 @@ void Motor_Brake(void);
 
 void UpdateSInedge(void);
 
-void error_handler(void);
-
 #ifdef __cplusplus
 }
 #endif
