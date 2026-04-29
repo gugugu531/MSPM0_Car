@@ -8,6 +8,11 @@ Project/Keil/*.hex
 Project/Keil/*.htm
 Project/Keil/*.dep
 keil/
+!Project/
+!Project/Keil/
+!Project/Keil/*.uvprojx
+!Project/Keil/*.uvoptx
+!Project/Keil/*.uvguix.*
 **/*.map
 **/*.obj
 **/*.o
