@@ -7,6 +7,7 @@
  */
 #include "SensorProc.h"
 #include "TrackingRuntime.h"
+#include "VisionState.h"
 #include <math.h>
 #include "Initialize.h"
 

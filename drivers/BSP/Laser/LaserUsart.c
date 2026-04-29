@@ -1,4 +1,5 @@
 #include "LaserUsart.h"
+#include "VisionState.h"
 
 static uint8_t USART_LASER_RX_BUF[USART_LASER_RX_BUF_LEN] = {0};
 static uint8_t new_package[USART_LASER_RX_BUF_LEN];

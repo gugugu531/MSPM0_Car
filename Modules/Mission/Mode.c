@@ -2,6 +2,7 @@
 #include "AppState.h"
 #include "ErrorHandler.h"
 #include "TrackingRuntime.h"
+#include "VisionState.h"
 #include <stdio.h>
 #include "Delay.h"
 #include "Initialize.h"
