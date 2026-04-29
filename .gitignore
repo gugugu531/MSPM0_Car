@@ -1,10 +1,13 @@
 Debug/
 .settings/
 .theia/
-targetConfigs/
-!targetConfigs/
-!targetConfigs/*.ccxml
-!targetConfigs/readme.txt
+Project/Keil/Objects/
+Project/Keil/*.map
+Project/Keil/*.axf
+Project/Keil/*.hex
+Project/Keil/*.htm
+Project/Keil/*.dep
+keil/
 **/*.map
 **/*.obj
 **/*.o

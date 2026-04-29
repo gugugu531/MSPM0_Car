@@ -10,9 +10,9 @@
 	<ignoreDefaultDeviceSettings value="true"/>
 	<ignoreDefaultCCSSettings value="true"/>
 	<templateProperties value="id=NUEDC2025_MSPM0G3507_ticlang.projectspec.NUEDC2025_MSPM0G3507_nortos_ticlang,buildProfile=debug,isHybrid=true"/>
-	<activeTargetConfiguration value="targetConfigs/MSPM0G3507.ccxml"/>
+	<activeTargetConfiguration value="Board/Target/MSPM0G3507.ccxml"/>
 	<isTargetConfigurationManual value="false"/>
 	<sourceLookupPath value="${COM_TI_MSPM0_SDK_INSTALL_DIR}/source/ti/driverlib"/>
-	<origin value="ticlang/NUEDC2025_MSPM0G3507_ticlang.projectspec"/>
-	<filesToOpen value="app/main.c,config/empty.syscfg"/>
+	<origin value="Project/CCS/NUEDC2025_MSPM0G3507_ticlang.projectspec"/>
+	<filesToOpen value="Core/Src/main.c,Board/SysConfig/empty.syscfg"/>
 </projectOptions>
