@@ -5,8 +5,6 @@
 #include "HallEncoder.h"
 
 Motor g_motor_left, g_motor_right;
-CarState car;
-Data current_data;
 uint8_t Digital[8];
 char error_message[100];
 double GyroscopeChannelData[10] = {0};
