@@ -34,23 +34,6 @@
 extern "C" {
 #endif
 
-extern Data current_data;
-extern uint8_t Digital[8];
-extern char error_message[100];
-
-extern uint32_t tick;
-
-extern float sInedge;
-extern int edge;
-extern int isturn;
-
-extern char message[100];
-
-extern CanMV_Error Laser_error;
-extern CanMV_Error Rect_error;
-extern uint16_t Laser_Loc[Laser_RX_Num / 2];
-extern uint16_t Rect_Loc[Rect_RX_Num / 2];
-
 void Motor_SystemInit(void);
 void Motor_SetLeftRaw(MotorMoveType type, uint16_t duty);
 void Motor_SetRightRaw(MotorMoveType type, uint16_t duty);

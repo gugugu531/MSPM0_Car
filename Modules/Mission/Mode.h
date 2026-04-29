@@ -16,6 +16,9 @@ void mode_test_connection(void);
 void mode_test_tracking(void);
 #endif
 
+extern int isturn;
+extern bool turning;
+
 void mode_problem_b_1(void);
 void mode_problem_b_2_3(void);
 void mode_problem_h_1(void);

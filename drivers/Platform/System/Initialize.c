@@ -1,3 +1,5 @@
+#include "AppState.h"
+#include "SystemTime.h"
 #include "Initialize.h"
 #include "HallEncoder.h"
 #include "Oled.h"
@@ -10,7 +12,6 @@ char error_message[100];
 double GyroscopeChannelData[10] = {0};
 float sInedge = 0.0f;
 int edge = 0;
-char message[100];
 
 void Motor_SystemInit(void)
 {

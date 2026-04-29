@@ -31,7 +31,6 @@ This refactor focuses on:
 
 The following are intentionally deferred to a later cleanup pass:
 
-- removing `AllHeader.h` and replacing it with explicit module dependencies
 - consolidating scattered global state into dedicated modules
 - splitting mission logic from direct hardware actuation calls
 

@@ -1,8 +1,7 @@
 #include <ti/devices/msp/msp.h>
 #include "ti_msp_dl_config.h"
 #include "Delay.h"
-
-extern uint32_t tick;
+#include "SystemTime.h"
 
 void Delay_us(uint32_t xus)
 {

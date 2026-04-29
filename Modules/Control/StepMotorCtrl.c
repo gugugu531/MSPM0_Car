@@ -1,4 +1,7 @@
 #include "StepMotorCtrl.h"
+#include "AppState.h"
+#include "LaserUsart.h"
+#include "SystemTime.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -16,8 +19,6 @@ Attitude cor = {0.0f, 0.0f}; // 校准数据
 
 #define LP_X 300 // 线性位置X坐标
 #define LP_Y 225 // 线性位置Y坐标
-
-extern bool turning;
 
 void PID_SMotor_Cont(void)
 {

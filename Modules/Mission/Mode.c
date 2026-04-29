@@ -1,4 +1,5 @@
 #include "Mode.h"
+#include "AppState.h"
 #include <stdio.h>
 #include "Delay.h"
 #include "Initialize.h"

@@ -1,8 +1,10 @@
 #include "WitSdk.h"
 #include <stdio.h>
 #include <string.h>
+#include "AppState.h"
 #include "Delay.h"
 #include "Initialize.h"
+#include "SystemTime.h"
 
 #define GYROSCOPE_BUFFER_SIZE    33
 #define GYROSCOPE_CH_DATA_SIZE   10
@@ -560,7 +562,6 @@ void GYROSCOPE_DATA_Decoder(uint8_t *buf)
 }
 
 void JY61P_Init(UART_Regs *uart){
-    extern uint32_t tick;
     Delay_ms(100);
     uint32_t init_time = tick;
     while(GyroscopeUsart3RxBuffer[0] != 0x55) {

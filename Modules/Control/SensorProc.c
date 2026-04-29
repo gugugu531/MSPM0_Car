@@ -6,6 +6,7 @@
  *  Description: Source file for sensor processing functions
  */
 #include "SensorProc.h"
+#include "AppState.h"
 #include <math.h>
 #include "Initialize.h"
 

@@ -4,6 +4,7 @@
  */
 #include "StepMotor.h"
 #include <math.h>
+#include "SystemTime.h"
 
 BSP_Status SMotor_Init(SMotor *motor, GPIO_Regs *Dir_port, uint32_t Dir_pin,
                        GPTIMER_Regs *pwm_timer, DL_TIMER_CC_INDEX pwm_channel) {
@@ -72,7 +73,6 @@ BSP_Status SMotor_SetSpeed(SMotor *motor, float angular_speed) {
 }
 
 BSP_Status SMotor_UpdateState(SMotor *motor) {
-    extern uint32_t tick;
     if (motor == NULL)
         return BSP_ERR_NULL;
 
