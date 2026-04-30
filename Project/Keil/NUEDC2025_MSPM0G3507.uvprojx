@@ -475,6 +475,11 @@
           <GroupName>Modules/Mission</GroupName>
           <Files>
             <File>
+              <FileName>AppLauncher.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\Modules\Mission\AppLauncher.c</FilePath>
+            </File>
+            <File>
               <FileName>Mode.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\Modules\Mission\Mode.c</FilePath>

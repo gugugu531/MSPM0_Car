@@ -46,25 +46,6 @@ void menu_init(void){
     addChild(now_mode_tree, problem_b_menu);
     addChild(now_mode_tree, problem_h_menu);
 
-#if PROJECT_ENABLE_TEST_MODES
-    ModeNode test_node = {menu_function, "Test Menu"};
-    ModeTree *test_menu = createModeTree(test_node);
-
-    addChild(now_mode_tree, test_menu);
-
-    ModeNode test_dis_mode = {mode_test_distance, "Test Distance"};
-    ModeNode test_cordi_mode = {mode_test_coordinate, "Test Coordinate"};
-    ModeNode test_circle_mode = {mode_test_circle, "Test Circle"};
-    ModeNode test_track_mode = {mode_test_tracking, "Test Track"};
-    ModeNode test_connect_mode = {mode_test_connection, "Test Connect"};
-
-    addChild(test_menu, createModeTree(test_connect_mode));
-    addChild(test_menu, createModeTree(test_dis_mode));
-    addChild(test_menu, createModeTree(test_cordi_mode));
-    addChild(test_menu, createModeTree(test_circle_mode));
-    addChild(test_menu, createModeTree(test_track_mode));
-#endif
-
     ModeNode problem_b1_menu_node = {menu_function, "ProB1"};
     ModeNode problem_b23_menu_node = {mode_problem_b_2_3, "ProB2/3"};
     ModeNode problem_h1_menu_node = {menu_function, "ProH1"};

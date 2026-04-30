@@ -2,14 +2,11 @@
  * @file  main.c
  * @brief 系统主入口，完成基础外设初始化并启动应用流程
  */
-#include "AppState.h"
-#include "SystemTime.h"
-#include "TrackingRuntime.h"
+#include "AppLauncher.h"
 #include "HallEncoder.h"
 #include "Initialize.h"
 #include "Key.h"
 #include "LaserUsart.h"
-#include "Mode.h"
 #include "Oled.h"
 #include "ti_msp_dl_config.h"
 
@@ -28,10 +25,14 @@ int main(void){
     Motor_SystemInit();
     Key_Init();
 
-    mode_problem_h_2();
+    App_Launch();
 
     while (1){
     }
+}
+
+void UART0_IRQHandler(void){
+    App_DebugUartHandler();
 }
 
 void UART2_IRQHandler(void){

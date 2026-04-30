@@ -106,6 +106,8 @@
 
         <file path="../../Modules/Mission/CircleList.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
         <file path="../../Modules/Mission/CircleList.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="../../Modules/Mission/AppLauncher.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="../../Modules/Mission/AppLauncher.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
         <file path="../../Modules/Mission/Menu.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
         <file path="../../Modules/Mission/Menu.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
         <file path="../../Modules/Mission/Mode.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
