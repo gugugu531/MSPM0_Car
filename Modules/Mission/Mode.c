@@ -107,7 +107,7 @@ void mode_problem_b_1(void){
 
 void mode_problem_b_2_3(void){
 #ifdef MODE_DEBUG
-    OLED_ShowString(0, 0, "ProB2/3", 8);
+    OLED_ShowString(0, 0, "Task B Laser", 8);
 #endif
 
     YP_SMotor_Init();
@@ -123,7 +123,7 @@ void mode_problem_b_2_3(void){
 
 void mode_problem_h_1(void){
 #ifdef MODE_DEBUG
-    OLED_ShowString(0, 0, "ProH1", 8);
+    OLED_ShowString(0, 0, "Task H Circle", 8);
 #endif
 
     int cn = mode_set_circle_num(1);
@@ -155,7 +155,7 @@ void mode_problem_h_1(void){
 
 void mode_problem_h_2(void){
 #ifdef MODE_DEBUG
-    OLED_ShowString(0, 0, "ProH2", 8);
+    OLED_ShowString(0, 0, "Task H Track", 8);
 #endif
 
     YP_SMotor_Init();

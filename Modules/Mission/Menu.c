@@ -13,11 +13,11 @@
 static ModeTree *now_mode_tree = NULL;
 char CircleNum = '0';
 
-static char circle_name_1[] = "1";
-static char circle_name_2[] = "2";
-static char circle_name_3[] = "3";
-static char circle_name_4[] = "4";
-static char circle_name_5[] = "5";
+static char circle_name_1[] = "1 Lap";
+static char circle_name_2[] = "2 Laps";
+static char circle_name_3[] = "3 Laps";
+static char circle_name_4[] = "4 Laps";
+static char circle_name_5[] = "5 Laps";
 
 static CircleList static_menu_list;
 
@@ -34,11 +34,11 @@ void menu_init(void){
 
     now_mode_tree->parent = NULL;
     now_mode_tree->nodes.mode_function = menu_function;
-    now_mode_tree->nodes.mode_name = "Main Menu";
+    now_mode_tree->nodes.mode_name = "Task Menu";
     OLED_Clear();
 
-    ModeNode problem_b_node = {menu_function, "Problem B"};
-    ModeNode problem_h_node = {menu_function, "Problem H"};
+    ModeNode problem_b_node = {menu_function, "Task B"};
+    ModeNode problem_h_node = {menu_function, "Task H"};
 
     ModeTree *problem_b_menu = createModeTree(problem_b_node);
     ModeTree *problem_h_menu = createModeTree(problem_h_node);
@@ -46,10 +46,10 @@ void menu_init(void){
     addChild(now_mode_tree, problem_b_menu);
     addChild(now_mode_tree, problem_h_menu);
 
-    ModeNode problem_b1_menu_node = {menu_function, "ProB1"};
-    ModeNode problem_b23_menu_node = {mode_problem_b_2_3, "ProB2/3"};
-    ModeNode problem_h1_menu_node = {menu_function, "ProH1"};
-    ModeNode problem_h2_menu_node = {mode_problem_h_2, "ProH2"};
+    ModeNode problem_b1_menu_node = {menu_function, "B1 Circle"};
+    ModeNode problem_b23_menu_node = {mode_problem_b_2_3, "B23 Laser"};
+    ModeNode problem_h1_menu_node = {menu_function, "H1 Circle"};
+    ModeNode problem_h2_menu_node = {mode_problem_h_2, "H2 Track"};
 
     ModeTree *problem_b_menu_1 = createModeTree(problem_b1_menu_node);
     ModeTree *problem_b_menu_23 = createModeTree(problem_b23_menu_node);

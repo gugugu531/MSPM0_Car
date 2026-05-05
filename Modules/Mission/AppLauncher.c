@@ -74,24 +74,24 @@ static uint32_t s_imu_frame_count = 0;
 static bool s_imu_uart_enabled = false;
 
 static const char *const s_root_items[APP_ENTRY_COUNT] = {
-    "Mission",
-    "Test"
+    "Task flow",
+    "Device check"
 };
 
 static const char *const s_test_items[APP_TEST_COUNT] = {
-    "Motor",
-    "Stepper",
-    "Gyro",
-    "Vision",
-    "Tracking"
+    "Motor speed",
+    "Pan tilt",
+    "Gyro angle",
+    "Vision loc",
+    "Track sensor"
 };
 
 static const char *const s_motor_modes[MOTOR_TEST_COUNT] = {
     "Stop",
     "Forward",
-    "Backward",
-    "Turn Left",
-    "Turn Right"
+    "Reverse",
+    "Spin Left",
+    "Spin Right"
 };
 
 static const char *const s_stepper_modes[STEPPER_TEST_COUNT] = {
@@ -104,6 +104,22 @@ static const char *const s_stepper_modes[STEPPER_TEST_COUNT] = {
 
 static void App_ClearKeys(void){
     Key_ClearAllEvents();
+}
+
+static const char *App_CanMvErrorText(CanMV_Error error){
+    switch (error){
+        case CANMV_ERR_NONE:
+            return "OK";
+        case CANMV_ERR_NOT_FOUND:
+            return "MISS";
+        case CANMV_ERR_LOST:
+            return "LOST";
+        case CANMV_ERR_FRAME_DROP:
+            return "DROP";
+        case CANMV_ERR_INIT:
+        default:
+            return "INIT";
+    }
 }
 
 static void App_ShowLines(const char *title,
@@ -229,9 +245,9 @@ static void App_RunMotorTest(void){
 
         if (tick - last_refresh >= 120){
             last_refresh = tick;
-            snprintf(line1, sizeof(line1), "Mode:%s", s_motor_modes[mode]);
-            snprintf(line2, sizeof(line2), "Spd:%.2f", Encoder_GetSpeed());
-            App_ShowLines("Motor Test", line1, line2, NULL, "S:Mode", "L:Back");
+            snprintf(line1, sizeof(line1), "State:%s", s_motor_modes[mode]);
+            snprintf(line2, sizeof(line2), "Enc spd:%0.2f", Encoder_GetSpeed());
+            App_ShowLines("Drive check", line1, line2, "Wheel motor test", "S state", "L back");
         }
 
         Delay_ms(20);
@@ -286,10 +302,10 @@ static void App_RunStepperTest(void){
 
         if (tick - last_refresh >= 120){
             last_refresh = tick;
-            snprintf(line1, sizeof(line1), "Mode:%s", s_stepper_modes[mode]);
-            snprintf(line2, sizeof(line2), "Yaw:%0.1f", GetYaw());
-            snprintf(line3, sizeof(line3), "Pitch:%0.1f", GetPitch());
-            App_ShowLines("Stepper Test", line1, line2, line3, "S:Mode", "L:Back");
+            snprintf(line1, sizeof(line1), "State:%s", s_stepper_modes[mode]);
+            snprintf(line2, sizeof(line2), "Yaw deg:%0.1f", GetYaw());
+            snprintf(line3, sizeof(line3), "Pit deg:%0.1f", GetPitch());
+            App_ShowLines("Pan tilt", line1, line2, line3, "S state", "L back");
         }
 
         Delay_ms(20);
@@ -320,27 +336,33 @@ static void App_RunImuTest(void){
         if (tick - last_refresh >= 150){
             last_refresh = tick;
 
-            switch (page){
-                case IMU_PAGE_ACC:
-                    snprintf(line1, sizeof(line1), "AX:%0.2f", GyroscopeChannelData[0]);
-                    snprintf(line2, sizeof(line2), "AY:%0.2f", GyroscopeChannelData[1]);
-                    snprintf(line3, sizeof(line3), "AZ:%0.2f", GyroscopeChannelData[2]);
-                    break;
-                case IMU_PAGE_GYRO:
-                    snprintf(line1, sizeof(line1), "GX:%0.1f", GyroscopeChannelData[3]);
-                    snprintf(line2, sizeof(line2), "GY:%0.1f", GyroscopeChannelData[4]);
-                    snprintf(line3, sizeof(line3), "GZ:%0.1f", GyroscopeChannelData[5]);
-                    break;
-                case IMU_PAGE_ANGLE:
-                default:
-                    snprintf(line1, sizeof(line1), "Roll:%0.1f", GyroscopeChannelData[6]);
-                    snprintf(line2, sizeof(line2), "Pitch:%0.1f", GyroscopeChannelData[7]);
-                    snprintf(line3, sizeof(line3), "Yaw:%0.1f", GyroscopeChannelData[8]);
-                    break;
+            if (s_imu_frame_count == 0){
+                snprintf(line1, sizeof(line1), "No IMU data");
+                snprintf(line2, sizeof(line2), "Check UART0");
+                snprintf(line3, sizeof(line3), "Frame wait...");
+            } else{
+                switch (page){
+                    case IMU_PAGE_ACC:
+                        snprintf(line1, sizeof(line1), "AX:%0.2f", GyroscopeChannelData[0]);
+                        snprintf(line2, sizeof(line2), "AY:%0.2f", GyroscopeChannelData[1]);
+                        snprintf(line3, sizeof(line3), "AZ:%0.2f", GyroscopeChannelData[2]);
+                        break;
+                    case IMU_PAGE_GYRO:
+                        snprintf(line1, sizeof(line1), "GX:%0.1f", GyroscopeChannelData[3]);
+                        snprintf(line2, sizeof(line2), "GY:%0.1f", GyroscopeChannelData[4]);
+                        snprintf(line3, sizeof(line3), "GZ:%0.1f", GyroscopeChannelData[5]);
+                        break;
+                    case IMU_PAGE_ANGLE:
+                    default:
+                        snprintf(line1, sizeof(line1), "Roll:%0.1f", GyroscopeChannelData[6]);
+                        snprintf(line2, sizeof(line2), "Pitch:%0.1f", GyroscopeChannelData[7]);
+                        snprintf(line3, sizeof(line3), "Yaw:%0.1f", GyroscopeChannelData[8]);
+                        break;
+                }
             }
 
-            snprintf(line4, sizeof(line4), "Frame:%lu", (unsigned long)s_imu_frame_count);
-            App_ShowLines("Gyro Test", line1, line2, line3, line4, "S:Page L:Back");
+            snprintf(line4, sizeof(line4), "Frames:%lu", (unsigned long)s_imu_frame_count);
+            App_ShowLines("Gyro check", line1, line2, line3, line4, "S page L back");
         }
 
         Delay_ms(20);
@@ -370,16 +392,16 @@ static void App_RunVisionTest(void){
             last_refresh = tick;
 
             if (page == VISION_PAGE_LASER){
-                snprintf(line1, sizeof(line1), "LaserErr:%d", (int)Laser_error);
+                snprintf(line1, sizeof(line1), "Laser:%s", App_CanMvErrorText(Laser_error));
                 snprintf(line2, sizeof(line2), "X:%u Y:%u", Laser_Loc[0], Laser_Loc[1]);
-                snprintf(line3, sizeof(line3), "Alt:%u %u", Laser_Loc[2], Laser_Loc[3]);
+                snprintf(line3, sizeof(line3), "Dot2:%u %u", Laser_Loc[2], Laser_Loc[3]);
             } else{
-                snprintf(line1, sizeof(line1), "RectErr:%d", (int)Rect_error);
+                snprintf(line1, sizeof(line1), "Rect:%s", App_CanMvErrorText(Rect_error));
                 snprintf(line2, sizeof(line2), "P0:%u,%u", Rect_Loc[0], Rect_Loc[1]);
                 snprintf(line3, sizeof(line3), "P1:%u,%u", Rect_Loc[2], Rect_Loc[3]);
             }
 
-            App_ShowLines("Vision Test", line1, line2, line3, "S:Page", "L:Back");
+            App_ShowLines("Vision check", line1, line2, line3, "S page", "L back");
         }
 
         Delay_ms(20);
@@ -413,8 +435,8 @@ static void App_RunTrackingTest(void){
             sensor_bits[8] = '\0';
 
             snprintf(line1, sizeof(line1), "Bits:%s", sensor_bits);
-            snprintf(line2, sizeof(line2), "Speed:%0.2f", Encoder_GetSpeed());
-            App_ShowLines("Track Test", line1, line2, "Live sensor", NULL, "L:Back");
+            snprintf(line2, sizeof(line2), "Car spd:%0.2f", Encoder_GetSpeed());
+            App_ShowLines("Track check", line1, line2, "8 sensor input", NULL, "L back");
         }
 
         Delay_ms(20);
@@ -470,7 +492,7 @@ static void App_RunTestMenu(void){
                      (unsigned int)(selected + 1),
                      (unsigned int)APP_TEST_COUNT,
                      s_test_items[selected]);
-            App_ShowLines("Test Entry", line1, NULL, NULL, "S:Next L:Enter", "D:Back");
+            App_ShowLines("Device check", line1, "Run debug page", NULL, "S next L enter", "D back");
             need_refresh = false;
         }
 
@@ -509,7 +531,7 @@ void App_Launch(void){
                      (unsigned int)(selected + 1),
                      (unsigned int)APP_ENTRY_COUNT,
                      s_root_items[selected]);
-            App_ShowLines("App Launcher", line1, NULL, NULL, "S:Next", "L:Enter");
+            App_ShowLines("Mode select", line1, "Choose run mode", NULL, "S next", "L enter");
             need_refresh = false;
         }
 

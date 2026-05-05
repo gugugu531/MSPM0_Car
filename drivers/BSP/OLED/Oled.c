@@ -216,12 +216,29 @@ void OLED_Clear(void){
 void OLED_ShowChar(uint8_t x,uint8_t y,uint8_t chr,uint8_t sizey){      	
     uint8_t c=0,sizex=sizey/2;
     uint16_t i=0,size1;
+
+    if (sizey != 8 && sizey != 16){
+        return;
+    }
+
+    if (y >= 8 || x >= 128){
+        return;
+    }
+
+    if (chr < ' ' || chr > '~'){
+        chr = '?';
+    }
+
     if(sizey==8){
         size1=6;
     }
     else{
         size1=(sizey/8+((sizey%8)?1:0))*(sizey/2);
     }
+    if ((uint16_t)x + sizex > 128){
+        return;
+    }
+
     c=chr-' ';//得到偏移后的值
     OLED_Set_Pos(x,y);
     for(i=0;i<size1;i++){
@@ -270,9 +287,18 @@ void OLED_ShowNum(uint8_t x,uint8_t y,uint32_t num,uint8_t len,uint8_t sizey){
 }
  
 //显示一个字符号串
-void OLED_ShowString(uint8_t x,uint8_t y,char *chr,uint8_t sizey){
+void OLED_ShowString(uint8_t x,uint8_t y,const char *chr,uint8_t sizey){
     uint8_t j=0;
-    while (chr[j]!='\0'){		
+    uint8_t step = (sizey == 8) ? 6 : (sizey / 2);
+
+    if (chr == NULL || step == 0){
+        return;
+    }
+
+    while (chr[j]!='\0' && x < 128){		
+        if ((uint16_t)x + step > 128){
+            break;
+        }
         OLED_ShowChar(x,y,chr[j++],sizey);
         if(sizey==8){
             x+=6;
