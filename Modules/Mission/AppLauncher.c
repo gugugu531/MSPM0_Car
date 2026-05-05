@@ -21,6 +21,8 @@
 #include <stdio.h>
 
 #define APP_IMU_FRAME_SIZE 33
+#define APP_MOTOR_TEST_RUN_DUTY 600
+#define APP_MOTOR_TEST_TURN_DUTY 500
 
 typedef enum {
     APP_ENTRY_MISSION = 0,
@@ -218,13 +220,15 @@ static void App_ProcessImuByte(uint8_t data){
 
 static void App_RunMotorTest(void){
     MotorTestMode mode = MOTOR_TEST_STOP;
+    uint16_t duty = 0;
     char line1[24];
     char line2[24];
+    char line3[24];
     uint32_t last_refresh = 0;
 
     Motor_Brake();
     App_ClearKeys();
-    App_ShowLines("Drive check", "State:Stop", "Enc spd:0.00", "Wheel motor test", "S state", "L back");
+    App_ShowLines("Drive check", "State:Stop", "Duty:0/1000", "Enc spd:0.00", "S run/state", "L back");
 
     while (1){
         key_event_t event = Key_GetEvent(KEY_ID_1);
@@ -239,25 +243,31 @@ static void App_RunMotorTest(void){
 
         switch (mode){
             case MOTOR_TEST_STOP:
+                duty = 0;
                 Motor_Brake();
                 break;
             case MOTOR_TEST_FORWARD:
-                Motor_SetLeft(250);
-                Motor_SetRight(250);
+                duty = APP_MOTOR_TEST_RUN_DUTY;
+                Motor_SetLeft((int16_t)duty);
+                Motor_SetRight((int16_t)duty);
                 break;
             case MOTOR_TEST_BACKWARD:
-                Motor_SetLeft(-250);
-                Motor_SetRight(-250);
+                duty = APP_MOTOR_TEST_RUN_DUTY;
+                Motor_SetLeft(-(int16_t)duty);
+                Motor_SetRight(-(int16_t)duty);
                 break;
             case MOTOR_TEST_TURN_LEFT:
-                Motor_SetLeft(-220);
-                Motor_SetRight(220);
+                duty = APP_MOTOR_TEST_TURN_DUTY;
+                Motor_SetLeft(-(int16_t)duty);
+                Motor_SetRight((int16_t)duty);
                 break;
             case MOTOR_TEST_TURN_RIGHT:
-                Motor_SetLeft(220);
-                Motor_SetRight(-220);
+                duty = APP_MOTOR_TEST_TURN_DUTY;
+                Motor_SetLeft((int16_t)duty);
+                Motor_SetRight(-(int16_t)duty);
                 break;
             default:
+                duty = 0;
                 Motor_Brake();
                 break;
         }
@@ -265,8 +275,9 @@ static void App_RunMotorTest(void){
         if (tick - last_refresh >= 120){
             last_refresh = tick;
             snprintf(line1, sizeof(line1), "State:%s", s_motor_modes[mode]);
-            snprintf(line2, sizeof(line2), "Enc spd:%0.2f", Encoder_GetSpeed());
-            App_UpdateTestLines(line1, line2, NULL, NULL);
+            snprintf(line2, sizeof(line2), "Duty:%u/1000", duty);
+            snprintf(line3, sizeof(line3), "Enc spd:%0.2f", Encoder_GetSpeed());
+            App_UpdateTestLines(line1, line2, line3, NULL);
         }
 
         Delay_ms(20);
