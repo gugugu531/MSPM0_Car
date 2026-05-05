@@ -14,29 +14,29 @@
         name="NUEDC2025_MSPM0G3507_nortos_ticlang"
         configurations="Debug"
         toolChain="TICLANG"
-        connection="TIXDS110_Connection.xml"
+        connection="segger_j-link_connection.xml"
         device="MSPM0G3507"
         ignoreDefaultDeviceSettings="true"
         ignoreDefaultCCSSettings="true"
         products="MSPM0-SDK;sysconfig"
         compilerBuildOptions="
-            -I${PROJECT_ROOT}
+            -I${REPO_ROOT}
             -I${PROJECT_ROOT}/${ConfigName}
-            -I${PROJECT_ROOT}/Core/Inc
-            -I${PROJECT_ROOT}/Core/Src
-            -I${PROJECT_ROOT}/Board/SysConfig
-            -I${PROJECT_ROOT}/Drivers
-            -I${PROJECT_ROOT}/Drivers/Platform/Common
-            -I${PROJECT_ROOT}/Drivers/Platform/System
-            -I${PROJECT_ROOT}/Drivers/BSP/IMU
-            -I${PROJECT_ROOT}/Drivers/BSP/Key
-            -I${PROJECT_ROOT}/Drivers/BSP/Laser
-            -I${PROJECT_ROOT}/Drivers/BSP/Motor
-            -I${PROJECT_ROOT}/Drivers/BSP/OLED
-            -I${PROJECT_ROOT}/Drivers/BSP/StepMotor
-            -I${PROJECT_ROOT}/Drivers/BSP/TrackingSensor
-            -I${PROJECT_ROOT}/Modules/Control
-            -I${PROJECT_ROOT}/Modules/Mission
+            -I${REPO_ROOT}/Core/Inc
+            -I${REPO_ROOT}/Core/Src
+            -I${REPO_ROOT}/Board/SysConfig
+            -I${REPO_ROOT}/Drivers
+            -I${REPO_ROOT}/Drivers/Platform/Common
+            -I${REPO_ROOT}/Drivers/Platform/System
+            -I${REPO_ROOT}/Drivers/BSP/IMU
+            -I${REPO_ROOT}/Drivers/BSP/Key
+            -I${REPO_ROOT}/Drivers/BSP/Laser
+            -I${REPO_ROOT}/Drivers/BSP/Motor
+            -I${REPO_ROOT}/Drivers/BSP/OLED
+            -I${REPO_ROOT}/Drivers/BSP/StepMotor
+            -I${REPO_ROOT}/Drivers/BSP/TrackingSensor
+            -I${REPO_ROOT}/Modules/Control
+            -I${REPO_ROOT}/Modules/Mission
             -O0
             @device.opt
             -I${COM_TI_MSPM0_SDK_INSTALL_DIR}/source/third_party/CMSIS/Core/Include
@@ -50,7 +50,7 @@
         linkerBuildOptions="
             -ldevice.cmd.genlibs
             -L${COM_TI_MSPM0_SDK_INSTALL_DIR}/source
-            -L${PROJECT_ROOT}
+            -L${REPO_ROOT}
             -L${PROJECT_BUILD_DIR}/syscfg
             -Wl,--rom_model
             -Wl,--warn_sections
@@ -69,75 +69,76 @@
 
         <property name="buildProfile" value="debug"/>
         <property name="isHybrid" value="true"/>
+        <pathVariable name="REPO_ROOT" path="../.." scope="project" />
 
-        <file path="../../Core/Src/main.c" openOnCreation="true" excludeFromBuild="false" action="copy" />
-        <file path="../../Board/SysConfig/empty.syscfg" openOnCreation="true" excludeFromBuild="false" action="copy" />
-        <file path="../../Board/SysConfig/ti_msp_dl_config.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Board/SysConfig/ti_msp_dl_config.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="${REPO_ROOT}/Core/Src/main.c" openOnCreation="true" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Board/SysConfig/empty.syscfg" openOnCreation="true" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Board/SysConfig/ti_msp_dl_config.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Board/SysConfig/ti_msp_dl_config.h" openOnCreation="false" excludeFromBuild="false" action="link" />
 
-        <file path="../../Core/Inc/AppState.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Core/Inc/SystemTime.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Core/Inc/TrackingRuntime.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Core/Inc/VisionState.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Core/Inc/project_build_config.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/Platform/Common/BspCommon.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="${REPO_ROOT}/Core/Inc/AppState.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Core/Inc/SystemTime.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Core/Inc/TrackingRuntime.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Core/Inc/VisionState.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Core/Inc/project_build_config.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/Platform/Common/BspCommon.h" openOnCreation="false" excludeFromBuild="false" action="link" />
 
-        <file path="../../Drivers/Platform/System/Delay.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/Platform/System/Delay.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/Platform/System/ErrorHandler.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/Platform/System/ErrorHandler.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/Platform/System/Initialize.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/Platform/System/Initialize.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/Platform/System/InitStepMotor.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/Platform/System/InitStepMotor.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="${REPO_ROOT}/Drivers/Platform/System/Delay.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/Platform/System/Delay.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/Platform/System/ErrorHandler.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/Platform/System/ErrorHandler.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/Platform/System/Initialize.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/Platform/System/Initialize.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/Platform/System/InitStepMotor.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/Platform/System/InitStepMotor.h" openOnCreation="false" excludeFromBuild="false" action="link" />
 
-        <file path="../../Modules/Control/Kinematics.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Control/Kinematics.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Control/PID.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Control/PID.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Control/Rotation.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Control/Rotation.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Control/SensorProc.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Control/SensorProc.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Control/StepMotorCtrl.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Control/StepMotorCtrl.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Control/Tracking.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Control/Tracking.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="${REPO_ROOT}/Modules/Control/Kinematics.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Control/Kinematics.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Control/PID.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Control/PID.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Control/Rotation.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Control/Rotation.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Control/SensorProc.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Control/SensorProc.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Control/StepMotorCtrl.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Control/StepMotorCtrl.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Control/Tracking.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Control/Tracking.h" openOnCreation="false" excludeFromBuild="false" action="link" />
 
-        <file path="../../Modules/Mission/CircleList.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Mission/CircleList.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Mission/AppLauncher.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Mission/AppLauncher.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Mission/Menu.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Mission/Menu.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Mission/Mode.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Mission/Mode.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Mission/ModeTree.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Modules/Mission/ModeTree.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="${REPO_ROOT}/Modules/Mission/CircleList.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Mission/CircleList.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Mission/AppLauncher.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Mission/AppLauncher.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Mission/Menu.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Mission/Menu.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Mission/Mode.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Mission/Mode.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Mission/ModeTree.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Modules/Mission/ModeTree.h" openOnCreation="false" excludeFromBuild="false" action="link" />
 
-        <file path="../../Drivers/BSP/IMU/Reg.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/BSP/IMU/WitSDK.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/BSP/IMU/WitSDK.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="${REPO_ROOT}/Drivers/BSP/IMU/Reg.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/BSP/IMU/WitSDK.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/BSP/IMU/WitSDK.h" openOnCreation="false" excludeFromBuild="false" action="link" />
 
-        <file path="../../Drivers/BSP/Key/Key.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/BSP/Key/Key.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="${REPO_ROOT}/Drivers/BSP/Key/Key.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/BSP/Key/Key.h" openOnCreation="false" excludeFromBuild="false" action="link" />
 
-        <file path="../../Drivers/BSP/Laser/LaserUsart.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/BSP/Laser/LaserUsart.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="${REPO_ROOT}/Drivers/BSP/Laser/LaserUsart.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/BSP/Laser/LaserUsart.h" openOnCreation="false" excludeFromBuild="false" action="link" />
 
-        <file path="../../Drivers/BSP/Motor/HallEncoder.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/BSP/Motor/HallEncoder.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/BSP/Motor/Tb6612fng.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/BSP/Motor/Tb6612fng.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="${REPO_ROOT}/Drivers/BSP/Motor/HallEncoder.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/BSP/Motor/HallEncoder.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/BSP/Motor/Tb6612fng.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/BSP/Motor/Tb6612fng.h" openOnCreation="false" excludeFromBuild="false" action="link" />
 
-        <file path="../../Drivers/BSP/OLED/OLED.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/BSP/OLED/OLED.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/BSP/OLED/OLEDFont.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="${REPO_ROOT}/Drivers/BSP/OLED/OLED.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/BSP/OLED/OLED.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/BSP/OLED/OLEDFont.h" openOnCreation="false" excludeFromBuild="false" action="link" />
 
-        <file path="../../Drivers/BSP/StepMotor/StepMotor.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/BSP/StepMotor/StepMotor.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="${REPO_ROOT}/Drivers/BSP/StepMotor/StepMotor.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/BSP/StepMotor/StepMotor.h" openOnCreation="false" excludeFromBuild="false" action="link" />
 
-        <file path="../../Drivers/BSP/TrackingSensor/TrackingSensor.c" openOnCreation="false" excludeFromBuild="false" action="copy" />
-        <file path="../../Drivers/BSP/TrackingSensor/TrackingSensor.h" openOnCreation="false" excludeFromBuild="false" action="copy" />
+        <file path="${REPO_ROOT}/Drivers/BSP/TrackingSensor/TrackingSensor.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+        <file path="${REPO_ROOT}/Drivers/BSP/TrackingSensor/TrackingSensor.h" openOnCreation="false" excludeFromBuild="false" action="link" />
     </project>
 </projectSpec>

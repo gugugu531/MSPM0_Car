@@ -68,9 +68,8 @@
   - `Mission/`：启动器、菜单树、题目流程与任务编排
 - `Project/`
   - `CCS/`：`CCS` 导入规格与工程元数据
+  - `CCS/targetConfigs/`：`CCS` 目标连接配置
   - `Keil/`：`Keil` 工程文件
-- `targetConfigs/`
-  - `CCS` 自动管理的目标连接配置
 - `Docs/`
   - 构建说明、目录结构和维护约定
 - `Tools/`
@@ -90,6 +89,12 @@
 - 不跟踪 `.ccsproject`
 
 如需在 `CCS` 中打开本工程，应通过 `projectspec` 重新导入。
+当前 `projectspec` 采用“链接仓库源码”的方式导入，不再复制一份源码树。
+若使用 `CCS` 图形界面直接导入，生成工程目录通常会落在当前 workspace 中。
+如需避免把导入工程目录生成在仓库根目录，推荐：
+
+- 使用仓库外独立 workspace
+- 或将导入生成目录固定放在 `Project/CCS/Workspace/` 这类专用位置，并作为本地产物忽略
 
 ## 构建边界
 
@@ -108,6 +113,7 @@
 - `Project/Keil/*.map`
 - `Project/Keil/*.uvoptx`
 - `Project/Keil/*.uvguix.*`
+- `NUEDC2025_MSPM0G3507_nortos_ticlang/`
 - `.settings/`
 - `.theia/`
 - `.clangd/`

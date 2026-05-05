@@ -23,15 +23,15 @@
   - `Mission/`：启动页、菜单树、题目模式和流程编排
 - `Project/`
   - `CCS/`：`CCS` 导入规格和工程元数据
+  - `CCS/targetConfigs/`：`CCS` 目标连接配置
   - `Keil/`：`Keil` 工程文件
-- `targetConfigs/`
-  - `CCS` 自动生成和管理的目标连接配置
 - `Docs/`
   - 结构说明、构建说明、维护约定
 - `Tools/`
   - `J-Link` 辅助脚本
 
 当前根目录不再保留 `.project`、`.cproject`、`.ccsproject`，因此仓库形态更接近“共享源码 + `CCS` 导入模板 + `Keil` 工程文件”，而不是“直接可打开的根目录 `CCS` 工程”。
+`CCS` 若基于 `projectspec` 重新生成导入工程目录，该目录应视为本地工程产物，而不是仓库源码目录的一部分。
 
 ## 2. Runtime Layering
 
@@ -147,9 +147,12 @@
 - `Project/Keil/*.map`
 - `Project/Keil/*.uvoptx`
 - `Project/Keil/*.uvguix.*`
+- `NUEDC2025_MSPM0G3507_nortos_ticlang/`
 - `.settings/`
 - `.theia/`
 - `.clangd/`
+
+若后续需要在仓库内保留 `CCS` 导入工程目录，也建议收纳到 `Project/CCS/Workspace/` 这类专用位置，而不是继续放在仓库根目录。
 
 ## 9. Maintenance Guidance
 

@@ -47,6 +47,8 @@
   [Board/SysConfig/ti_msp_dl_config.h](../Board/SysConfig/ti_msp_dl_config.h)
 
 当前仓库不再保留根目录 `CCS` 工程元数据文件，因此 `CCS` 的推荐入口是 `projectspec` 导入，而不是直接打开仓库根目录。
+当前 `projectspec` 采用“链接仓库源码”而非“复制源码到工程目录”的方式导入，因此推荐将 `CCS` 工程创建到独立 workspace 中，避免在仓库内生成额外的导入工程目录。
+若必须把导入工程放在仓库内，建议单独落在 `Project/CCS/Workspace/` 之类的专用目录，而不是仓库根目录。
 
 ### 3.2 Startup And Link
 
@@ -65,6 +67,16 @@
 - 新增源码后，确认 `projectspec` 已包含对应文件
 - 若修改 `projectspec` 或重新导入工程，建议执行 `Refresh`、`Clean`、`Build`
 - 不要让 `CCS` 扫描 `Project/Keil/Objects/` 或引用其中的 `.o/.obj`
+- 若重新导入 `CCS` 工程，优先使用独立 workspace，避免把导入生成目录落在仓库根目录
+- `CCS` 目标连接配置统一放在 `Project/CCS/targetConfigs/`
+
+### 3.5 Recommended Import Placement
+
+- 最推荐：把 `CCS` workspace 放在仓库外，例如单独的本地工作目录
+- 次优方案：若必须落在仓库内，将导入工程目录固定放在 `Project/CCS/Workspace/`
+- 不推荐：把导入工程目录直接生成在仓库根目录
+
+如果使用 `ccs-server-cli` 创建工程，可以通过 `-ccs.location` 显式指定导入工程目录；这比手工图形界面导入更容易保持位置一致。
 
 ## 4. Keil Build
 
@@ -126,6 +138,7 @@
 - 不要把某个 IDE 的构建产物目录纳入另一套 IDE 的源码扫描范围
 - 不要在 `Debug/` 或 `Project/Keil/Objects/` 中手工维护源码
 - 若本地重新生成了 `.settings/`、`Debug/`、`uvoptx`、`uvguix.*`，提交前应先清理
+- 若本地重新生成了 `CCS` 导入工程目录，也应确保其不进入版本控制
 - 若出现双 IDE 构建异常，优先排查：
   - 是否误引用了对方的构建产物
   - 是否误用了对方的启动文件

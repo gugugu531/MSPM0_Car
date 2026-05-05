@@ -1,6 +1,11 @@
 Debug/
 .settings/
 .theia/
+.project
+.cproject
+.ccsproject
+.clangd
+/NUEDC2025_MSPM0G3507_nortos_ticlang/
 Project/Keil/Objects/
 Project/Keil/*.map
 Project/Keil/*.axf
