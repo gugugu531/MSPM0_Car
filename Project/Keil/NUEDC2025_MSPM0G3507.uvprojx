@@ -134,11 +134,11 @@
             <RunIndependent>0</RunIndependent>
             <UpdateFlashBeforeDebugging>1</UpdateFlashBeforeDebugging>
             <Capability>1</Capability>
-            <DriverSelection>0</DriverSelection>
+            <DriverSelection>4096</DriverSelection>
           </Flash1>
           <bUseTDR>1</bUseTDR>
           <Flash2>BIN\UL2CM3.DLL</Flash2>
-          <Flash3></Flash3>
+          <Flash3>"" ()</Flash3>
           <Flash4></Flash4>
           <pFcarmOut></pFcarmOut>
           <pFcarmGrp></pFcarmGrp>
@@ -290,7 +290,7 @@
                 <Size>0x0</Size>
               </OCR_RVCT6>
               <OCR_RVCT7>
-                <Type>1</Type>
+                <Type>0</Type>
                 <StartAddress>0x20300000</StartAddress>
                 <Size>0x8000</Size>
               </OCR_RVCT7>
@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include;C:\ti\mspm0_sdk_2_10_00_04\source;..\..\Core\Inc;..\..\Core\Src;..\..\Board\SysConfig;..\..\drivers;..\..\drivers\Platform\Common;..\..\drivers\Platform\System;..\..\drivers\BSP\Imu;..\..\drivers\BSP\Key;..\..\drivers\BSP\Laser;..\..\drivers\BSP\Motor;..\..\drivers\BSP\OLED;..\..\drivers\BSP\StepMotor;..\..\drivers\BSP\TrackingSensor;..\..\Modules\Control;..\..\Modules\Mission</IncludePath>
+              <IncludePath>C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include;C:\ti\mspm0_sdk_2_10_00_04\source;..\..\Core\Inc;..\..\Core\Src;..\..\Board\SysConfig;..\..\Drivers;..\..\Drivers\Platform\Common;..\..\Drivers\Platform\System;..\..\Drivers\BSP\IMU;..\..\Drivers\BSP\Key;..\..\Drivers\BSP\Laser;..\..\Drivers\BSP\Motor;..\..\Drivers\BSP\OLED;..\..\Drivers\BSP\StepMotor;..\..\Drivers\BSP\TrackingSensor;..\..\Modules\Control;..\..\Modules\Mission</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -417,22 +417,22 @@
             <File>
               <FileName>Delay.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\Platform\System\Delay.c</FilePath>
+              <FilePath>..\..\Drivers\Platform\System\Delay.c</FilePath>
             </File>
             <File>
               <FileName>ErrorHandler.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\Platform\System\ErrorHandler.c</FilePath>
+              <FilePath>..\..\Drivers\Platform\System\ErrorHandler.c</FilePath>
             </File>
             <File>
               <FileName>Initialize.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\Platform\System\Initialize.c</FilePath>
+              <FilePath>..\..\Drivers\Platform\System\Initialize.c</FilePath>
             </File>
             <File>
               <FileName>InitStepMotor.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\Platform\System\InitStepMotor.c</FilePath>
+              <FilePath>..\..\Drivers\Platform\System\InitStepMotor.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -440,9 +440,9 @@
           <GroupName>Modules/Control</GroupName>
           <Files>
             <File>
-              <FileName>Pid.c</FileName>
+              <FileName>PID.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\Modules\Control\Pid.c</FilePath>
+              <FilePath>..\..\Modules\Control\PID.c</FilePath>
             </File>
             <File>
               <FileName>Kinematics.c</FileName>
@@ -507,42 +507,42 @@
             <File>
               <FileName>Tb6612fng.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\BSP\Motor\Tb6612fng.c</FilePath>
+              <FilePath>..\..\Drivers\BSP\Motor\Tb6612fng.c</FilePath>
             </File>
             <File>
               <FileName>HallEncoder.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\BSP\Motor\HallEncoder.c</FilePath>
+              <FilePath>..\..\Drivers\BSP\Motor\HallEncoder.c</FilePath>
             </File>
             <File>
-              <FileName>Oled.c</FileName>
+              <FileName>OLED.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\BSP\OLED\Oled.c</FilePath>
+              <FilePath>..\..\Drivers\BSP\OLED\OLED.c</FilePath>
             </File>
             <File>
               <FileName>Key.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\BSP\Key\Key.c</FilePath>
+              <FilePath>..\..\Drivers\BSP\Key\Key.c</FilePath>
             </File>
             <File>
               <FileName>LaserUsart.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\BSP\Laser\LaserUsart.c</FilePath>
+              <FilePath>..\..\Drivers\BSP\Laser\LaserUsart.c</FilePath>
             </File>
             <File>
               <FileName>StepMotor.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\BSP\StepMotor\StepMotor.c</FilePath>
+              <FilePath>..\..\Drivers\BSP\StepMotor\StepMotor.c</FilePath>
             </File>
             <File>
               <FileName>TrackingSensor.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\BSP\TrackingSensor\TrackingSensor.c</FilePath>
+              <FilePath>..\..\Drivers\BSP\TrackingSensor\TrackingSensor.c</FilePath>
             </File>
             <File>
-              <FileName>WitSdk.c</FileName>
+              <FileName>WitSDK.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\drivers\BSP\Imu\WitSdk.c</FilePath>
+              <FilePath>..\..\Drivers\BSP\IMU\WitSDK.c</FilePath>
             </File>
           </Files>
         </Group>

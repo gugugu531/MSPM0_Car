@@ -7,7 +7,7 @@
 
 #include "ModeTree.h"
 #include "CircleList.h"
-#include "Oled.h"
+#include "OLED.h"
 #include <stdbool.h>
 #include "project_build_config.h"
 

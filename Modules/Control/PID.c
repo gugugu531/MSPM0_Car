@@ -1,8 +1,8 @@
 /**
- * @file  Pid.c
+ * @file  PID.c
  * @brief PID 控制器实现，提供初始化、计算、复位等功能
  */
-#include "Pid.h"
+#include "PID.h"
 #include <stddef.h>
 
 void PID_Init(PIDController *pid, float Kp, float Ki, float Kd, float integral_limit){

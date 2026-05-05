@@ -1,5 +1,5 @@
 /**
- * @file      Oled.h
+ * @file      OLED.h
  * @brief     SSD1306 OLED 显示屏驱动库头文件 (软件I2C)
  * @details   通过软件模拟 I2C 协议驱动 OLED，提供初始化、显示字符、
  *            数字、字符串、位图等功能。

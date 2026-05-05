@@ -1,7 +1,7 @@
 #include "AppState.h"
 #include "ErrorHandler.h"
 #include "Initialize.h"
-#include "Oled.h"
+#include "OLED.h"
 
 void error_handler(void){
     Motor_Brake();

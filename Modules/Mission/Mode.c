@@ -11,7 +11,7 @@
 #include "Delay.h"
 #include "Initialize.h"
 #include "Kinematics.h"
-#include "Oled.h"
+#include "OLED.h"
 #include "SensorProc.h"
 #include "StepMotorCtrl.h"
 #include "Tracking.h"

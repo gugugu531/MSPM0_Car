@@ -7,8 +7,8 @@
  * @date      2025-07-31
  */
 
-#include "Oled.h"
-#include "OledFont.h"
+#include "OLED.h"
+#include "OLEDFont.h"
 #include <stdint.h>
 #include "Delay.h"
 

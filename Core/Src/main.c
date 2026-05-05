@@ -7,7 +7,7 @@
 #include "Initialize.h"
 #include "Key.h"
 #include "LaserUsart.h"
-#include "Oled.h"
+#include "OLED.h"
 #include "ti_msp_dl_config.h"
 
 uint32_t tick;

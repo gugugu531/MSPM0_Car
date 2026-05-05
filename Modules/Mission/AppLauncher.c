@@ -9,12 +9,12 @@
 #include "Initialize.h"
 #include "Key.h"
 #include "Menu.h"
-#include "Oled.h"
+#include "OLED.h"
 #include "SystemTime.h"
 #include "TrackingRuntime.h"
 #include "TrackingSensor.h"
 #include "VisionState.h"
-#include "WitSdk.h"
+#include "WitSDK.h"
 #include "ti_msp_dl_config.h"
 #include <stdbool.h>
 #include <stdint.h>

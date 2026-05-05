@@ -1,4 +1,4 @@
-#include "WitSdk.h"
+#include "WitSDK.h"
 #include <stdio.h>
 #include <string.h>
 #include "AppState.h"

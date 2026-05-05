@@ -1,5 +1,5 @@
 /**
- * @file  WitSdk.h
+ * @file  WitSDK.h
  * @brief WitMotion IMU SDK 接口，支持串口/I2C/CAN 协议通信
  */
 #ifndef WIT_SDK_H

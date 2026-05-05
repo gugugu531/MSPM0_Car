@@ -12,7 +12,7 @@
 #include "HallEncoder.h"
 #include "Initialize.h"
 #include "Mode.h"
-#include "Oled.h"
+#include "OLED.h"
 #include "SensorProc.h"
 
 static Coordinate laser_position = {0.0f, 0.0f};
