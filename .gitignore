@@ -5,6 +5,7 @@ Debug/
 .cproject
 .ccsproject
 .clangd
+.vscode/
 /NUEDC2025_MSPM0G3507_nortos_ticlang/
 Project/Keil/Objects/
 Project/Keil/*.map
