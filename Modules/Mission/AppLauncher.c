@@ -129,22 +129,40 @@ static void App_ShowLines(const char *title,
                           const char *line4,
                           const char *line5){
     OLED_Clear();
-    OLED_ShowString(0, 0, (char *)title, 8);
+    OLED_ShowString(0, 0, title, 8);
 
     if (line1 != NULL){
-        OLED_ShowString(0, 2, (char *)line1, 8);
+        OLED_ShowString(0, 2, line1, 8);
     }
     if (line2 != NULL){
-        OLED_ShowString(0, 3, (char *)line2, 8);
+        OLED_ShowString(0, 3, line2, 8);
     }
     if (line3 != NULL){
-        OLED_ShowString(0, 4, (char *)line3, 8);
+        OLED_ShowString(0, 4, line3, 8);
     }
     if (line4 != NULL){
-        OLED_ShowString(0, 6, (char *)line4, 8);
+        OLED_ShowString(0, 6, line4, 8);
     }
     if (line5 != NULL){
-        OLED_ShowString(0, 7, (char *)line5, 8);
+        OLED_ShowString(0, 7, line5, 8);
+    }
+}
+
+static void App_UpdateTestLines(const char *line1,
+                                const char *line2,
+                                const char *line3,
+                                const char *line4){
+    if (line1 != NULL){
+        OLED_ShowStringClearLine(0, 2, line1, 8);
+    }
+    if (line2 != NULL){
+        OLED_ShowStringClearLine(0, 3, line2, 8);
+    }
+    if (line3 != NULL){
+        OLED_ShowStringClearLine(0, 4, line3, 8);
+    }
+    if (line4 != NULL){
+        OLED_ShowStringClearLine(0, 6, line4, 8);
     }
 }
 
@@ -206,6 +224,7 @@ static void App_RunMotorTest(void){
 
     Motor_Brake();
     App_ClearKeys();
+    App_ShowLines("Drive check", "State:Stop", "Enc spd:0.00", "Wheel motor test", "S state", "L back");
 
     while (1){
         key_event_t event = Key_GetEvent(KEY_ID_1);
@@ -247,7 +266,7 @@ static void App_RunMotorTest(void){
             last_refresh = tick;
             snprintf(line1, sizeof(line1), "State:%s", s_motor_modes[mode]);
             snprintf(line2, sizeof(line2), "Enc spd:%0.2f", Encoder_GetSpeed());
-            App_ShowLines("Drive check", line1, line2, "Wheel motor test", "S state", "L back");
+            App_UpdateTestLines(line1, line2, NULL, NULL);
         }
 
         Delay_ms(20);
@@ -263,6 +282,7 @@ static void App_RunStepperTest(void){
 
     YP_SMotor_Init();
     App_ClearKeys();
+    App_ShowLines("Pan tilt", "State:Stop", "Yaw deg:0.0", "Pit deg:0.0", "S state", "L back");
 
     while (1){
         key_event_t event = Key_GetEvent(KEY_ID_1);
@@ -305,7 +325,7 @@ static void App_RunStepperTest(void){
             snprintf(line1, sizeof(line1), "State:%s", s_stepper_modes[mode]);
             snprintf(line2, sizeof(line2), "Yaw deg:%0.1f", GetYaw());
             snprintf(line3, sizeof(line3), "Pit deg:%0.1f", GetPitch());
-            App_ShowLines("Pan tilt", line1, line2, line3, "S state", "L back");
+            App_UpdateTestLines(line1, line2, line3, NULL);
         }
 
         Delay_ms(20);
@@ -322,6 +342,7 @@ static void App_RunImuTest(void){
 
     App_EnableImuDebugUart();
     App_ClearKeys();
+    App_ShowLines("Gyro check", "No IMU data", "Check UART0", "Frame wait...", "Frames:0", "S page L back");
 
     while (1){
         key_event_t event = Key_GetEvent(KEY_ID_1);
@@ -362,7 +383,7 @@ static void App_RunImuTest(void){
             }
 
             snprintf(line4, sizeof(line4), "Frames:%lu", (unsigned long)s_imu_frame_count);
-            App_ShowLines("Gyro check", line1, line2, line3, line4, "S page L back");
+            App_UpdateTestLines(line1, line2, line3, line4);
         }
 
         Delay_ms(20);
@@ -377,6 +398,7 @@ static void App_RunVisionTest(void){
     uint32_t last_refresh = 0;
 
     App_ClearKeys();
+    App_ShowLines("Vision check", "Laser:INIT", "X:0 Y:0", "Dot2:0 0", "S page", "L back");
 
     while (1){
         key_event_t event = Key_GetEvent(KEY_ID_1);
@@ -401,7 +423,7 @@ static void App_RunVisionTest(void){
                 snprintf(line3, sizeof(line3), "P1:%u,%u", Rect_Loc[2], Rect_Loc[3]);
             }
 
-            App_ShowLines("Vision check", line1, line2, line3, "S page", "L back");
+            App_UpdateTestLines(line1, line2, line3, NULL);
         }
 
         Delay_ms(20);
@@ -415,6 +437,7 @@ static void App_RunTrackingTest(void){
     uint32_t last_refresh = 0;
 
     App_ClearKeys();
+    App_ShowLines("Track check", "Bits:00000000", "Car spd:0.00", "8 sensor input", NULL, "L back");
 
     while (1){
         key_event_t event = Key_GetEvent(KEY_ID_1);
@@ -436,7 +459,7 @@ static void App_RunTrackingTest(void){
 
             snprintf(line1, sizeof(line1), "Bits:%s", sensor_bits);
             snprintf(line2, sizeof(line2), "Car spd:%0.2f", Encoder_GetSpeed());
-            App_ShowLines("Track check", line1, line2, "8 sensor input", NULL, "L back");
+            App_UpdateTestLines(line1, line2, NULL, NULL);
         }
 
         Delay_ms(20);

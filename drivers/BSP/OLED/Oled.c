@@ -208,6 +208,17 @@ void OLED_Clear(void){
         OLED_Write_ContinuousData_NoAck(clear_buf, 128);  
     }
 }
+
+void OLED_ClearLine(uint8_t y){
+    static uint8_t clear_buf[128] = {0};
+
+    if (y >= 8){
+        return;
+    }
+
+    OLED_Set_Pos(0, y);
+    OLED_Write_ContinuousData_NoAck(clear_buf, 128);
+}
  
 //在指定位置显示一个字符,包括部分字符
 //x:0~127
@@ -307,6 +318,11 @@ void OLED_ShowString(uint8_t x,uint8_t y,const char *chr,uint8_t sizey){
             x+=sizey/2;
         }
     }
+}
+
+void OLED_ShowStringClearLine(uint8_t x,uint8_t y,const char *chr,uint8_t sizey){
+    OLED_ClearLine(y);
+    OLED_ShowString(x, y, chr, sizey);
 }
  
 
