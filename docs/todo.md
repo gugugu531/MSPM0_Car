@@ -1,0 +1,9 @@
+# Todo
+
+- 在确认本地 MSPM0 SDK 环境变量后运行 CCS/ticlang 构建。
+- 在确认本地 Keil MDK/ArmClang 安装路径后运行 Keil 构建。
+- 继续把 `middleware/runtime` 中的全局运行时状态收敛为显式上下文结构。
+- 如需要更彻底的 API 统一，后续可把公开 C 函数也改为 snake_case。
+- 复查 `middleware/system/error_handler.c` 对 OLED 的直接依赖，必要时改成显示回调。
+- 上板验证启动页、任务菜单、设备自检、UART0 IMU、UART2 视觉和 SysTick 按键扫描。
+
