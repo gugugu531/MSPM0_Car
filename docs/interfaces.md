@@ -27,7 +27,7 @@
 
 - `common/bsp_common.h`：BSP 公共状态和基础数据结构，详细说明见 `docs/interfaces/bsp_common.md`。
 - `time/bsp_time.h`：BSP 系统时间和阻塞延时服务，详细说明见 `docs/interfaces/bsp_time.md`。
-- `key.h`：按键状态机。消抖时间源来自 `bsp/time`。
+- `key.h`：按键读取、消抖和事件生成，详细说明见 `docs/interfaces/bsp_key.md`。
 - `oled.h`：SSD1306 OLED 驱动。软件 I2C 延时来自 `bsp/time`。
 - `step_motor.h`：步进电机底层驱动。状态更新由调用方显式传入当前时间。
 - `laser_usart.h`：CanMV UART 解析和激光点/矩形点状态。

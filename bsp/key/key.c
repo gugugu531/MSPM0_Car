@@ -1,266 +1,280 @@
 /**
- * @file  Key.c
- * @brief 按键驱动实现，支持消抖、短按、长按和双击检测
+ * @file  key.c
+ * @brief BSP 按键驱动实现。
  */
-
 #include "key.h"
 #include "bsp_time.h"
 
-static key_info_t keys[KEY_ID_MAX];
-static key_event_t key_events[KEY_ID_MAX];
+typedef enum {
+    KEY_LEVEL_RELEASED = 0,
+    KEY_LEVEL_PRESSED
+} KEY_LEVEL;
 
-/**
- * @brief 获取系统时间戳 (毫秒)
- * @return 当前时间戳
- */
-static uint32_t Get_SystemTick(void){
-    return BSP_Time_GetMs();
+typedef enum {
+    KEY_STATE_RELEASED = 0,
+    KEY_STATE_PRESS_DEBOUNCE,
+    KEY_STATE_PRESSED,
+    KEY_STATE_RELEASE_DEBOUNCE,
+    KEY_STATE_WAIT_DOUBLE,
+    KEY_STATE_DOUBLE_DEBOUNCE
+} KEY_STATE;
+
+typedef struct {
+    GPIO_Regs *port;
+    uint32_t pin;
+    bool active_low;
+} KEY_HW_CONFIG;
+
+typedef struct {
+    KEY_STATE state;
+    KEY_LEVEL stable_level;
+    KEY_LEVEL candidate_level;
+    uint32_t debounce_start_ms;
+    uint32_t press_start_ms;
+    uint32_t release_time_ms;
+    KEY_EVENT pending_event;
+    bool long_reported;
+    bool suppress_release_event;
+} KEY_STATE_CONTEXT;
+
+static const KEY_HW_CONFIG s_key_hw[KEY_ID_MAX] = {
+    [KEY_ID_1] = {
+        .port = KEY1_PORT,
+        .pin = KEY1_PIN,
+        .active_low = (KEY1_ACTIVE_LOW != 0U),
+    },
+};
+
+static KEY_STATE_CONTEXT s_key_state[KEY_ID_MAX];
+
+static bool Key_IsValidId(KEY_ID key_id){
+    return key_id < KEY_ID_MAX;
 }
 
-/**
- * @brief 读取指定按键的GPIO状态
- * @param key_id 按键ID
- * @return GPIO引脚状态 (0或1)
- */
-static uint8_t Key_ReadGPIO(key_id_t key_id){
-    if (key_id >= KEY_ID_MAX){
-        return KEY_RELEASED_LEVEL;
+static KEY_LEVEL Key_ReadLevel(KEY_ID key_id){
+    const KEY_HW_CONFIG *hw = &s_key_hw[key_id];
+    bool high_level = (DL_GPIO_readPins(hw->port, hw->pin) != 0U);
+    bool pressed = hw->active_low ? !high_level : high_level;
+
+    return pressed ? KEY_LEVEL_PRESSED : KEY_LEVEL_RELEASED;
+}
+
+static void Key_PushEvent(KEY_ID key_id, KEY_EVENT event){
+    if (event != KEY_EVENT_NONE){
+        s_key_state[key_id].pending_event = event;
     }
-
-    key_info_t *key = &keys[key_id];
-    uint32_t pin_state = DL_GPIO_readPins(key->port, key->pin);
-
-    return (pin_state != 0) ? 1 : 0;
 }
 
-/**
- * @brief 按键系统初始化
- */
 void Key_Init(void){
-    keys[KEY_ID_1].port = KEY_PORT;
-    keys[KEY_ID_1].pin = KEY_PIN;
+    for (uint8_t i = 0U; i < (uint8_t)KEY_ID_MAX; i++){
+        KEY_ID key_id = (KEY_ID)i;
+        KEY_LEVEL level = Key_ReadLevel(key_id);
 
-    for (uint8_t i = 0; i < KEY_ID_MAX; i++){
-        keys[i].state = KEY_STATE_IDLE;
-        keys[i].current_level = KEY_RELEASED_LEVEL;
-        keys[i].last_level = KEY_RELEASED_LEVEL;
-        keys[i].press_time = 0;
-        keys[i].release_time = 0;
-        keys[i].last_event_time = 0;
-        keys[i].click_count = 0;
-        keys[i].long_press_flag = false;
-        key_events[i] = KEY_EVENT_NONE;
-    }
-
-    for (uint8_t i = 0; i < KEY_ID_MAX; i++){
-        keys[i].current_level = Key_ReadGPIO((key_id_t)i);
-        keys[i].last_level = keys[i].current_level;
+        s_key_state[i].state = (level == KEY_LEVEL_PRESSED) ? KEY_STATE_PRESSED : KEY_STATE_RELEASED;
+        s_key_state[i].stable_level = level;
+        s_key_state[i].candidate_level = level;
+        s_key_state[i].debounce_start_ms = BSP_Time_GetMs();
+        s_key_state[i].press_start_ms = BSP_Time_GetMs();
+        s_key_state[i].release_time_ms = BSP_Time_GetMs();
+        s_key_state[i].pending_event = KEY_EVENT_NONE;
+        s_key_state[i].long_reported = false;
+        s_key_state[i].suppress_release_event = false;
     }
 }
 
-/**
- * @brief 单个按键状态机处理
- * @param key_id 按键ID
- */
-static void Key_StateMachine(key_id_t key_id){
-    if (key_id >= KEY_ID_MAX){
+static void Key_UpdateReleased(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
+    KEY_STATE_CONTEXT *state = &s_key_state[key_id];
+
+    if (level == KEY_LEVEL_PRESSED){
+        state->candidate_level = level;
+        state->debounce_start_ms = now_ms;
+        state->state = KEY_STATE_PRESS_DEBOUNCE;
+    }
+}
+
+static void Key_UpdatePressDebounce(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
+    KEY_STATE_CONTEXT *state = &s_key_state[key_id];
+
+    if (level != state->candidate_level){
+        state->state = KEY_STATE_RELEASED;
         return;
     }
 
-    key_info_t *key = &keys[key_id];
-    uint32_t current_time = Get_SystemTick();
+    if (now_ms - state->debounce_start_ms >= KEY_DEBOUNCE_MS){
+        state->stable_level = KEY_LEVEL_PRESSED;
+        state->press_start_ms = now_ms;
+        state->long_reported = false;
+        state->suppress_release_event = false;
+        state->state = KEY_STATE_PRESSED;
+    }
+}
 
-    key->current_level = Key_ReadGPIO(key_id);
+static void Key_UpdatePressed(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
+    KEY_STATE_CONTEXT *state = &s_key_state[key_id];
 
-    switch (key->state){
-        case KEY_STATE_IDLE:
-            if (key->current_level == KEY_PRESSED_LEVEL && key->last_level == KEY_RELEASED_LEVEL){
-                key->state = KEY_STATE_DEBOUNCE;
-                key->press_time = current_time;
-            }
+    if (level == KEY_LEVEL_RELEASED){
+        state->candidate_level = level;
+        state->debounce_start_ms = now_ms;
+        state->state = KEY_STATE_RELEASE_DEBOUNCE;
+        return;
+    }
+
+    if (!state->long_reported && (now_ms - state->press_start_ms >= KEY_LONG_PRESS_MS)){
+        state->long_reported = true;
+        Key_PushEvent(key_id, KEY_EVENT_LONG_PRESS);
+    }
+}
+
+static void Key_UpdateReleaseDebounce(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
+    KEY_STATE_CONTEXT *state = &s_key_state[key_id];
+
+    if (level != state->candidate_level){
+        state->state = KEY_STATE_PRESSED;
+        return;
+    }
+
+    if (now_ms - state->debounce_start_ms < KEY_DEBOUNCE_MS){
+        return;
+    }
+
+    state->stable_level = KEY_LEVEL_RELEASED;
+    state->release_time_ms = now_ms;
+
+    if (state->long_reported || state->suppress_release_event){
+        state->suppress_release_event = false;
+        state->state = KEY_STATE_RELEASED;
+        return;
+    }
+
+    if (now_ms - state->press_start_ms >= KEY_SHORT_PRESS_MIN_MS){
+        state->state = KEY_STATE_WAIT_DOUBLE;
+    } else{
+        state->state = KEY_STATE_RELEASED;
+    }
+}
+
+static void Key_UpdateWaitDouble(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
+    KEY_STATE_CONTEXT *state = &s_key_state[key_id];
+
+    if (now_ms - state->release_time_ms >= KEY_DOUBLE_CLICK_MS){
+        Key_PushEvent(key_id, KEY_EVENT_SHORT_PRESS);
+        state->state = KEY_STATE_RELEASED;
+        return;
+    }
+
+    if (level == KEY_LEVEL_PRESSED){
+        state->candidate_level = level;
+        state->debounce_start_ms = now_ms;
+        state->state = KEY_STATE_DOUBLE_DEBOUNCE;
+    }
+}
+
+static void Key_UpdateDoubleDebounce(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
+    KEY_STATE_CONTEXT *state = &s_key_state[key_id];
+
+    if (level != state->candidate_level){
+        state->state = KEY_STATE_WAIT_DOUBLE;
+        return;
+    }
+
+    if (now_ms - state->debounce_start_ms >= KEY_DEBOUNCE_MS){
+        Key_PushEvent(key_id, KEY_EVENT_DOUBLE_CLICK);
+        state->stable_level = KEY_LEVEL_PRESSED;
+        state->press_start_ms = now_ms;
+        state->long_reported = false;
+        state->suppress_release_event = true;
+        state->state = KEY_STATE_PRESSED;
+    }
+}
+
+static void Key_Update(KEY_ID key_id){
+    KEY_STATE_CONTEXT *state = &s_key_state[key_id];
+    KEY_LEVEL level = Key_ReadLevel(key_id);
+    uint32_t now_ms = BSP_Time_GetMs();
+
+    switch (state->state){
+        case KEY_STATE_RELEASED:
+            Key_UpdateReleased(key_id, level, now_ms);
             break;
-
-        case KEY_STATE_DEBOUNCE:
-            if (key->current_level == KEY_PRESSED_LEVEL){
-                if (current_time - key->press_time >= KEY_DEBOUNCE_TIME){
-                    key->state = KEY_STATE_PRESSED;
-                    key_events[key_id] = KEY_EVENT_PRESS;
-                    key->long_press_flag = false;
-                }
-            } else{
-                key->state = KEY_STATE_IDLE;
-            }
+        case KEY_STATE_PRESS_DEBOUNCE:
+            Key_UpdatePressDebounce(key_id, level, now_ms);
             break;
-
         case KEY_STATE_PRESSED:
-            if (key->current_level == KEY_RELEASED_LEVEL){
-                key->release_time = current_time;
-                uint32_t press_duration = current_time - key->press_time;
-
-                if (press_duration >= KEY_SHORT_PRESS_TIME && press_duration < KEY_LONG_PRESS_TIME){
-                    key->click_count++;
-                    key->last_event_time = current_time;
-                    key->state = KEY_STATE_WAIT_DOUBLE;
-                } else if (press_duration >= KEY_LONG_PRESS_TIME){
-                    key->state = KEY_STATE_IDLE;
-                    key->click_count = 0;
-                } else{
-                    key->state = KEY_STATE_IDLE;
-                }
-
-                key_events[key_id] = KEY_EVENT_RELEASE;
-            } else{
-                if (!key->long_press_flag && (current_time - key->press_time >= KEY_LONG_PRESS_TIME)){
-                    key->long_press_flag = true;
-                    key->state = KEY_STATE_LONG_PRESS;
-                    key_events[key_id] = KEY_EVENT_LONG_PRESS;
-                    key->last_event_time = current_time;
-                }
-            }
+            Key_UpdatePressed(key_id, level, now_ms);
             break;
-
-        case KEY_STATE_LONG_PRESS:
-            if (key->current_level == KEY_RELEASED_LEVEL){
-                key->state = KEY_STATE_IDLE;
-                key->click_count = 0;
-                key_events[key_id] = KEY_EVENT_RELEASE;
-            } else{
-                if (current_time - key->last_event_time >= KEY_REPEAT_TIME){
-                    key_events[key_id] = KEY_EVENT_LONG_PRESS_REPEAT;
-                    key->last_event_time = current_time;
-                }
-            }
+        case KEY_STATE_RELEASE_DEBOUNCE:
+            Key_UpdateReleaseDebounce(key_id, level, now_ms);
             break;
-
         case KEY_STATE_WAIT_DOUBLE:
-            if (key->current_level == KEY_PRESSED_LEVEL && key->last_level == KEY_RELEASED_LEVEL){
-                if (current_time - key->release_time <= KEY_DOUBLE_CLICK_TIME){
-                    key_events[key_id] = KEY_EVENT_DOUBLE_CLICK;
-                    key->click_count = 0;
-                    key->state = KEY_STATE_DEBOUNCE;
-                    key->press_time = current_time;
-                } else{
-                    key_events[key_id] = KEY_EVENT_SHORT_PRESS;
-                    key->click_count = 0;
-                    key->state = KEY_STATE_DEBOUNCE;
-                    key->press_time = current_time;
-                }
-            } else if (current_time - key->release_time > KEY_DOUBLE_CLICK_TIME){
-                key_events[key_id] = KEY_EVENT_SHORT_PRESS;
-                key->click_count = 0;
-                key->state = KEY_STATE_IDLE;
-            }
+            Key_UpdateWaitDouble(key_id, level, now_ms);
             break;
-
+        case KEY_STATE_DOUBLE_DEBOUNCE:
+            Key_UpdateDoubleDebounce(key_id, level, now_ms);
+            break;
         default:
-            key->state = KEY_STATE_IDLE;
+            state->state = KEY_STATE_RELEASED;
+            state->stable_level = KEY_LEVEL_RELEASED;
             break;
     }
 }
 
 void Key_Scan(void){
-    for (uint8_t i = 0; i < KEY_ID_MAX; i++){
-        Key_StateMachine((key_id_t)i);
+    for (uint8_t i = 0U; i < (uint8_t)KEY_ID_MAX; i++){
+        Key_Update((KEY_ID)i);
     }
 }
 
-/**
- * @brief 获取指定按键的事件
- * @param key_id 按键ID
- * @return 按键事件类型
- */
-key_event_t Key_GetEvent(key_id_t key_id){
-    if (key_id >= KEY_ID_MAX){
+KEY_EVENT Key_GetEvent(KEY_ID key_id){
+    if (!Key_IsValidId(key_id)){
         return KEY_EVENT_NONE;
     }
 
-    key_event_t event = key_events[key_id];
-    key_events[key_id] = KEY_EVENT_NONE;
+    KEY_EVENT event = s_key_state[key_id].pending_event;
+    s_key_state[key_id].pending_event = KEY_EVENT_NONE;
     return event;
 }
 
-/**
- * @brief 检查指定按键是否按下
- * @param key_id 按键ID
- * @return true=按下, false=释放
- */
-bool Key_IsPressed(key_id_t key_id){
-    if (key_id >= KEY_ID_MAX){
+bool Key_IsPressed(KEY_ID key_id){
+    if (!Key_IsValidId(key_id)){
         return false;
     }
 
-    return keys[key_id].current_level == KEY_PRESSED_LEVEL;
+    return s_key_state[key_id].stable_level == KEY_LEVEL_PRESSED;
 }
 
-/**
- * @brief 检查指定按键的短按事件
- * @param key_id 按键ID
- * @return true=检测到短按, false=无短按
- */
-bool Key_IsShortPress(key_id_t key_id){
-    if (key_id >= KEY_ID_MAX){
+static bool Key_ConsumeIf(KEY_ID key_id, KEY_EVENT expected_event){
+    if (!Key_IsValidId(key_id)){
         return false;
     }
 
-    if (key_events[key_id] == KEY_EVENT_SHORT_PRESS){
-        key_events[key_id] = KEY_EVENT_NONE;
-        return true;
-    }
-
-    return false;
-}
-
-/**
- * @brief 检查指定按键的长按事件
- * @param key_id 按键ID
- * @return true=检测到长按, false=无长按
- */
-bool Key_IsLongPress(key_id_t key_id){
-    if (key_id >= KEY_ID_MAX){
+    if (s_key_state[key_id].pending_event != expected_event){
         return false;
     }
 
-    if (key_events[key_id] == KEY_EVENT_LONG_PRESS){
-        key_events[key_id] = KEY_EVENT_NONE;
-        return true;
-    }
-
-    return false;
+    s_key_state[key_id].pending_event = KEY_EVENT_NONE;
+    return true;
 }
 
-/**
- * @brief 检查指定按键的双击事件
- * @param key_id 按键ID
- * @return true=检测到双击, false=无双击
- */
-bool Key_IsDoubleClick(key_id_t key_id){
-    if (key_id >= KEY_ID_MAX){
-        return false;
-    }
-
-    if (key_events[key_id] == KEY_EVENT_DOUBLE_CLICK){
-        key_events[key_id] = KEY_EVENT_NONE;
-        return true;
-    }
-
-    return false;
+bool Key_IsShortPress(KEY_ID key_id){
+    return Key_ConsumeIf(key_id, KEY_EVENT_SHORT_PRESS);
 }
 
-/**
- * @brief 清除指定按键的所有事件
- * @param key_id 按键ID
- */
-void Key_ClearEvent(key_id_t key_id){
-    if (key_id < KEY_ID_MAX){
-        key_events[key_id] = KEY_EVENT_NONE;
+bool Key_IsLongPress(KEY_ID key_id){
+    return Key_ConsumeIf(key_id, KEY_EVENT_LONG_PRESS);
+}
+
+bool Key_IsDoubleClick(KEY_ID key_id){
+    return Key_ConsumeIf(key_id, KEY_EVENT_DOUBLE_CLICK);
+}
+
+void Key_ClearEvent(KEY_ID key_id){
+    if (Key_IsValidId(key_id)){
+        s_key_state[key_id].pending_event = KEY_EVENT_NONE;
     }
 }
 
-/**
- * @brief 清除所有按键的所有事件
- */
 void Key_ClearAllEvents(void){
-    for (uint8_t i = 0; i < KEY_ID_MAX; i++){
-        key_events[i] = KEY_EVENT_NONE;
+    for (uint8_t i = 0U; i < (uint8_t)KEY_ID_MAX; i++){
+        s_key_state[i].pending_event = KEY_EVENT_NONE;
     }
 }

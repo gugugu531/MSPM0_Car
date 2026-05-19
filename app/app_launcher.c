@@ -230,7 +230,7 @@ static void App_RunMotorTest(void){
     App_ShowLines("Drive check", "State:Stop", "Duty:0/1000", "Enc spd:0.00", "S run/state", "L back");
 
     while (1){
-        key_event_t event = Key_GetEvent(KEY_ID_1);
+        KEY_EVENT event = Key_GetEvent(KEY_ID_1);
 
         if (event == KEY_EVENT_SHORT_PRESS){
             mode = (MotorTestMode)((mode + 1) % MOTOR_TEST_COUNT);
@@ -296,7 +296,7 @@ static void App_RunStepperTest(void){
     App_ShowLines("Pan tilt", "State:Stop", "Yaw deg:0.0", "Pit deg:0.0", "S state", "L back");
 
     while (1){
-        key_event_t event = Key_GetEvent(KEY_ID_1);
+        KEY_EVENT event = Key_GetEvent(KEY_ID_1);
 
         if (event == KEY_EVENT_SHORT_PRESS){
             mode = (StepperTestMode)((mode + 1) % STEPPER_TEST_COUNT);
@@ -357,7 +357,7 @@ static void App_RunImuTest(void){
     App_ShowLines("Gyro check", "No IMU data", "Check UART0", "Frame wait...", "Frames:0", "S page L back");
 
     while (1){
-        key_event_t event = Key_GetEvent(KEY_ID_1);
+        KEY_EVENT event = Key_GetEvent(KEY_ID_1);
 
         if (event == KEY_EVENT_SHORT_PRESS){
             page = (ImuPage)((page + 1) % IMU_PAGE_COUNT);
@@ -414,7 +414,7 @@ static void App_RunVisionTest(void){
     App_ShowLines("Vision check", "Laser:INIT", "X:0 Y:0", "Dot2:0 0", "S page", "L back");
 
     while (1){
-        key_event_t event = Key_GetEvent(KEY_ID_1);
+        KEY_EVENT event = Key_GetEvent(KEY_ID_1);
 
         if (event == KEY_EVENT_SHORT_PRESS){
             page = (VisionPage)((page + 1) % VISION_PAGE_COUNT);
@@ -454,7 +454,7 @@ static void App_RunTrackingTest(void){
     App_ShowLines("Track check", "Bits:00000000", "Car spd:0.00", "8 sensor input", NULL, "L back");
 
     while (1){
-        key_event_t event = Key_GetEvent(KEY_ID_1);
+        KEY_EVENT event = Key_GetEvent(KEY_ID_1);
 
         if (event == KEY_EVENT_LONG_PRESS){
             App_ClearKeys();
@@ -511,7 +511,7 @@ static void App_RunTestMenu(void){
     App_ClearKeys();
 
     while (1){
-        key_event_t event = Key_GetEvent(KEY_ID_1);
+        KEY_EVENT event = Key_GetEvent(KEY_ID_1);
 
         if (event == KEY_EVENT_SHORT_PRESS){
             selected = (AppTestItem)((selected + 1) % APP_TEST_COUNT);
@@ -546,7 +546,7 @@ void App_Launch(void){
     App_ClearKeys();
 
     while (1){
-        key_event_t event = Key_GetEvent(KEY_ID_1);
+        KEY_EVENT event = Key_GetEvent(KEY_ID_1);
 
         if (event == KEY_EVENT_SHORT_PRESS){
             selected = (AppEntry)((selected + 1) % APP_ENTRY_COUNT);
