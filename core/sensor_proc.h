@@ -20,8 +20,8 @@
 #define DisSensorToWheel 195
 #define DisSensor 12
 
-Coordinate paper_to_camera(Coordinate paper);
-Coordinate get_target_coordinate(void);
+BSP_POINT2F paper_to_camera(BSP_POINT2F paper);
+BSP_POINT2F get_target_coordinate(void);
 
 float Grayscale_Num_To_Theta(int num);
 float thetaGrayscale(void);

@@ -44,18 +44,18 @@ typedef struct {
 extern "C" {
 #endif
 
-BSP_Status Motor_Init(Motor *M,
+BSP_STATUS Motor_Init(Motor *M,
         GPIO_Regs *p_port, uint32_t p_pin,
         GPIO_Regs *n_port, uint32_t n_pin,
         GPTIMER_Regs *pwm_timer, DL_TIMER_CC_INDEX pwm_channel,
         uint16_t initial_duty);
 
-BSP_Status Motor_ParamInit(Motor *M,
+BSP_STATUS Motor_ParamInit(Motor *M,
         double reduce, double full_speed_rpm, int wheel_diameter);
 
-BSP_Status Motor_SetDuty(MotorMoveType type, uint16_t duty, Motor *M);
+BSP_STATUS Motor_SetDuty(MotorMoveType type, uint16_t duty, Motor *M);
 
-BSP_Status Motor_SetSpeed(MotorMoveType type, double speed, Motor *M);
+BSP_STATUS Motor_SetSpeed(MotorMoveType type, double speed, Motor *M);
 
 int Motor_SpeedToDuty(double speed, Motor *M);
 

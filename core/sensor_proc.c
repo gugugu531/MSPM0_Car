@@ -8,9 +8,9 @@
 #include <math.h>
 #include "motor_system.h"
 
-static Coordinate paper_corner_c[4];
+static BSP_POINT2F paper_corner_c[4];
 
-Coordinate paper_to_camera(Coordinate paper){
+BSP_POINT2F paper_to_camera(BSP_POINT2F paper){
     paper.x /= PAPERWIDE;
     paper.y /= PAPERHIGHT;
     paper_corner_c[3].x = Rect_Loc[0];
@@ -30,15 +30,15 @@ Coordinate paper_to_camera(Coordinate paper){
     float bottom_x = (1.0f - u) * paper_corner_c[3].x + u * paper_corner_c[2].x;
     float bottom_y = (1.0f - u) * paper_corner_c[3].y + u * paper_corner_c[2].y;
 
-    Coordinate camera_coord;
+    BSP_POINT2F camera_coord;
     camera_coord.x = (1.0f - v) * top_x + v * bottom_x;
     camera_coord.y = (1.0f - v) * top_y + v * bottom_y;
 
     return camera_coord;
 }
 
-Coordinate get_target_coordinate(){
-    Coordinate target;
+BSP_POINT2F get_target_coordinate(){
+    BSP_POINT2F target;
     float target_theta = (edge - 1) * 90.0f + sInedge;
 
     target.x = CIRCLERADIUS * cosf(DEG_TO_RAD(target_theta));

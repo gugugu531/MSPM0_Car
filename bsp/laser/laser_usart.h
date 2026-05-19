@@ -21,6 +21,14 @@
 #define Rect_Begin    10
 #define Rect_RX_Num   16
 
+typedef enum {
+    CANMV_STATUS_INIT = -1,
+    CANMV_STATUS_OK = 0,
+    CANMV_STATUS_NOT_FOUND = 1,
+    CANMV_STATUS_LOST = 2,
+    CANMV_STATUS_FRAME_DROP = 3,
+} CANMV_STATUS;
+
 void Laser_USART_Init(void);
 void Laser_SendChar(char ch);
 void Laser_SendString(char *str);
@@ -31,7 +39,7 @@ void CanMV_Process(void);
 
 extern uint16_t Laser_Loc[10];
 extern uint16_t Rect_Loc[10];
-extern CanMV_Error Laser_error;
-extern CanMV_Error Rect_error;
+extern CANMV_STATUS Laser_error;
+extern CANMV_STATUS Rect_error;
 
 #endif /* LASER_USART_H */

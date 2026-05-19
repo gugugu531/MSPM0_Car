@@ -41,12 +41,12 @@ typedef struct {
     // Add any additional fields as needed
 } SMotor;
 
-BSP_Status SMotor_Init(SMotor *motor,
+BSP_STATUS SMotor_Init(SMotor *motor,
                        GPIO_Regs *Dir_port, uint32_t Dir_pin,
                        GPTIMER_Regs *pwm_timer, DL_TIMER_CC_INDEX pwm_channel);
-BSP_Status SMotor_SetSpeed(SMotor *motor, float angular_speed);
-BSP_Status SMotor_ParamInit(SMotor *motor, SMOTOR_DIR_STATE Anti_Dir, float step_angular, float step_divisor);
-BSP_Status SMotor_UpdateState(SMotor *motor, uint32_t current_time);
+BSP_STATUS SMotor_SetSpeed(SMotor *motor, float angular_speed);
+BSP_STATUS SMotor_ParamInit(SMotor *motor, SMOTOR_DIR_STATE Anti_Dir, float step_angular, float step_divisor);
+BSP_STATUS SMotor_UpdateState(SMotor *motor, uint32_t current_time);
 uint32_t SMotor_GetClockFreq(GPTIMER_Regs *timer);
 uint32_t SMotor_GetStepFreq(float angular_speed, SMotor *motor);
 

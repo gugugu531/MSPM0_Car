@@ -12,11 +12,11 @@
 #include "motor_system.h"
 #include "sensor_proc.h"
 
-static Coordinate laser_position = {0.0f, 0.0f};
-static Coordinate target_position = {0.0f, 0.0f};
+static BSP_POINT2F laser_position = {0.0f, 0.0f};
+static BSP_POINT2F target_position = {0.0f, 0.0f};
 static bool is_updated = false;
 static bool is_new_mode = true;
-static Attitude cor = {0.0f, 0.0f};
+static BSP_ATTITUDE2F cor = {0.0f, 0.0f};
 
 void PID_SMotor_Cont(void){
     static PIDController pid_x, pid_y;
@@ -36,7 +36,7 @@ void PID_SMotor_Cont(void){
     float output_wyaw = 0.0f;
     float output_wpitch = 0.0f;
 
-    if (!is_updated && (Laser_error == CANMV_ERR_NONE)){
+    if (!is_updated && (Laser_error == CANMV_STATUS_OK)){
         output_wyaw = last_output_wyaw;
         output_wpitch = last_output_wpitch;
     } else if (is_updated){
@@ -60,7 +60,7 @@ void PID_SMotor_Cont(void){
 }
 
 void SetTargetCenter(void){
-    if (Laser_error == CANMV_ERR_NONE && Laser_Loc[0] != 0 && Laser_Loc[1] != 0){
+    if (Laser_error == CANMV_STATUS_OK && Laser_Loc[0] != 0 && Laser_Loc[1] != 0){
         target_position.x = Laser_Loc[0];
         target_position.y = 480 - Laser_Loc[1];
         is_updated = true;
@@ -68,14 +68,14 @@ void SetTargetCenter(void){
 }
 
 void SetLaserPosition(void){
-    if (Laser_error == CANMV_ERR_NONE){
+    if (Laser_error == CANMV_STATUS_OK){
         laser_position.x = Laser_Loc[2];
         laser_position.y = 480 - Laser_Loc[3];
     }
 }
 
 void SetTargetCircle(void){
-    if (Rect_error == CANMV_ERR_NONE){
+    if (Rect_error == CANMV_STATUS_OK){
         target_position = paper_to_camera(get_target_coordinate());
         is_updated = true;
     }

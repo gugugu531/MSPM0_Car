@@ -5,10 +5,10 @@
 #include "step_motor.h"
 #include <math.h>
 
-BSP_Status SMotor_Init(SMotor *motor, GPIO_Regs *Dir_port, uint32_t Dir_pin,
+BSP_STATUS SMotor_Init(SMotor *motor, GPIO_Regs *Dir_port, uint32_t Dir_pin,
                        GPTIMER_Regs *pwm_timer, DL_TIMER_CC_INDEX pwm_channel){
     if (motor == NULL || pwm_timer == NULL){
-        return BSP_ERR_NULL;
+        return BSP_STATUS_NULL;
     }
 
     motor->Dir_port = Dir_port;
@@ -22,31 +22,31 @@ BSP_Status SMotor_Init(SMotor *motor, GPIO_Regs *Dir_port, uint32_t Dir_pin,
     DL_GPIO_clearPins(motor->Dir_port, motor->Dir_pin);
     DL_TimerG_startCounter(motor->pwm_timer);
     DL_TimerG_setCaptureCompareValue(motor->pwm_timer, 0, motor->pwm_channel);
-    return BSP_OK;
+    return BSP_STATUS_OK;
 }
 
-BSP_Status SMotor_ParamInit(SMotor *motor, SMOTOR_DIR_STATE Anti_Dir,
+BSP_STATUS SMotor_ParamInit(SMotor *motor, SMOTOR_DIR_STATE Anti_Dir,
                             float step_angular, float step_divisor){
     if (motor == NULL){
-        return BSP_ERR_NULL;
+        return BSP_STATUS_NULL;
     }
 
     motor->parameters.Anti_Dir = Anti_Dir;
     motor->parameters.step_angular = step_angular;
     motor->parameters.step_divisor = step_divisor;
-    return BSP_OK;
+    return BSP_STATUS_OK;
 }
 
-BSP_Status SMotor_SetSpeed(SMotor *motor, float angular_speed){
+BSP_STATUS SMotor_SetSpeed(SMotor *motor, float angular_speed){
     if (motor == NULL || motor->pwm_timer == NULL){
-        return BSP_ERR_NULL;
+        return BSP_STATUS_NULL;
     }
 
     motor->state.angular_speed = angular_speed;
 
     if (fabsf(angular_speed) == 0.0f){
         DL_TimerG_setCaptureCompareValue(motor->pwm_timer, 0, motor->pwm_channel);
-        return BSP_OK;
+        return BSP_STATUS_OK;
     }
 
     if (angular_speed > 0){
@@ -74,22 +74,22 @@ BSP_Status SMotor_SetSpeed(SMotor *motor, float angular_speed){
 
     DL_TimerG_setLoadValue(motor->pwm_timer, target_arr);
     DL_TimerG_setCaptureCompareValue(motor->pwm_timer, target_arr / 2, motor->pwm_channel);
-    return BSP_OK;
+    return BSP_STATUS_OK;
 }
 
-BSP_Status SMotor_UpdateState(SMotor *motor, uint32_t current_time){
+BSP_STATUS SMotor_UpdateState(SMotor *motor, uint32_t current_time){
     if (motor == NULL){
-        return BSP_ERR_NULL;
+        return BSP_STATUS_NULL;
     }
 
     if (motor->state.last_update_time == (uint32_t)-1){
         motor->state.last_update_time = current_time;
-        return BSP_OK;
+        return BSP_STATUS_OK;
     }
     motor->state.current_position += motor->state.angular_speed *
         (current_time - motor->state.last_update_time) * 1e-3;
     motor->state.last_update_time = current_time;
-    return BSP_OK;
+    return BSP_STATUS_OK;
 }
 
 uint32_t SMotor_GetClockFreq(GPTIMER_Regs *timer){

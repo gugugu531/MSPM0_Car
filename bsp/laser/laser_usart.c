@@ -7,8 +7,8 @@ static uint8_t g_new_package_flag = 0;
 uint16_t Laser_Loc[10];
 uint16_t Rect_Loc[10];
 
-CanMV_Error Laser_error = CANMV_ERR_INIT;
-CanMV_Error Rect_error  = CANMV_ERR_INIT;
+CANMV_STATUS Laser_error = CANMV_STATUS_INIT;
+CANMV_STATUS Rect_error  = CANMV_STATUS_INIT;
 
 static int Laser_Find_None_Init = 1;
 static int Rect_Find_None_Init  = 1;
@@ -52,11 +52,11 @@ static void Deal_Rx(uint8_t rxtemp){
         USART_LASER_RX_BUF[rx_count++] = rxtemp;
     } else{
         if (g_start == 0){
-            if (Laser_error == CANMV_ERR_NOT_FOUND){
+            if (Laser_error == CANMV_STATUS_NOT_FOUND){
                 return;
             }
-            Laser_error = CANMV_ERR_FRAME_DROP;
-            Rect_error  = CANMV_ERR_FRAME_DROP;
+            Laser_error = CANMV_STATUS_FRAME_DROP;
+            Rect_error  = CANMV_STATUS_FRAME_DROP;
             return;
         }
 
@@ -68,14 +68,14 @@ static void Deal_Rx(uint8_t rxtemp){
             memcpy(new_package, USART_LASER_RX_BUF, USART_LASER_RX_BUF_LEN);
             g_new_package_flag = 1;
             memset(USART_LASER_RX_BUF, 0, USART_LASER_RX_BUF_LEN);
-            Laser_error = CANMV_ERR_NONE;
-            Rect_error  = CANMV_ERR_NONE;
+            Laser_error = CANMV_STATUS_OK;
+            Rect_error  = CANMV_STATUS_OK;
         }
 
         if (rx_count >= USART_LASER_RX_BUF_LEN){
-            if (Laser_error != CANMV_ERR_NOT_FOUND){
-                Laser_error = CANMV_ERR_FRAME_DROP;
-                Rect_error  = CANMV_ERR_FRAME_DROP;
+            if (Laser_error != CANMV_STATUS_NOT_FOUND){
+                Laser_error = CANMV_STATUS_FRAME_DROP;
+                Rect_error  = CANMV_STATUS_FRAME_DROP;
             }
             g_start = 0;
             rx_count = 0;
@@ -107,15 +107,15 @@ static bool Array_Empty(uint16_t arr[], int len){
     return true;
 }
 
-static void Update_Error(uint16_t arr[], int len, CanMV_Error *error, int *find_none_init){
-    if (*error == CANMV_ERR_FRAME_DROP){
+static void Update_Error(uint16_t arr[], int len, CANMV_STATUS *error, int *find_none_init){
+    if (*error == CANMV_STATUS_FRAME_DROP){
         return;
     }
 
     if (Array_Empty(arr, len)){
-        *error = (*find_none_init == 0) ? CANMV_ERR_LOST : CANMV_ERR_NOT_FOUND;
+        *error = (*find_none_init == 0) ? CANMV_STATUS_LOST : CANMV_STATUS_NOT_FOUND;
     } else{
-        *error = CANMV_ERR_NONE;
+        *error = CANMV_STATUS_OK;
         *find_none_init = 0;
     }
 }

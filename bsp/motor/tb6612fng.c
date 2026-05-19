@@ -1,12 +1,12 @@
 #include "tb6612fng.h"
 
-BSP_Status Motor_Init(Motor *M,
+BSP_STATUS Motor_Init(Motor *M,
         GPIO_Regs *p_port, uint32_t p_pin,
         GPIO_Regs *n_port, uint32_t n_pin,
         GPTIMER_Regs *pwm_timer, DL_TIMER_CC_INDEX pwm_channel,
         uint16_t initial_duty){
     if (M == NULL || pwm_timer == NULL){
-        return BSP_ERR_NULL;
+        return BSP_STATUS_NULL;
     }
 
     M->p.port = p_port;
@@ -21,24 +21,24 @@ BSP_Status Motor_Init(Motor *M,
     DL_GPIO_clearPins(M->p.port, M->p.pin);
     DL_TimerG_startCounter(M->speed.pwm_timer);
     DL_TimerG_setCaptureCompareValue(M->speed.pwm_timer, M->speed.current_duty, M->speed.pwm_channel);
-    return BSP_OK;
+    return BSP_STATUS_OK;
 }
 
-BSP_Status Motor_ParamInit(Motor *M,
+BSP_STATUS Motor_ParamInit(Motor *M,
         double reduce, double full_speed_rpm, int wheel_diameter){
     if (M == NULL){
-        return BSP_ERR_NULL;
+        return BSP_STATUS_NULL;
     }
 
     M->param.reduce = reduce;
     M->param.full_speed_rpm = full_speed_rpm;
     M->param.wheel_diameter = wheel_diameter;
-    return BSP_OK;
+    return BSP_STATUS_OK;
 }
 
-BSP_Status Motor_SetDuty(MotorMoveType type, uint16_t duty, Motor *M){
+BSP_STATUS Motor_SetDuty(MotorMoveType type, uint16_t duty, Motor *M){
     if (M == NULL){
-        return BSP_ERR_NULL;
+        return BSP_STATUS_NULL;
     }
 
     switch (type){
@@ -63,7 +63,7 @@ BSP_Status Motor_SetDuty(MotorMoveType type, uint16_t duty, Motor *M){
     }
     M->speed.current_duty = duty;
     DL_TimerG_setCaptureCompareValue(M->speed.pwm_timer, M->speed.current_duty, M->speed.pwm_channel);
-    return BSP_OK;
+    return BSP_STATUS_OK;
 }
 
 int Motor_SpeedToDuty(double speed, Motor *M){
@@ -84,9 +84,9 @@ int Motor_SpeedToDuty(double speed, Motor *M){
     return duty;
 }
 
-BSP_Status Motor_SetSpeed(MotorMoveType type, double speed, Motor *M){
+BSP_STATUS Motor_SetSpeed(MotorMoveType type, double speed, Motor *M){
     if (M == NULL){
-        return BSP_ERR_NULL;
+        return BSP_STATUS_NULL;
     }
     int duty = Motor_SpeedToDuty(speed, M);
     if (duty < 0){

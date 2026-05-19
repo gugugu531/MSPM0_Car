@@ -108,17 +108,17 @@ static void App_ClearKeys(void){
     Key_ClearAllEvents();
 }
 
-static const char *App_CanMvErrorText(CanMV_Error error){
+static const char *App_CanMvErrorText(CANMV_STATUS error){
     switch (error){
-        case CANMV_ERR_NONE:
+        case CANMV_STATUS_OK:
             return "OK";
-        case CANMV_ERR_NOT_FOUND:
+        case CANMV_STATUS_NOT_FOUND:
             return "MISS";
-        case CANMV_ERR_LOST:
+        case CANMV_STATUS_LOST:
             return "LOST";
-        case CANMV_ERR_FRAME_DROP:
+        case CANMV_STATUS_FRAME_DROP:
             return "DROP";
-        case CANMV_ERR_INIT:
+        case CANMV_STATUS_INIT:
         default:
             return "INIT";
     }

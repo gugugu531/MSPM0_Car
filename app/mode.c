@@ -59,8 +59,8 @@ void mode_test_circle(void){
 void mode_test_connection(void){
     char message[50];
     while (1){
-        Coordinate cor = {0.0f, 0.0f};
-        Coordinate paper = {0.1f, 0.1f};
+        BSP_POINT2F cor = {0.0f, 0.0f};
+        BSP_POINT2F paper = {0.1f, 0.1f};
 
         cor = paper_to_camera(paper);
         sprintf(message, "Camera: (%.2f, %.2f)", cor.x, cor.y);
@@ -226,7 +226,7 @@ bool mode_turn_step(void){
 }
 
 bool mode_init_guard(void){
-    if (Laser_error == CANMV_ERR_NOT_FOUND){
+    if (Laser_error == CANMV_STATUS_NOT_FOUND){
         YP_SMotor_SetSpeed(-90, 0);
         return false;
     }

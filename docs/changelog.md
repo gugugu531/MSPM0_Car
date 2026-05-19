@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 重写 `bsp/common` 公共契约：统一使用 SDK 风格的全大写类型名 `BSP_STATUS`、`BSP_POINT2F`、`BSP_ATTITUDE2F`。
+- 将 CanMV 状态码从 `bsp/common` 移入 `bsp/laser/laser_usart.h`，由对接 CanMV 的驱动自行维护。
 - 将工程源码重构为 `app`、`core`、`middleware`、`bsp` 四层结构。
 - 将自维护源码和目录统一为小写加下划线命名。
 - 将 SysConfig 和启动资源迁入 `board`，IDE 工程元数据迁入 `project`，脚本目录统一为 `tools`。
