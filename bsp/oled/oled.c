@@ -9,26 +9,15 @@
 
 #include "oled.h"
 #include "oled_font.h"
+#include "bsp_time.h"
 #include <stdint.h>
 
-static OLED_DelayUsProvider oled_delay_us;
-static OLED_DelayMsProvider oled_delay_ms;
-
-void OLED_SetDelayProvider(OLED_DelayUsProvider delay_us, OLED_DelayMsProvider delay_ms){
-    oled_delay_us = delay_us;
-    oled_delay_ms = delay_ms;
-}
-
 static void OLED_DelayUs(uint32_t us){
-    if (oled_delay_us != NULL){
-        oled_delay_us(us);
-    }
+    BSP_DelayUs(us);
 }
 
 static void OLED_DelayMs(uint32_t ms){
-    if (oled_delay_ms != NULL){
-        oled_delay_ms(ms);
-    }
+    BSP_DelayMs(ms);
 }
 
 //OLED的显存

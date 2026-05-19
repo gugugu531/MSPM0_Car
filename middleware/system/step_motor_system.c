@@ -9,7 +9,7 @@
  */
 
 #include "step_motor_system.h"
-#include "system_time.h"
+#include "bsp_time.h"
 
 // 全局步进电机实例
 SMotor yawMotor = {0};      // YAW偏航电机
@@ -58,7 +58,7 @@ void YP_SMotor_SetSpeed(float yaw_speed, float pitch_speed){
 
 void YP_SMotor_UpdateState(void){
     // 更新两个电机的状态
-    uint32_t now = System_GetTickMs();
+    uint32_t now = BSP_Time_GetMs();
     SMotor_UpdateState(&yawMotor, now);
     SMotor_UpdateState(&pitchMotor, now);
 }

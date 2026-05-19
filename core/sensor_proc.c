@@ -3,6 +3,7 @@
  * @brief 传感信息处理与目标坐标换算实现
  */
 #include "sensor_proc.h"
+#include "kinematics.h"
 #include "tracking_runtime.h"
 #include "vision_state.h"
 #include <math.h>

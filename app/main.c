@@ -3,19 +3,17 @@
  * @brief 系统主入口，完成基础外设初始化并启动应用流程
  */
 #include "app_launcher.h"
-#include "delay.h"
+#include "bsp_time.h"
 #include "hall_encoder.h"
 #include "motor_system.h"
 #include "key.h"
 #include "laser_usart.h"
 #include "oled.h"
-#include "system_time.h"
 #include "ti_msp_dl_config.h"
-
-uint32_t tick;
 
 int main(void){
     SYSCFG_DL_init();
+    BSP_Time_Init();
     __enable_irq();
 
     Encoder_Init();
@@ -23,11 +21,9 @@ int main(void){
     DL_TimerG_startCounter(TIMER_0_INST);
 
     Laser_USART_Init();
-    OLED_SetDelayProvider(Delay_us, Delay_ms);
     OLED_Init();
     Motor_SystemInit();
     Key_Init();
-    Key_SetTimeProvider(System_GetTickMs);
 
     App_Launch();
 
@@ -53,7 +49,7 @@ void SysTick_Handler(void){
     static int scan_divider = 0;
 
     scan_divider++;
-    tick++;
+    BSP_Time_TickInc();
 
     if (scan_divider == 10){
         Key_Scan();

@@ -3,7 +3,7 @@
  * @brief 底盘电机初始化与基础运动控制实现
  */
 #include "system_error_state.h"
-#include "system_time.h"
+#include "bsp_time.h"
 #include "tracking_runtime.h"
 #include "hall_encoder.h"
 #include "motor_system.h"
@@ -70,7 +70,7 @@ void Motor_Brake(void){
 
 void UpdateSInedge(void){
     static uint32_t last_time = 0;
-    uint32_t now = tick;
+    uint32_t now = BSP_Time_GetMs();
 
     if (now - last_time >= 10){
         float dt = (now - last_time) * 1e-3f;

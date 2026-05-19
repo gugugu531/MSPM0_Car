@@ -4,24 +4,17 @@
  */
 
 #include "key.h"
+#include "bsp_time.h"
 
 static key_info_t keys[KEY_ID_MAX];
 static key_event_t key_events[KEY_ID_MAX];
-static uint32_t (*key_time_provider)(void);
 
 /**
  * @brief 获取系统时间戳 (毫秒)
  * @return 当前时间戳
  */
 static uint32_t Get_SystemTick(void){
-    if (key_time_provider == NULL){
-        return 0;
-    }
-    return key_time_provider();
-}
-
-void Key_SetTimeProvider(uint32_t (*provider)(void)){
-    key_time_provider = provider;
+    return BSP_Time_GetMs();
 }
 
 /**

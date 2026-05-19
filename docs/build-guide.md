@@ -20,7 +20,7 @@
 - `bsp/`
 - `board/sys_config/`
 
-构建时必须同时包含这些 include path。新增源码后，需要同步更新 `project/ccs/NUEDC2025_MSPM0G3507_ticlang.projectspec` 和 `project/keil/NUEDC2025_MSPM0G3507.uvprojx`。
+构建时必须同时包含这些 include path。按照当前重写流程，新增源码先完成分层框架和接口收敛；整体框架确认后，再统一维护 `project/ccs/NUEDC2025_MSPM0G3507_ticlang.projectspec` 和 `project/keil/NUEDC2025_MSPM0G3507.uvprojx`。
 
 ## CCS 构建
 
@@ -82,4 +82,3 @@
 - `.settings/`
 - `.theia/`
 - `.clangd/`
-

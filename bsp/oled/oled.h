@@ -6,7 +6,7 @@
  * @author    Jianing Wang
  * @version   1.1
  * @date      2025-07-31
- * @note      - 需要提供微秒级延时函数 Delay_us() 的实现。
+ * @note      - 依赖 bsp/time 提供 BSP_DelayUs() 和 BSP_DelayMs()。
  *            - 使用前请在 SysConfig 中配置 SCL 和 SDA 引脚，并在此文件中
  *              正确配置 OLED_GPIO_PORT、OLED_SCL_PIN 和 OLED_SDA_PIN。
  */
@@ -16,9 +16,6 @@
 
 #include "ti_msp_dl_config.h" // TI MSPM0 底层配置
 #include <stdint.h>          // 标准整数类型
-
-typedef void (*OLED_DelayUsProvider)(uint32_t us);
-typedef void (*OLED_DelayMsProvider)(uint32_t ms);
 
 //==================================================================================
 // 用户配置区 (User Configuration)
@@ -54,7 +51,6 @@ typedef void (*OLED_DelayMsProvider)(uint32_t ms);
 
 
 // OLED 控制与显示函数
-void OLED_SetDelayProvider(OLED_DelayUsProvider delay_us, OLED_DelayMsProvider delay_ms);
 void OLED_ColorTurn(uint8_t i);
 void OLED_DisplayTurn(uint8_t i);
 void OLED_WR_Byte(uint8_t dat,uint8_t cmd);

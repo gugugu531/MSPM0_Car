@@ -3,7 +3,7 @@
  * @brief 云台步进电机控制与视觉目标跟踪实现
  */
 #include "step_motor_ctrl.h"
-#include "system_time.h"
+#include "bsp_time.h"
 #include "tracking_runtime.h"
 #include "vision_state.h"
 #include <stdbool.h>
@@ -23,7 +23,7 @@ void PID_SMotor_Cont(void){
     static uint32_t last_update_time = 0;
     static float last_output_wyaw = 0.0f;
     static float last_output_wpitch = 0.0f;
-    uint32_t current_time = tick;
+    uint32_t current_time = BSP_Time_GetMs();
 
     if (is_new_mode){
         PID_Init(&pid_x, 0.2f, 0.0f, 0.0f, 1000.0f);

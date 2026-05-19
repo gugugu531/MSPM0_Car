@@ -16,11 +16,9 @@
 
 ## middleware
 
-- `system_time.h`：声明 `tick` 和 `System_GetTickMs()`。
 - `system_error_state.h`：声明错误显示所需的 `error_message`。
 - `tracking_runtime.h`：声明巡线和任务运行时共享状态，包括 `Digital`、`sInedge`、`edge`、`turning`。
 - `vision_state.h`：兼容层，转发 `bsp/laser/laser_usart.h` 导出的视觉状态。
-- `delay.h`：提供毫秒和微秒延时。
 - `motor_system.h`：提供左右底盘电机组合初始化、原始占空比控制和带符号占空比控制。
 - `step_motor_system.h`：提供 yaw/pitch 双轴步进电机组合初始化、速度控制、状态更新和位置查询。
 - `error_handler.h`：提供错误处理入口，当前行为为刹车并在 OLED 上显示错误信息。
@@ -28,8 +26,9 @@
 ## bsp
 
 - `common/bsp_common.h`：BSP 公共状态和基础数据结构，详细说明见 `docs/interfaces/bsp_common.md`。
-- `key.h`：按键状态机。时间源通过 `Key_SetTimeProvider()` 注入。
-- `oled.h`：SSD1306 OLED 驱动。延时函数通过 `OLED_SetDelayProvider()` 注入。
+- `time/bsp_time.h`：BSP 系统时间和阻塞延时服务，详细说明见 `docs/interfaces/bsp_time.md`。
+- `key.h`：按键状态机。消抖时间源来自 `bsp/time`。
+- `oled.h`：SSD1306 OLED 驱动。软件 I2C 延时来自 `bsp/time`。
 - `step_motor.h`：步进电机底层驱动。状态更新由调用方显式传入当前时间。
 - `laser_usart.h`：CanMV UART 解析和激光点/矩形点状态。
 - `wit_sdk.h`：IMU 协议解析和陀螺仪通道数据。

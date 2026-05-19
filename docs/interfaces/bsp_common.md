@@ -63,7 +63,6 @@ typedef struct {
 ## 不放入 common 的内容
 
 - CanMV 状态码：属于 `bsp/laser/laser_usart.h`。
-- 时间和延时函数：后续单独构建 `bsp/time`。
+- 时间和延时函数：已由 `bsp/time` 单独提供。
 - duty 限幅、频率换算等工具：放在对应外设驱动的 `.c` 文件中。
 - 业务运行时状态：放在上层 runtime 或具体拥有该状态的 BSP 驱动中。
-

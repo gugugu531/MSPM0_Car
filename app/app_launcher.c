@@ -3,14 +3,13 @@
  * @brief 顶层应用启动框架，提供赛题入口和调试入口
  */
 #include "app_launcher.h"
-#include "delay.h"
+#include "bsp_time.h"
 #include "hall_encoder.h"
 #include "step_motor_system.h"
 #include "motor_system.h"
 #include "key.h"
 #include "menu.h"
 #include "oled.h"
-#include "system_time.h"
 #include "tracking_runtime.h"
 #include "tracking_sensor.h"
 #include "vision_state.h"
@@ -272,15 +271,16 @@ static void App_RunMotorTest(void){
                 break;
         }
 
-        if (tick - last_refresh >= 120){
-            last_refresh = tick;
+        uint32_t now = BSP_Time_GetMs();
+        if (now - last_refresh >= 120){
+            last_refresh = now;
             snprintf(line1, sizeof(line1), "State:%s", s_motor_modes[mode]);
             snprintf(line2, sizeof(line2), "Duty:%u/1000", duty);
             snprintf(line3, sizeof(line3), "Enc spd:%0.2f", Encoder_GetSpeed());
             App_UpdateTestLines(line1, line2, line3, NULL);
         }
 
-        Delay_ms(20);
+        BSP_DelayMs(20);
     }
 }
 
@@ -331,15 +331,16 @@ static void App_RunStepperTest(void){
 
         YP_SMotor_UpdateState();
 
-        if (tick - last_refresh >= 120){
-            last_refresh = tick;
+        uint32_t now = BSP_Time_GetMs();
+        if (now - last_refresh >= 120){
+            last_refresh = now;
             snprintf(line1, sizeof(line1), "State:%s", s_stepper_modes[mode]);
             snprintf(line2, sizeof(line2), "Yaw deg:%0.1f", GetYaw());
             snprintf(line3, sizeof(line3), "Pit deg:%0.1f", GetPitch());
             App_UpdateTestLines(line1, line2, line3, NULL);
         }
 
-        Delay_ms(20);
+        BSP_DelayMs(20);
     }
 }
 
@@ -365,8 +366,9 @@ static void App_RunImuTest(void){
             return;
         }
 
-        if (tick - last_refresh >= 150){
-            last_refresh = tick;
+        uint32_t now = BSP_Time_GetMs();
+        if (now - last_refresh >= 150){
+            last_refresh = now;
 
             if (s_imu_frame_count == 0){
                 snprintf(line1, sizeof(line1), "No IMU data");
@@ -397,7 +399,7 @@ static void App_RunImuTest(void){
             App_UpdateTestLines(line1, line2, line3, line4);
         }
 
-        Delay_ms(20);
+        BSP_DelayMs(20);
     }
 }
 
@@ -421,8 +423,9 @@ static void App_RunVisionTest(void){
             return;
         }
 
-        if (tick - last_refresh >= 150){
-            last_refresh = tick;
+        uint32_t now = BSP_Time_GetMs();
+        if (now - last_refresh >= 150){
+            last_refresh = now;
 
             if (page == VISION_PAGE_LASER){
                 snprintf(line1, sizeof(line1), "Laser:%s", App_CanMvErrorText(Laser_error));
@@ -437,7 +440,7 @@ static void App_RunVisionTest(void){
             App_UpdateTestLines(line1, line2, line3, NULL);
         }
 
-        Delay_ms(20);
+        BSP_DelayMs(20);
     }
 }
 
@@ -460,8 +463,9 @@ static void App_RunTrackingTest(void){
 
         TrackingSensor_Read(Digital);
 
-        if (tick - last_refresh >= 120){
-            last_refresh = tick;
+        uint32_t now = BSP_Time_GetMs();
+        if (now - last_refresh >= 120){
+            last_refresh = now;
 
             for (uint8_t i = 0; i < 8; i++){
                 sensor_bits[i] = (char)('0' + (Digital[i] ? 1 : 0));
@@ -473,7 +477,7 @@ static void App_RunTrackingTest(void){
             App_UpdateTestLines(line1, line2, NULL, NULL);
         }
 
-        Delay_ms(20);
+        BSP_DelayMs(20);
     }
 }
 
@@ -530,7 +534,7 @@ static void App_RunTestMenu(void){
             need_refresh = false;
         }
 
-        Delay_ms(20);
+        BSP_DelayMs(20);
     }
 }
 
@@ -569,7 +573,7 @@ void App_Launch(void){
             need_refresh = false;
         }
 
-        Delay_ms(20);
+        BSP_DelayMs(20);
     }
 }
 

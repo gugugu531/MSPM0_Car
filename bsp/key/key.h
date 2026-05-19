@@ -72,12 +72,6 @@ typedef struct {
 void Key_Init(void);
 
 /**
- * @brief Set the millisecond time source used by the key state machine.
- * @param provider Function returning current time in milliseconds.
- */
-void Key_SetTimeProvider(uint32_t (*provider)(void));
-
-/**
  * @brief 按键扫描处理
  * @note 建议在主循环或定时器中以 5 ms 到 10 ms 周期调用
  */

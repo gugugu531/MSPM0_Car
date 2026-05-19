@@ -8,7 +8,7 @@
 #include "tracking_runtime.h"
 #include "vision_state.h"
 #include <stdio.h>
-#include "delay.h"
+#include "bsp_time.h"
 #include "motor_system.h"
 #include "kinematics.h"
 #include "oled.h"
@@ -35,12 +35,12 @@ void mode_test_coordinate(void){
         YP_SMotor_SetSpeed(180, 0);
         Motor_SetLeft(300);
         Motor_SetRight(300);
-        Delay_ms(500);
+        BSP_DelayMs(500);
 
         Motor_SetLeft(-300);
         Motor_SetRight(-300);
         YP_SMotor_SetSpeed(-180, 0);
-        Delay_ms(500);
+        BSP_DelayMs(500);
     }
 }
 
@@ -52,7 +52,7 @@ void mode_test_circle(void){
             Motor_Brake();
             break;
         }
-        Delay_ms(10);
+        BSP_DelayMs(10);
     }
 }
 
@@ -100,7 +100,7 @@ void mode_problem_b_1(void){
             lineWalking_low();
         }
 
-        Delay_ms(10);
+        BSP_DelayMs(10);
     }
 }
 
@@ -116,7 +116,7 @@ void mode_problem_b_2_3(void){
         if (mode_init_guard()){
             PID_SMotor_Cont();
         }
-        Delay_ms(10);
+        BSP_DelayMs(10);
     }
 }
 
@@ -148,7 +148,7 @@ void mode_problem_h_1(void){
         SetTargetCenter();
         Compute_excur();
         PID_SMotor_Cont();
-        Delay_ms(50);
+        BSP_DelayMs(50);
     }
 }
 
@@ -177,7 +177,7 @@ void mode_problem_h_2(void){
         SetTargetCircle();
         Compute_excur();
         PID_SMotor_Cont();
-        Delay_ms(10);
+        BSP_DelayMs(10);
     }
 }
 

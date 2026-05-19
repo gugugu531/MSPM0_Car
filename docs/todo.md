@@ -1,6 +1,6 @@
 # Todo
 
-- 后续构建 `bsp/time`，将系统 tick 和 delay 基础能力下沉到 BSP 层。
+- 后续根据真实系统时钟复核 `BSP_TIME_CPUCLK_HZ`，必要时改为从时钟配置自动派生。
 - 后续构建具体 BSP 外设时，继续按 SDK 风格统一公开类型和枚举成员命名。
 - 在确认本地 MSPM0 SDK 环境变量后运行 CCS/ticlang 构建。
 - 在确认本地 Keil MDK/ArmClang 安装路径后运行 Keil 构建。
