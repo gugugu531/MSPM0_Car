@@ -2,6 +2,9 @@
 
 ## 未发布
 
+- 重写 `core/rotation` 为独立子目录，使用 `ROTATION_EULER` 和 `ROTATION_MATRIX` 明确表达姿态角和旋转矩阵。
+- 移除旧 `rotation_matrix()`、`matrix_multiplication()`、`matrix_transpose()` 和 `matrix_to_angles()` 接口。
+- 为旋转数学模块补充中文接口文档 `docs/interfaces/core_rotation.md`。
 - 重写 `core/kinematics` 为独立子目录，保留纯运动学和几何计算接口，不再声明任务流程式动作接口。
 - 新增 `KINEMATICS_POSE`、`KINEMATICS_VELOCITY`、`KINEMATICS_DIFFERENTIAL_OUTPUT` 等运动学数据结构。
 - 为运动学模块补充中文接口文档 `docs/interfaces/core_kinematics.md`。

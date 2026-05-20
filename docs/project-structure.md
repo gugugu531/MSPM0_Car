@@ -41,7 +41,7 @@
 
 - `pid/`：位置式和增量式 PID 控制器。
 - `kinematics/`：角度、位姿、差速混控和二维几何计算。
-- `rotation.*`
+- `rotation/`：欧拉角、旋转矩阵和三维向量旋转计算。
 - `tracking.*`
 - `sensor_proc.*`
 - `step_motor_ctrl.*`
