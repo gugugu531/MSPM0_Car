@@ -181,7 +181,7 @@ float TB6612FNG_GetDuty(TB6612FNG_CHANNEL channel){
     return s_tb6612fng_state[channel].duty_percent;
 }
 
-TB6612FNG_OUTPUT TB6612FNG_GetOutput(TB6612FNG_CHANNEL channel){
+TB6612FNG_OUTPUT TB6612FNG_GetOutputStatus(TB6612FNG_CHANNEL channel){
     if (!TB6612FNG_IsValidChannel(channel)){
         return TB6612FNG_OUTPUT_COAST;
     }

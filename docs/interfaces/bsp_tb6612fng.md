@@ -97,7 +97,7 @@ typedef enum {
 
 返回最近一次记录的带符号百分比占空比。非法通道返回 `0.0f`。
 
-### `TB6612FNG_OUTPUT TB6612FNG_GetOutput(TB6612FNG_CHANNEL channel)`
+### `TB6612FNG_OUTPUT TB6612FNG_GetOutputStatus(TB6612FNG_CHANNEL channel)`
 
 返回最近一次记录的输出状态。非法通道返回 `TB6612FNG_OUTPUT_COAST`。
 
