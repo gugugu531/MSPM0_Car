@@ -33,5 +33,5 @@
 - `laser_usart.h`：CanMV UART 解析和激光点/矩形点状态。
 - `wit_sdk.h`：IMU 协议解析和陀螺仪通道数据。
 - `tb6612fng.h`：TB6612FNG 双路直流电机驱动芯片接口，详细说明见 `docs/interfaces/bsp_tb6612fng.md`。
-- `hall_encoder.h`：霍尔编码器接口。
+- `hall_encoder.h`：霍尔编码器计数、速度和距离估计接口，详细说明见 `docs/interfaces/bsp_hall_encoder.md`。
 - `grayscale_sensor.h`：8 路光敏灰度传感器数字量接口，详细说明见 `docs/interfaces/bsp_grayscale_sensor.md`。
