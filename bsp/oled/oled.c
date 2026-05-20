@@ -1,16 +1,51 @@
 /**
- * @file      OLED.c
- * @brief     SSD1306 OLED显示屏驱动库的实现文件 (软件I2C)
- * @details   实现了通过软件模拟I2C协议驱动OLED的所有函数。
- * @author    Jianing Wang
- * @version   1.1
- * @date      2025-07-31
+ * @file  oled.c
+ * @brief SSD1306 OLED 软件 I2C 显示实现。
  */
 
 #include "oled.h"
 #include "oled_font.h"
 #include "bsp_time.h"
 #include <stdint.h>
+
+#define OLED_CMD  0U
+#define OLED_DATA 1U
+#define OLED_I2C_ADDR 0x78U
+
+static void OLED_SCL_Set(void);
+static void OLED_SCL_Clr(void);
+static void OLED_SDA_Set(void);
+static void OLED_SDA_Clr(void);
+static uint32_t OLED_SDA_Read(void);
+static void I2C_Start(void);
+static void I2C_Stop(void);
+static uint8_t OLED_I2C_WaitAck(void);
+static void OLED_Send_Byte(uint8_t dat);
+static void OLED_WR_Byte(uint8_t dat, uint8_t mode);
+static void OLED_Write_ContinuousCmd(const uint8_t *cmds, uint8_t len);
+static void OLED_Write_ContinuousData_NoAck(const uint8_t *data, uint16_t len);
+static void OLED_Set_Pos(uint8_t x, uint8_t y);
+static uint32_t oled_pow(uint8_t m, uint8_t n);
+
+static void OLED_SCL_Set(void){
+    DL_GPIO_setPins(OLED_GPIO_PORT, OLED_SCL_PIN);
+}
+
+static void OLED_SCL_Clr(void){
+    DL_GPIO_clearPins(OLED_GPIO_PORT, OLED_SCL_PIN);
+}
+
+static void OLED_SDA_Set(void){
+    DL_GPIO_setPins(OLED_GPIO_PORT, OLED_SDA_PIN);
+}
+
+static void OLED_SDA_Clr(void){
+    DL_GPIO_clearPins(OLED_GPIO_PORT, OLED_SDA_PIN);
+}
+
+static uint32_t OLED_SDA_Read(void){
+    return DL_GPIO_readPins(OLED_GPIO_PORT, OLED_SDA_PIN);
+}
 
 static void OLED_DelayUs(uint32_t us){
     BSP_DelayUs(us);
@@ -57,23 +92,20 @@ void OLED_ColorTurn(uint8_t i){
 //    }
 //}
  
-//起始信号
-void I2C_Start(void){
+static void I2C_Start(void){
     OLED_SDA_Set();
     OLED_SCL_Set();
     OLED_SDA_Clr();OLED_DelayUs(1);
     OLED_SCL_Clr();
 }
  
-//结束信号
-void I2C_Stop(void){
+static void I2C_Stop(void){
     OLED_SDA_Clr();
     OLED_SCL_Set();
     OLED_SDA_Set();
 }
  
-//等待信号响应
-uint8_t OLED_I2C_WaitAck(void) //测数据信号的电平
+static uint8_t OLED_I2C_WaitAck(void)
 {
     uint8_t ack = 1;  // 默认无ACK
     OLED_SDA_Set();   // 释放SDA
@@ -85,8 +117,7 @@ uint8_t OLED_I2C_WaitAck(void) //测数据信号的电平
     return ack;  // 返回0表示成功，1表示失败
 }
  
-//写入一个字节
-void OLED_Send_Byte(uint8_t dat){
+static void OLED_Send_Byte(uint8_t dat){
     uint8_t i;
     for(i=0;i<8;i++){
         OLED_SCL_Clr();
@@ -110,9 +141,9 @@ void OLED_Send_Byte(uint8_t dat){
 //发送一个字节
 //向SSD1306写入一个字节。
 //mode:数据/命令标志 0,表示命令;1,表示数据;
-void OLED_WR_Byte(uint8_t dat,uint8_t mode){
+static void OLED_WR_Byte(uint8_t dat,uint8_t mode){
     I2C_Start();
-    OLED_Send_Byte(0x78);
+    OLED_Send_Byte(OLED_I2C_ADDR);
     if (OLED_I2C_WaitAck() != 0){ I2C_Stop(); return; }  // 地址无响应，退出
  
     if(mode){
@@ -131,13 +162,13 @@ void OLED_WR_Byte(uint8_t dat,uint8_t mode){
     I2C_Stop();
 }
  
-void OLED_Write_ContinuousCmd(uint8_t *cmds, uint8_t len){
+static void OLED_Write_ContinuousCmd(const uint8_t *cmds, uint8_t len){
     if (len == 0){
         return;
     }
  
     I2C_Start();
-    OLED_Send_Byte(0x78);  // OLED地址
+    OLED_Send_Byte(OLED_I2C_ADDR);  // OLED地址
     if (OLED_I2C_WaitAck() != 0){ I2C_Stop(); return; }
  
     OLED_Send_Byte(0x00);  // 命令模式
@@ -153,7 +184,7 @@ void OLED_Write_ContinuousCmd(uint8_t *cmds, uint8_t len){
 }
  
 //坐标设置
-void OLED_Set_Pos(uint8_t x, uint8_t y){ 
+static void OLED_Set_Pos(uint8_t x, uint8_t y){
 //    OLED_WR_Byte(0xb0+y,OLED_CMD);
 //    OLED_WR_Byte(((x&0xf0)>>4)|0x10,OLED_CMD);
 //    OLED_WR_Byte((x&0x0f),OLED_CMD);
@@ -165,26 +196,35 @@ void OLED_Set_Pos(uint8_t x, uint8_t y){
 }
  
 //开启OLED显示    
-void OLED_Display_On(void){
+void OLED_DisplayOn(void){
     OLED_WR_Byte(0X8D,OLED_CMD);  //SET DCDC命令
     OLED_WR_Byte(0X14,OLED_CMD);  //DCDC ON
     OLED_WR_Byte(0XAF,OLED_CMD);  //DISPLAY ON
 }
  
+void OLED_Display_On(void){
+    OLED_DisplayOn();
+}
+
 //关闭OLED显示     
-void OLED_Display_Off(void){
+void OLED_DisplayOff(void){
     OLED_WR_Byte(0X8D,OLED_CMD);  //SET DCDC命令
     OLED_WR_Byte(0X10,OLED_CMD);  //DCDC OFF
     OLED_WR_Byte(0XAE,OLED_CMD);  //DISPLAY OFF
 }
+
+void OLED_Display_Off(void){
+    OLED_DisplayOff();
+}
+
 // 连续发送数据时跳过ACK检查（仅清屏用）
-void OLED_Write_ContinuousData_NoAck(uint8_t *data, uint16_t len){
+static void OLED_Write_ContinuousData_NoAck(const uint8_t *data, uint16_t len){
     if (len == 0){
         return;
     }
  
     I2C_Start();
-    OLED_Send_Byte(0x78);
+    OLED_Send_Byte(OLED_I2C_ADDR);
     (void)OLED_I2C_WaitAck();  // 忽略ACK
  
     OLED_Send_Byte(0x40);
@@ -273,7 +313,7 @@ void OLED_ShowChar(uint8_t x,uint8_t y,uint8_t chr,uint8_t sizey){
 }
  
 //m^n函数
-uint32_t oled_pow(uint8_t m,uint8_t n){
+static uint32_t oled_pow(uint8_t m,uint8_t n){
     uint32_t result=1;	 
     while(n--){
         result*=m;
@@ -332,9 +372,26 @@ void OLED_ShowStringClearLine(uint8_t x,uint8_t y,const char *chr,uint8_t sizey)
     OLED_ShowString(x, y, chr, sizey);
 }
  
+void OLED_DrawBMP(uint8_t x, uint8_t y, uint8_t sizex, uint8_t sizey, const uint8_t *bmp){
+    if (bmp == NULL || x >= OLED_WIDTH || y >= OLED_PAGE_COUNT || sizex == 0U || sizey == 0U){
+        return;
+    }
+
+    uint8_t page_count = (uint8_t)((sizey + 7U) / 8U);
+    uint16_t bmp_index = 0U;
+
+    for (uint8_t page = 0U; page < page_count && (uint8_t)(y + page) < OLED_PAGE_COUNT; page++){
+        OLED_Set_Pos(x, (uint8_t)(y + page));
+
+        for (uint8_t col = 0U; col < sizex && (uint8_t)(x + col) < OLED_WIDTH; col++){
+            OLED_WR_Byte(bmp[bmp_index + col], OLED_DATA);
+        }
+
+        bmp_index = (uint16_t)(bmp_index + sizex);
+    }
+}
 
 
- 
 //初始化SSD1306					    
 void OLED_Init(void){
     OLED_DelayMs(100);

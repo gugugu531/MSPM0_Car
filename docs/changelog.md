@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 重写 `bsp/oled` 公开边界：头文件只保留显示接口和硬件宏，软件 I2C 与 SSD1306 低层写入函数收敛为内部实现。
+- 为 OLED 显示接口补充中文接口文档 `docs/interfaces/bsp_oled.md`。
 - 为 `bsp/imu/wit_sdk` 追加 `WitGetAcc()`、`WitGetGyro()`、`WitGetAttitude()` 和 `WitGetData()`，保留厂家驱动主体和命名风格不变。
 - 为 WitMotion IMU 读取接口补充中文接口文档 `docs/interfaces/bsp_wit_sdk.md`。
 - 将 `bsp/laser/laser_usart` 重写为 `bsp/canmv/canmv_uart`，公开 `CanMvUart_*` 接口并移除旧 `Laser_*` / `Rect_*` 全局状态接口。

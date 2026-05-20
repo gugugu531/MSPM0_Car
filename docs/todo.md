@@ -7,6 +7,7 @@
 - 后续重写 `middleware/runtime/vision_state.h`、视觉坐标处理和 UART2 中断入口，对接新的 `CanMvUart_*` 接口。
 - 后续整体框架确认后，将 CCS、Keil 和编辑器配置中的 `bsp/laser/laser_usart` 路径统一更新为 `bsp/canmv/canmv_uart`。
 - 后续迁移 IMU 自检和上层姿态读取代码，从直接访问 `GyroscopeChannelData[]` 改为调用 `WitGetData()` 或对应 getter。
+- 后续重写显示相关上层时，评估是否把 `app` 与 `middleware/system/error_handler.c` 对 `OLED_*` 的直接调用收敛到显示服务。
 - 后续如增加第二个实体按键，在 `KEY_ID`、硬件映射宏和 `bsp/key` 内部配置表中同步扩展。
 - 后续整体框架确认后，将 CCS、Keil 和编辑器配置中的 `bsp/tracking_sensor` 路径统一更新为 `bsp/grayscale_sensor`。
 - 后续构建具体 BSP 外设时，继续按 SDK 风格统一公开类型和枚举成员命名。
