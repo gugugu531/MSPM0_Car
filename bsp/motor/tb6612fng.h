@@ -1,63 +1,90 @@
 /**
  * @file  tb6612fng.h
- * @brief TB6612FNG 直流电机驱动接口，提供 PWM 调速与方向控制
+ * @brief BSP TB6612FNG 双路直流电机驱动接口。
  */
 #ifndef TB6612FNG_H
 #define TB6612FNG_H
 
-#include "ti_msp_dl_config.h"
 #include "bsp_common.h"
-
-typedef enum {
-    MOTOR_FORWARD = 0,
-    MOTOR_BACKWARD = 1,
-    MOTOR_BRAKE = 2,
-    MOTOR_SLIDE = 3,
-    MOTOR_SLEEP = 4,
-} MotorMoveType;
-
-typedef struct {
-    GPIO_Regs *port;
-    uint32_t pin;
-} GPIO_Pin;
-
-typedef struct {
-    GPTIMER_Regs *pwm_timer;
-    DL_TIMER_CC_INDEX pwm_channel;
-    uint16_t current_duty;
-} MotorPWM;
-
-typedef struct {
-    double reduce;
-    double full_speed_rpm;
-    int wheel_diameter;
-} MotorParam;
-
-typedef struct {
-    GPIO_Pin p;
-    GPIO_Pin n;
-    MotorPWM speed;
-    MotorParam param;
-} Motor;
+#include "ti_msp_dl_config.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-BSP_STATUS Motor_Init(Motor *M,
-        GPIO_Regs *p_port, uint32_t p_pin,
-        GPIO_Regs *n_port, uint32_t n_pin,
-        GPTIMER_Regs *pwm_timer, DL_TIMER_CC_INDEX pwm_channel,
-        uint16_t initial_duty);
+#ifndef TB6612FNG_LEFT_IN1_PORT
+#define TB6612FNG_LEFT_IN1_PORT Motor_IO_BIN1_PORT
+#endif
 
-BSP_STATUS Motor_ParamInit(Motor *M,
-        double reduce, double full_speed_rpm, int wheel_diameter);
+#ifndef TB6612FNG_LEFT_IN1_PIN
+#define TB6612FNG_LEFT_IN1_PIN Motor_IO_BIN1_PIN
+#endif
 
-BSP_STATUS Motor_SetDuty(MotorMoveType type, uint16_t duty, Motor *M);
+#ifndef TB6612FNG_LEFT_IN2_PORT
+#define TB6612FNG_LEFT_IN2_PORT Motor_IO_BIN2_PORT
+#endif
 
-BSP_STATUS Motor_SetSpeed(MotorMoveType type, double speed, Motor *M);
+#ifndef TB6612FNG_LEFT_IN2_PIN
+#define TB6612FNG_LEFT_IN2_PIN Motor_IO_BIN2_PIN
+#endif
 
-int Motor_SpeedToDuty(double speed, Motor *M);
+#ifndef TB6612FNG_LEFT_PWM_TIMER
+#define TB6612FNG_LEFT_PWM_TIMER Motor_INST
+#endif
+
+#ifndef TB6612FNG_LEFT_PWM_CHANNEL
+#define TB6612FNG_LEFT_PWM_CHANNEL DL_TIMER_CC_1_INDEX
+#endif
+
+#ifndef TB6612FNG_RIGHT_IN1_PORT
+#define TB6612FNG_RIGHT_IN1_PORT Motor_IO_AIN1_PORT
+#endif
+
+#ifndef TB6612FNG_RIGHT_IN1_PIN
+#define TB6612FNG_RIGHT_IN1_PIN Motor_IO_AIN1_PIN
+#endif
+
+#ifndef TB6612FNG_RIGHT_IN2_PORT
+#define TB6612FNG_RIGHT_IN2_PORT Motor_IO_AIN2_PORT
+#endif
+
+#ifndef TB6612FNG_RIGHT_IN2_PIN
+#define TB6612FNG_RIGHT_IN2_PIN Motor_IO_AIN2_PIN
+#endif
+
+#ifndef TB6612FNG_RIGHT_PWM_TIMER
+#define TB6612FNG_RIGHT_PWM_TIMER Motor_INST
+#endif
+
+#ifndef TB6612FNG_RIGHT_PWM_CHANNEL
+#define TB6612FNG_RIGHT_PWM_CHANNEL DL_TIMER_CC_0_INDEX
+#endif
+
+#ifndef TB6612FNG_PWM_PERIOD
+#define TB6612FNG_PWM_PERIOD 1000U
+#endif
+
+typedef enum {
+    TB6612FNG_CHANNEL_LEFT = 0,
+    TB6612FNG_CHANNEL_RIGHT,
+    TB6612FNG_CHANNEL_MAX
+} TB6612FNG_CHANNEL;
+
+typedef enum {
+    TB6612FNG_OUTPUT_COAST = 0,
+    TB6612FNG_OUTPUT_FORWARD,
+    TB6612FNG_OUTPUT_BACKWARD,
+    TB6612FNG_OUTPUT_BRAKE
+} TB6612FNG_OUTPUT;
+
+BSP_STATUS TB6612FNG_Init(void);
+BSP_STATUS TB6612FNG_SetDuty(TB6612FNG_CHANNEL channel, float duty_percent);
+BSP_STATUS TB6612FNG_Brake(TB6612FNG_CHANNEL channel);
+BSP_STATUS TB6612FNG_Coast(TB6612FNG_CHANNEL channel);
+BSP_STATUS TB6612FNG_BrakeAll(void);
+BSP_STATUS TB6612FNG_CoastAll(void);
+float TB6612FNG_GetDuty(TB6612FNG_CHANNEL channel);
+TB6612FNG_OUTPUT TB6612FNG_GetOutput(TB6612FNG_CHANNEL channel);
 
 #ifdef __cplusplus
 }
