@@ -2,6 +2,10 @@
 
 ## 未发布
 
+- 新增 `middleware/chassis` 底盘组合服务，对接 `TB6612FNG_*` 与 `HallEncoder_*`，公开 `Chassis_*` 接口。
+- 删除旧 `middleware/system/motor_system.*`，不再在底盘模块中混放巡线状态和错误消息全局变量。
+- 将旧 `error_handler()` 的停车动作临时改为调用 `Chassis_Brake()`，等待后续 `middleware/fault` 重写。
+- 为底盘组合服务补充中文接口文档 `docs/interfaces/middleware_chassis.md`。
 - 重写 `bsp/oled` 公开边界：头文件只保留显示接口和硬件宏，软件 I2C 与 SSD1306 低层写入函数收敛为内部实现。
 - 为 OLED 显示接口补充中文接口文档 `docs/interfaces/bsp_oled.md`。
 - 为 `bsp/imu/wit_sdk` 追加 `WitGetAcc()`、`WitGetGyro()`、`WitGetAttitude()` 和 `WitGetData()`，保留厂家驱动主体和命名风格不变。

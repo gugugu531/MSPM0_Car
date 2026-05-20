@@ -16,12 +16,12 @@
 
 ## middleware
 
+- `chassis.h`：底盘组合服务，详细说明见 `docs/interfaces/middleware_chassis.md`。
 - `system_error_state.h`：声明错误显示所需的 `error_message`。
 - `tracking_runtime.h`：声明巡线和任务运行时共享状态，包括 `Digital`、`sInedge`、`edge`、`turning`。
 - `vision_state.h`：当前仍是视觉状态兼容层，后续需迁移到 `bsp/canmv/canmv_uart.h`。
-- `motor_system.h`：提供左右底盘电机组合初始化、原始占空比控制和带符号占空比控制。
 - `step_motor_system.h`：提供 yaw/pitch 双轴步进电机组合初始化、速度控制、状态更新和位置查询。
-- `error_handler.h`：提供错误处理入口，当前行为为刹车并在 OLED 上显示错误信息。
+- `error_handler.h`：提供错误处理入口，当前行为为调用 `Chassis_Brake()` 并在 OLED 上显示错误信息。
 
 ## bsp
 

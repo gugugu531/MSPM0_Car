@@ -1,8 +1,9 @@
 # Todo
 
 - 后续根据真实系统时钟复核 `BSP_TIME_CPUCLK_HZ`，必要时改为从时钟配置自动派生。
-- 后续重写 `middleware/system/motor_system.*`，对接新的 `TB6612FNG_*` 百分比占空比接口。
-- 后续重写上层电机和速度相关模块，对接新的 `HallEncoder_*` 接口。
+- 后续将 `app`、`core` 中的旧 `Motor_*`、`Encoder_*` 调用迁移到 `Chassis_*`。
+- 后续建立 `middleware/line_follow`，承接 `Digital[]`、`sInedge`、`edge`、`turning` 和原 `UpdateSInedge()` 职责。
+- 后续建立 `middleware/fault`，承接 `error_message` 和旧 `error_handler()` 职责。
 - 后续重写 `middleware/system/step_motor_system.*`，对接新的 `StepMotor_*` 通道接口。
 - 后续重写 `middleware/runtime/vision_state.h`、视觉坐标处理和 UART2 中断入口，对接新的 `CanMvUart_*` 接口。
 - 后续整体框架确认后，将 CCS、Keil 和编辑器配置中的 `bsp/laser/laser_usart` 路径统一更新为 `bsp/canmv/canmv_uart`。
