@@ -18,7 +18,7 @@
 
 - `system_error_state.h`：声明错误显示所需的 `error_message`。
 - `tracking_runtime.h`：声明巡线和任务运行时共享状态，包括 `Digital`、`sInedge`、`edge`、`turning`。
-- `vision_state.h`：兼容层，转发 `bsp/laser/laser_usart.h` 导出的视觉状态。
+- `vision_state.h`：当前仍是视觉状态兼容层，后续需迁移到 `bsp/canmv/canmv_uart.h`。
 - `motor_system.h`：提供左右底盘电机组合初始化、原始占空比控制和带符号占空比控制。
 - `step_motor_system.h`：提供 yaw/pitch 双轴步进电机组合初始化、速度控制、状态更新和位置查询。
 - `error_handler.h`：提供错误处理入口，当前行为为刹车并在 OLED 上显示错误信息。
@@ -30,7 +30,7 @@
 - `key.h`：按键读取、消抖和事件生成，详细说明见 `docs/interfaces/bsp_key.md`。
 - `oled.h`：SSD1306 OLED 驱动。软件 I2C 延时来自 `bsp/time`。
 - `step_motor.h`：步进电机开环速度、阻塞定时运行和估计位置接口，详细说明见 `docs/interfaces/bsp_step_motor.md`。
-- `laser_usart.h`：CanMV UART 解析和激光点/矩形点状态。
+- `canmv_uart.h`：CanMV UART 收发、帧解析和目标状态接口，详细说明见 `docs/interfaces/bsp_canmv_uart.md`。
 - `wit_sdk.h`：IMU 协议解析和陀螺仪通道数据。
 - `tb6612fng.h`：TB6612FNG 双路直流电机驱动芯片接口，详细说明见 `docs/interfaces/bsp_tb6612fng.md`。
 - `hall_encoder.h`：霍尔编码器计数、速度和距离估计接口，详细说明见 `docs/interfaces/bsp_hall_encoder.md`。

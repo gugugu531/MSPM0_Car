@@ -4,6 +4,8 @@
 - 后续重写 `middleware/system/motor_system.*`，对接新的 `TB6612FNG_*` 百分比占空比接口。
 - 后续重写上层电机和速度相关模块，对接新的 `HallEncoder_*` 接口。
 - 后续重写 `middleware/system/step_motor_system.*`，对接新的 `StepMotor_*` 通道接口。
+- 后续重写 `middleware/runtime/vision_state.h`、视觉坐标处理和 UART2 中断入口，对接新的 `CanMvUart_*` 接口。
+- 后续整体框架确认后，将 CCS、Keil 和编辑器配置中的 `bsp/laser/laser_usart` 路径统一更新为 `bsp/canmv/canmv_uart`。
 - 后续如增加第二个实体按键，在 `KEY_ID`、硬件映射宏和 `bsp/key` 内部配置表中同步扩展。
 - 后续整体框架确认后，将 CCS、Keil 和编辑器配置中的 `bsp/tracking_sensor` 路径统一更新为 `bsp/grayscale_sensor`。
 - 后续构建具体 BSP 外设时，继续按 SDK 风格统一公开类型和枚举成员命名。

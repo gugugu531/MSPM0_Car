@@ -62,9 +62,9 @@
 `bsp` 是最低层，直接面对板级外设：
 
 - `common/`
+- `canmv/`
 - `imu/`
 - `key/`
-- `laser/`
 - `motor/`
 - `oled/`
 - `step_motor/`
