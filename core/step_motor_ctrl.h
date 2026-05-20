@@ -2,7 +2,7 @@
 #define STEP_MOTOR_CTRL_H
 
 #include "step_motor.h"
-#include "pid.h"
+#include "pid/pid.h"
 #include "step_motor_system.h"
 #include "bsp_common.h"
 

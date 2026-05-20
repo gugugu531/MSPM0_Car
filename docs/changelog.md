@@ -2,6 +2,9 @@
 
 ## 未发布
 
+- 重写 `core/pid` 为独立子目录，新增 `PID_MODE_POSITION` 和 `PID_MODE_INCREMENTAL` 两种控制模式。
+- 将 PID 接口改为 `PID_CONTROLLER` / `PID_CONFIG` / `PID_STATE`，`PID_Update()` 直接返回当前输出并统一处理积分和输出限幅。
+- 为 PID 控制器补充中文接口文档 `docs/interfaces/core_pid.md`。
 - 新增 `middleware/fault` 系统故障处理服务，公开 `SystemFault_*` 接口。
 - 故障停机时同步执行 `Chassis_Brake()` 和 `Gimbal_Stop()`，并通过 `Ui_RenderStatusPage()` 显示错误页。
 - 删除旧 `middleware/runtime/system_error_state.h` 和 `middleware/system/error_handler.*`。

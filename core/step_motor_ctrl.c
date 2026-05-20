@@ -19,15 +19,24 @@ static bool is_new_mode = true;
 static BSP_ATTITUDE2F cor = {0.0f, 0.0f};
 
 void PID_SMotor_Cont(void){
-    static PIDController pid_x, pid_y;
+    static PID_CONTROLLER pid_x, pid_y;
     static uint32_t last_update_time = 0;
     static float last_output_wyaw = 0.0f;
     static float last_output_wpitch = 0.0f;
     uint32_t current_time = BSP_Time_GetMs();
 
     if (is_new_mode){
-        PID_Init(&pid_x, 0.2f, 0.0f, 0.0f, 1000.0f);
-        PID_Init(&pid_y, 0.2f, 0.0f, 0.0f, 1000.0f);
+        const PID_CONFIG pid_config = {
+            .kp = 0.2f,
+            .ki = 0.0f,
+            .kd = 0.0f,
+            .integral_limit = 1000.0f,
+            .output_limit = 0.0f,
+            .mode = PID_MODE_POSITION,
+        };
+
+        PID_Init(&pid_x, &pid_config);
+        PID_Init(&pid_y, &pid_config);
         is_new_mode = false;
         last_update_time = current_time;
         return;
@@ -42,11 +51,9 @@ void PID_SMotor_Cont(void){
     } else if (is_updated){
         is_updated = false;
         float dt = (current_time - last_update_time) / 1000.0f;
-        PID_Update(&pid_x, target_position.x, laser_position.x, dt);
-        PID_Update(&pid_y, target_position.y, laser_position.y, dt);
+        output_wyaw = -1.0f * PID_Update(&pid_x, target_position.x, laser_position.x, dt);
+        output_wpitch = PID_Update(&pid_y, target_position.y, laser_position.y, dt);
         last_update_time = current_time;
-        output_wyaw = -1 * PID_Compute(&pid_x);
-        output_wpitch = PID_Compute(&pid_y);
     }
 
     output_wpitch += cor.pitch;

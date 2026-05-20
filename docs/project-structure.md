@@ -39,7 +39,7 @@
 
 `core` 放置和硬件无关或弱硬件相关的控制逻辑：
 
-- `pid.*`
+- `pid/`：位置式和增量式 PID 控制器。
 - `kinematics.*`
 - `rotation.*`
 - `tracking.*`

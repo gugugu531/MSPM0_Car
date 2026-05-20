@@ -1,5 +1,7 @@
 # Todo
 
+- 后续将 `core/tracking` 中的旧 `PID_IR_Calc_Custom()` 迁移到通用 `PID_CONTROLLER`。
+- 后续将 `core/step_motor_ctrl` 重写为 `core/gimbal_tracking`，并改为调用 `middleware/gimbal`。
 - 后续根据真实系统时钟复核 `BSP_TIME_CPUCLK_HZ`，必要时改为从时钟配置自动派生。
 - 后续将 `app`、`core` 中的旧 `Motor_*`、`Encoder_*` 调用迁移到 `Chassis_*`。
 - 后续将 `app`、`core` 中的旧 `Digital[]`、`edge`、`turning` 访问迁移到 `LineFollow_*`。
