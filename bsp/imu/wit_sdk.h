@@ -126,6 +126,30 @@ int32_t WitSetCanBaud(int32_t uiBaudIndex);
 void IT_JY61P(void);
 void GYROSCOPE_DATA_Decoder(uint8_t *buf);
 void JY61P_Init(UART_Regs *uart);
+
+typedef struct {
+    float x;
+    float y;
+    float z;
+} WIT_VECTOR3F;
+
+typedef struct {
+    float roll;
+    float pitch;
+    float yaw;
+} WIT_ATTITUDE;
+
+typedef struct {
+    WIT_VECTOR3F acc_g;
+    WIT_VECTOR3F gyro_deg_s;
+    WIT_ATTITUDE attitude_deg;
+    float temperature_c;
+} WIT_IMU_DATA;
+
+int32_t WitGetAcc(WIT_VECTOR3F *out);
+int32_t WitGetGyro(WIT_VECTOR3F *out);
+int32_t WitGetAttitude(WIT_ATTITUDE *out);
+int32_t WitGetData(WIT_IMU_DATA *out);
 	
 char CheckRange(short sTemp,short sMin,short sMax);
 

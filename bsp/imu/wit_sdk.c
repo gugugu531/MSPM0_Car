@@ -561,3 +561,50 @@ void JY61P_Init(UART_Regs *uart){
     (void)uart;
     memset(GyroscopeUsart3RxBuffer, 0x00, sizeof(GyroscopeUsart3RxBuffer));
 }
+
+int32_t WitGetAcc(WIT_VECTOR3F *out)
+{
+    if(out == NULL)return WIT_HAL_INVAL;
+
+    out->x = (float)GyroscopeChannelData[0];
+    out->y = (float)GyroscopeChannelData[1];
+    out->z = (float)GyroscopeChannelData[2];
+    return WIT_HAL_OK;
+}
+
+int32_t WitGetGyro(WIT_VECTOR3F *out)
+{
+    if(out == NULL)return WIT_HAL_INVAL;
+
+    out->x = (float)GyroscopeChannelData[3];
+    out->y = (float)GyroscopeChannelData[4];
+    out->z = (float)GyroscopeChannelData[5];
+    return WIT_HAL_OK;
+}
+
+int32_t WitGetAttitude(WIT_ATTITUDE *out)
+{
+    if(out == NULL)return WIT_HAL_INVAL;
+
+    out->roll = (float)GyroscopeChannelData[6];
+    out->pitch = (float)GyroscopeChannelData[7];
+    out->yaw = (float)GyroscopeChannelData[8];
+    return WIT_HAL_OK;
+}
+
+int32_t WitGetData(WIT_IMU_DATA *out)
+{
+    if(out == NULL)return WIT_HAL_INVAL;
+
+    out->acc_g.x = (float)GyroscopeChannelData[0];
+    out->acc_g.y = (float)GyroscopeChannelData[1];
+    out->acc_g.z = (float)GyroscopeChannelData[2];
+    out->gyro_deg_s.x = (float)GyroscopeChannelData[3];
+    out->gyro_deg_s.y = (float)GyroscopeChannelData[4];
+    out->gyro_deg_s.z = (float)GyroscopeChannelData[5];
+    out->attitude_deg.roll = (float)GyroscopeChannelData[6];
+    out->attitude_deg.pitch = (float)GyroscopeChannelData[7];
+    out->attitude_deg.yaw = (float)GyroscopeChannelData[8];
+    out->temperature_c = (float)GyroscopeChannelData[9];
+    return WIT_HAL_OK;
+}
