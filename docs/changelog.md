@@ -2,6 +2,9 @@
 
 ## 未发布
 
+- 重写 `core/kinematics` 为独立子目录，保留纯运动学和几何计算接口，不再声明任务流程式动作接口。
+- 新增 `KINEMATICS_POSE`、`KINEMATICS_VELOCITY`、`KINEMATICS_DIFFERENTIAL_OUTPUT` 等运动学数据结构。
+- 为运动学模块补充中文接口文档 `docs/interfaces/core_kinematics.md`。
 - 重写 `core/pid` 为独立子目录，新增 `PID_MODE_POSITION` 和 `PID_MODE_INCREMENTAL` 两种控制模式。
 - 将 PID 接口改为 `PID_CONTROLLER` / `PID_CONFIG` / `PID_STATE`，`PID_Update()` 直接返回当前输出并统一处理积分和输出限幅。
 - 为 PID 控制器补充中文接口文档 `docs/interfaces/core_pid.md`。

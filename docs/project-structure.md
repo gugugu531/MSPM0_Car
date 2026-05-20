@@ -40,7 +40,7 @@
 `core` 放置和硬件无关或弱硬件相关的控制逻辑：
 
 - `pid/`：位置式和增量式 PID 控制器。
-- `kinematics.*`
+- `kinematics/`：角度、位姿、差速混控和二维几何计算。
 - `rotation.*`
 - `tracking.*`
 - `sensor_proc.*`

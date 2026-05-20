@@ -9,7 +9,7 @@
 ## core
 
 - `pid/pid.h`：位置式和增量式 PID 控制器，详细说明见 `docs/interfaces/core_pid.md`。
-- `kinematics.h`：坐标、运动学和里程相关计算。
+- `kinematics/kinematics.h`：角度、位姿、差速混控和二维几何计算，详细说明见 `docs/interfaces/core_kinematics.md`。
 - `tracking.h`：巡线控制入口。
 - `sensor_proc.h`：目标点提取、纸面坐标和相机坐标转换。
 - `step_motor_ctrl.h`：基于视觉目标的云台控制逻辑。

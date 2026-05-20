@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include "bsp_time.h"
 #include "motor_system.h"
-#include "kinematics.h"
+#include "kinematics/kinematics.h"
 #include "oled.h"
 #include "sensor_proc.h"
 #include "step_motor_ctrl.h"
