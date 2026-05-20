@@ -11,7 +11,7 @@
 #include "menu.h"
 #include "oled.h"
 #include "tracking_runtime.h"
-#include "tracking_sensor.h"
+#include "grayscale_sensor.h"
 #include "vision_state.h"
 #include "wit_sdk.h"
 #include "ti_msp_dl_config.h"
@@ -461,7 +461,7 @@ static void App_RunTrackingTest(void){
             return;
         }
 
-        TrackingSensor_Read(Digital);
+        GrayscaleSensor_Read(Digital);
 
         uint32_t now = BSP_Time_GetMs();
         if (now - last_refresh >= 120){

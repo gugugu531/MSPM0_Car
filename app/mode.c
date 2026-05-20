@@ -15,7 +15,7 @@
 #include "sensor_proc.h"
 #include "step_motor_ctrl.h"
 #include "tracking.h"
-#include "tracking_sensor.h"
+#include "grayscale_sensor.h"
 
 extern char CircleNum;
 
@@ -47,7 +47,7 @@ void mode_test_coordinate(void){
 void mode_test_circle(void){
     while (1){
         UpdateSInedge();
-        TrackingSensor_Read(Digital);
+        GrayscaleSensor_Read(Digital);
         if (!mode_turn_step()){
             Motor_Brake();
             break;
@@ -70,7 +70,7 @@ void mode_test_connection(void){
 
 void mode_test_tracking(void){
     while (1){
-        TrackingSensor_Read(Digital);
+        GrayscaleSensor_Read(Digital);
         lineWalking_low();
         if (empty_Detect()){
             Motor_Brake();
@@ -88,7 +88,7 @@ void mode_problem_b_1(void){
 #endif
 
     while (1){
-        TrackingSensor_Read(Digital);
+        GrayscaleSensor_Read(Digital);
         UpdateSInedge();
 
         if (half_Detect() && (cn * 4 == edge - 1)){
@@ -129,7 +129,7 @@ void mode_problem_h_1(void){
 
     YP_SMotor_Init();
     while (1){
-        TrackingSensor_Read(Digital);
+        GrayscaleSensor_Read(Digital);
         UpdateSInedge();
 
         if (half_Detect() && (cn * 4 == edge)){
@@ -159,7 +159,7 @@ void mode_problem_h_2(void){
 
     YP_SMotor_Init();
     while (1){
-        TrackingSensor_Read(Digital);
+        GrayscaleSensor_Read(Digital);
         UpdateSInedge();
 
         if (half_Detect() && (4 == edge)){

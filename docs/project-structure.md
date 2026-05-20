@@ -69,7 +69,7 @@
 - `oled/`
 - `step_motor/`
 - `time/`
-- `tracking_sensor/`
+- `grayscale_sensor/`
 
 该层禁止包含 `app`、`core`、`middleware` 头文件。需要基础时间或阻塞延时能力时，统一调用 `bsp/time`。
 

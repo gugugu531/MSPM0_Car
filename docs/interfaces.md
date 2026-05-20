@@ -32,4 +32,5 @@
 - `step_motor.h`：步进电机底层驱动。状态更新由调用方显式传入当前时间。
 - `laser_usart.h`：CanMV UART 解析和激光点/矩形点状态。
 - `wit_sdk.h`：IMU 协议解析和陀螺仪通道数据。
-- `tb6612fng.h`、`hall_encoder.h`、`tracking_sensor.h`：底盘电机驱动、编码器和巡线传感器接口。
+- `tb6612fng.h`、`hall_encoder.h`：底盘电机驱动和编码器接口。
+- `grayscale_sensor.h`：8 路光敏灰度传感器数字量接口，详细说明见 `docs/interfaces/bsp_grayscale_sensor.md`。
