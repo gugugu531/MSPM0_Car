@@ -4,6 +4,8 @@
 - 后续将 `app`、`core` 中的旧 `Motor_*`、`Encoder_*` 调用迁移到 `Chassis_*`。
 - 后续将 `app`、`core` 中的旧 `Digital[]`、`edge`、`turning` 访问迁移到 `LineFollow_*`。
 - 后续在具体使用点重新设计旧 `sInedge` 和 `UpdateSInedge()` 对应的阶段距离逻辑，优先评估 `Chassis_GetDistance()` / `Chassis_ResetDistance()`。
+- 后续将 `app/app_launcher.c` 的 `App_ShowLines()`、`App_UpdateTestLines()` 和简单 OLED 页面渲染迁移到 `Ui_*`。
+- 后续将 `app/menu.c` 的列表绘制迁移到 `Ui_RenderListPage()`，菜单树和按键逻辑仍保留在 app。
 - 后续建立 `middleware/fault`，承接 `error_message` 和旧 `error_handler()` 职责。
 - 后续将 `app`、`core` 中的旧 `YP_SMotor_*`、`GetYaw()`、`GetPitch()` 调用迁移到 `Gimbal_*`。
 - 后续重写 `middleware/runtime/vision_state.h`、视觉坐标处理和 UART2 中断入口，对接新的 `CanMvUart_*` 接口。

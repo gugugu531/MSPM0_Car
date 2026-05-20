@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 新增 `middleware/ui` 轻量 OLED UI 渲染层，提供文本页、状态页、列表页和行刷新接口。
+- 为 UI 渲染层补充中文接口文档 `docs/interfaces/middleware_ui.md`。
 - 新增 `middleware/line_follow` 巡线运行状态服务，公开传感器快照、边线计数和转弯状态接口。
 - 删除旧 `middleware/runtime/tracking_runtime.h`，不再暴露 `Digital[]`、`edge`、`turning` 全局变量声明。
 - 明确旧 `sInedge` 和 `UpdateSInedge()` 不迁入 `line_follow`，后续在具体使用点重新设计阶段距离逻辑。
