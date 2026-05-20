@@ -29,7 +29,7 @@
 - `time/bsp_time.h`：BSP 系统时间和阻塞延时服务，详细说明见 `docs/interfaces/bsp_time.md`。
 - `key.h`：按键读取、消抖和事件生成，详细说明见 `docs/interfaces/bsp_key.md`。
 - `oled.h`：SSD1306 OLED 驱动。软件 I2C 延时来自 `bsp/time`。
-- `step_motor.h`：步进电机底层驱动。状态更新由调用方显式传入当前时间。
+- `step_motor.h`：步进电机开环速度、阻塞定时运行和估计位置接口，详细说明见 `docs/interfaces/bsp_step_motor.md`。
 - `laser_usart.h`：CanMV UART 解析和激光点/矩形点状态。
 - `wit_sdk.h`：IMU 协议解析和陀螺仪通道数据。
 - `tb6612fng.h`：TB6612FNG 双路直流电机驱动芯片接口，详细说明见 `docs/interfaces/bsp_tb6612fng.md`。

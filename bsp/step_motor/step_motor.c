@@ -1,110 +1,237 @@
 /**
- * @file  StepMotor.c
- * @brief 步进电机 BSP 驱动实现，提供初始化、调速与状态更新
+ * @file  step_motor.c
+ * @brief BSP 步进电机开环控制实现。
  */
 #include "step_motor.h"
-#include <math.h>
+#include "bsp_time.h"
+#include <stdbool.h>
 
-BSP_STATUS SMotor_Init(SMotor *motor, GPIO_Regs *Dir_port, uint32_t Dir_pin,
-                       GPTIMER_Regs *pwm_timer, DL_TIMER_CC_INDEX pwm_channel){
-    if (motor == NULL || pwm_timer == NULL){
-        return BSP_STATUS_NULL;
-    }
+typedef struct {
+    GPIO_Regs *dir_port;
+    uint32_t dir_pin;
+    GPTIMER_Regs *pwm_timer;
+    DL_TIMER_CC_INDEX pwm_channel;
+    bool positive_dir_high;
+} STEP_MOTOR_HW_CONFIG;
 
-    motor->Dir_port = Dir_port;
-    motor->Dir_pin = Dir_pin;
-    motor->pwm_timer = pwm_timer;
-    motor->pwm_channel = pwm_channel;
-    motor->state.angular_speed = 0.0;
-    motor->state.last_update_time = (uint32_t)-1;
-    motor->state.current_position = 0.0;
+typedef struct {
+    float speed_deg_per_s;
+    float estimated_position_deg;
+    uint32_t last_update_ms;
+    bool update_started;
+} STEP_MOTOR_STATE;
 
-    DL_GPIO_clearPins(motor->Dir_port, motor->Dir_pin);
-    DL_TimerG_startCounter(motor->pwm_timer);
-    DL_TimerG_setCaptureCompareValue(motor->pwm_timer, 0, motor->pwm_channel);
-    return BSP_STATUS_OK;
+static const STEP_MOTOR_HW_CONFIG s_step_motor_hw[STEP_MOTOR_CHANNEL_MAX] = {
+    [STEP_MOTOR_CHANNEL_YAW] = {
+        .dir_port = STEP_MOTOR_YAW_DIR_PORT,
+        .dir_pin = STEP_MOTOR_YAW_DIR_PIN,
+        .pwm_timer = STEP_MOTOR_YAW_PWM_TIMER,
+        .pwm_channel = STEP_MOTOR_YAW_PWM_CHANNEL,
+        .positive_dir_high = (STEP_MOTOR_YAW_POSITIVE_DIR_HIGH != 0U),
+    },
+    [STEP_MOTOR_CHANNEL_PITCH] = {
+        .dir_port = STEP_MOTOR_PITCH_DIR_PORT,
+        .dir_pin = STEP_MOTOR_PITCH_DIR_PIN,
+        .pwm_timer = STEP_MOTOR_PITCH_PWM_TIMER,
+        .pwm_channel = STEP_MOTOR_PITCH_PWM_CHANNEL,
+        .positive_dir_high = (STEP_MOTOR_PITCH_POSITIVE_DIR_HIGH != 0U),
+    },
+};
+
+static STEP_MOTOR_STATE s_step_motor_state[STEP_MOTOR_CHANNEL_MAX];
+
+static bool StepMotor_IsValidChannel(STEP_MOTOR_CHANNEL channel){
+    return channel < STEP_MOTOR_CHANNEL_MAX;
 }
 
-BSP_STATUS SMotor_ParamInit(SMotor *motor, SMOTOR_DIR_STATE Anti_Dir,
-                            float step_angular, float step_divisor){
-    if (motor == NULL){
-        return BSP_STATUS_NULL;
-    }
-
-    motor->parameters.Anti_Dir = Anti_Dir;
-    motor->parameters.step_angular = step_angular;
-    motor->parameters.step_divisor = step_divisor;
-    return BSP_STATUS_OK;
+static float StepMotor_Abs(float value){
+    return (value < 0.0f) ? -value : value;
 }
 
-BSP_STATUS SMotor_SetSpeed(SMotor *motor, float angular_speed){
-    if (motor == NULL || motor->pwm_timer == NULL){
-        return BSP_STATUS_NULL;
+static uint32_t StepMotor_GetStepFrequency(float speed_deg_per_s){
+    float abs_speed = StepMotor_Abs(speed_deg_per_s);
+
+    if (abs_speed <= 0.0f || STEP_MOTOR_STEP_ANGLE_DEG <= 0.0f || STEP_MOTOR_MICROSTEP <= 0.0f){
+        return 0U;
     }
 
-    motor->state.angular_speed = angular_speed;
+    return (uint32_t)((abs_speed / STEP_MOTOR_STEP_ANGLE_DEG) * STEP_MOTOR_MICROSTEP);
+}
 
-    if (fabsf(angular_speed) == 0.0f){
-        DL_TimerG_setCaptureCompareValue(motor->pwm_timer, 0, motor->pwm_channel);
-        return BSP_STATUS_OK;
+static void StepMotor_SetDirection(const STEP_MOTOR_HW_CONFIG *hw, float speed_deg_per_s){
+    bool set_high = hw->positive_dir_high;
+
+    if (speed_deg_per_s < 0.0f){
+        set_high = !set_high;
     }
 
-    if (angular_speed > 0){
-        if (motor->parameters.Anti_Dir == SMOTOR_DIR_HIGH){
-            DL_GPIO_setPins(motor->Dir_port, motor->Dir_pin);
-        } else{
-            DL_GPIO_clearPins(motor->Dir_port, motor->Dir_pin);
-        }
+    if (set_high){
+        DL_GPIO_setPins(hw->dir_port, hw->dir_pin);
     } else{
-        if (motor->parameters.Anti_Dir == SMOTOR_DIR_HIGH){
-            DL_GPIO_clearPins(motor->Dir_port, motor->Dir_pin);
-        } else{
-            DL_GPIO_setPins(motor->Dir_port, motor->Dir_pin);
-        }
-        angular_speed = -angular_speed;
+        DL_GPIO_clearPins(hw->dir_port, hw->dir_pin);
     }
-
-    uint32_t tim_clk = SMotor_GetClockFreq(motor->pwm_timer);
-    uint32_t target_frequency = SMotor_GetStepFreq(angular_speed, motor);
-    uint32_t now_prescaler = 32 * 8 * 2;
-    uint32_t target_arr = tim_clk / (target_frequency * now_prescaler) - 1;
-    if (target_arr > 65535){
-        target_arr = 65535;
-    }
-
-    DL_TimerG_setLoadValue(motor->pwm_timer, target_arr);
-    DL_TimerG_setCaptureCompareValue(motor->pwm_timer, target_arr / 2, motor->pwm_channel);
-    return BSP_STATUS_OK;
 }
 
-BSP_STATUS SMotor_UpdateState(SMotor *motor, uint32_t current_time){
-    if (motor == NULL){
-        return BSP_STATUS_NULL;
-    }
+static void StepMotor_DisablePulse(const STEP_MOTOR_HW_CONFIG *hw){
+    DL_TimerG_setCaptureCompareValue(hw->pwm_timer, 0U, hw->pwm_channel);
+}
 
-    if (motor->state.last_update_time == (uint32_t)-1){
-        motor->state.last_update_time = current_time;
+static BSP_STATUS StepMotor_ApplySpeed(STEP_MOTOR_CHANNEL channel, float speed_deg_per_s){
+    const STEP_MOTOR_HW_CONFIG *hw = &s_step_motor_hw[channel];
+    uint32_t step_frequency = StepMotor_GetStepFrequency(speed_deg_per_s);
+
+    if (step_frequency == 0U){
+        StepMotor_DisablePulse(hw);
         return BSP_STATUS_OK;
     }
-    motor->state.current_position += motor->state.angular_speed *
-        (current_time - motor->state.last_update_time) * 1e-3;
-    motor->state.last_update_time = current_time;
+
+    StepMotor_SetDirection(hw, speed_deg_per_s);
+
+    uint32_t denominator = step_frequency * STEP_MOTOR_TIMER_PRESCALER_FACTOR;
+    if (denominator == 0U){
+        return BSP_STATUS_INVALID_ARG;
+    }
+
+    uint32_t arr = (STEP_MOTOR_TIMER_CLOCK_HZ / denominator);
+    if (arr > 0U){
+        arr--;
+    }
+
+    if (arr > STEP_MOTOR_MAX_ARR){
+        arr = STEP_MOTOR_MAX_ARR;
+    }
+
+    DL_TimerG_setLoadValue(hw->pwm_timer, arr);
+    DL_TimerG_setCaptureCompareValue(hw->pwm_timer, arr / 2U, hw->pwm_channel);
     return BSP_STATUS_OK;
 }
 
-uint32_t SMotor_GetClockFreq(GPTIMER_Regs *timer){
-    if (timer == NULL){
-        return 0;
+BSP_STATUS StepMotor_Init(void){
+    for (uint8_t i = 0U; i < (uint8_t)STEP_MOTOR_CHANNEL_MAX; i++){
+        const STEP_MOTOR_HW_CONFIG *hw = &s_step_motor_hw[i];
+
+        s_step_motor_state[i].speed_deg_per_s = 0.0f;
+        s_step_motor_state[i].estimated_position_deg = 0.0f;
+        s_step_motor_state[i].last_update_ms = 0U;
+        s_step_motor_state[i].update_started = false;
+
+        DL_GPIO_clearPins(hw->dir_port, hw->dir_pin);
+        DL_TimerG_startCounter(hw->pwm_timer);
+        StepMotor_DisablePulse(hw);
     }
-    return 32000000;
+
+    return BSP_STATUS_OK;
 }
 
-uint32_t SMotor_GetStepFreq(float angular_speed, SMotor *motor){
-    if (motor == NULL){
-        return 0;
+BSP_STATUS StepMotor_UpdateState(STEP_MOTOR_CHANNEL channel, uint32_t now_ms){
+    if (!StepMotor_IsValidChannel(channel)){
+        return BSP_STATUS_INVALID_ARG;
     }
-    if (angular_speed < 0){
-        angular_speed = -angular_speed;
+
+    STEP_MOTOR_STATE *state = &s_step_motor_state[channel];
+
+    if (!state->update_started){
+        state->last_update_ms = now_ms;
+        state->update_started = true;
+        return BSP_STATUS_OK;
     }
-    return (uint32_t)(angular_speed / motor->parameters.step_angular * motor->parameters.step_divisor);
+
+    state->estimated_position_deg += state->speed_deg_per_s *
+        (float)(now_ms - state->last_update_ms) * 1e-3f;
+    state->last_update_ms = now_ms;
+    return BSP_STATUS_OK;
+}
+
+BSP_STATUS StepMotor_UpdateAllState(uint32_t now_ms){
+    BSP_STATUS status = BSP_STATUS_OK;
+
+    for (uint8_t i = 0U; i < (uint8_t)STEP_MOTOR_CHANNEL_MAX; i++){
+        BSP_STATUS channel_status = StepMotor_UpdateState((STEP_MOTOR_CHANNEL)i, now_ms);
+
+        if (channel_status != BSP_STATUS_OK){
+            status = channel_status;
+        }
+    }
+
+    return status;
+}
+
+BSP_STATUS StepMotor_SetSpeed(STEP_MOTOR_CHANNEL channel, float speed_deg_per_s){
+    if (!StepMotor_IsValidChannel(channel)){
+        return BSP_STATUS_INVALID_ARG;
+    }
+
+    (void)StepMotor_UpdateState(channel, BSP_Time_GetMs());
+
+    BSP_STATUS status = StepMotor_ApplySpeed(channel, speed_deg_per_s);
+    if (status != BSP_STATUS_OK){
+        return status;
+    }
+
+    s_step_motor_state[channel].speed_deg_per_s = speed_deg_per_s;
+    return BSP_STATUS_OK;
+}
+
+BSP_STATUS StepMotor_RunFor(STEP_MOTOR_CHANNEL channel,
+                            float speed_deg_per_s,
+                            uint32_t duration_ms){
+    BSP_STATUS status = StepMotor_SetSpeed(channel, speed_deg_per_s);
+    if (status != BSP_STATUS_OK){
+        return status;
+    }
+
+    BSP_DelayMs(duration_ms);
+    (void)StepMotor_UpdateState(channel, BSP_Time_GetMs());
+    return StepMotor_Stop(channel);
+}
+
+BSP_STATUS StepMotor_Stop(STEP_MOTOR_CHANNEL channel){
+    if (!StepMotor_IsValidChannel(channel)){
+        return BSP_STATUS_INVALID_ARG;
+    }
+
+    (void)StepMotor_UpdateState(channel, BSP_Time_GetMs());
+    StepMotor_DisablePulse(&s_step_motor_hw[channel]);
+    s_step_motor_state[channel].speed_deg_per_s = 0.0f;
+    return BSP_STATUS_OK;
+}
+
+BSP_STATUS StepMotor_StopAll(void){
+    BSP_STATUS status = BSP_STATUS_OK;
+
+    for (uint8_t i = 0U; i < (uint8_t)STEP_MOTOR_CHANNEL_MAX; i++){
+        BSP_STATUS channel_status = StepMotor_Stop((STEP_MOTOR_CHANNEL)i);
+
+        if (channel_status != BSP_STATUS_OK){
+            status = channel_status;
+        }
+    }
+
+    return status;
+}
+
+float StepMotor_GetSpeed(STEP_MOTOR_CHANNEL channel){
+    if (!StepMotor_IsValidChannel(channel)){
+        return 0.0f;
+    }
+
+    return s_step_motor_state[channel].speed_deg_per_s;
+}
+
+float StepMotor_GetEstimatedPosition(STEP_MOTOR_CHANNEL channel){
+    if (!StepMotor_IsValidChannel(channel)){
+        return 0.0f;
+    }
+
+    return s_step_motor_state[channel].estimated_position_deg;
+}
+
+void StepMotor_ResetEstimatedPosition(STEP_MOTOR_CHANNEL channel){
+    if (!StepMotor_IsValidChannel(channel)){
+        return;
+    }
+
+    s_step_motor_state[channel].estimated_position_deg = 0.0f;
+    s_step_motor_state[channel].last_update_ms = BSP_Time_GetMs();
+    s_step_motor_state[channel].update_started = true;
 }
