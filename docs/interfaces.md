@@ -20,9 +20,8 @@
 - `gimbal.h`：云台组合服务，详细说明见 `docs/interfaces/middleware_gimbal.md`。
 - `line_follow.h`：巡线运行状态服务，详细说明见 `docs/interfaces/middleware_line_follow.md`。
 - `ui.h`：轻量 OLED UI 渲染层，详细说明见 `docs/interfaces/middleware_ui.md`。
-- `system_error_state.h`：声明错误显示所需的 `error_message`。
+- `system_fault.h`：系统故障处理服务，详细说明见 `docs/interfaces/middleware_system_fault.md`。
 - `vision_state.h`：当前仍是视觉状态兼容层，后续需迁移到 `bsp/canmv/canmv_uart.h`。
-- `error_handler.h`：提供错误处理入口，当前行为为调用 `Chassis_Brake()` 并在 OLED 上显示错误信息。
 
 ## bsp
 

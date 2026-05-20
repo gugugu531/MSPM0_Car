@@ -2,6 +2,10 @@
 
 ## 未发布
 
+- 新增 `middleware/fault` 系统故障处理服务，公开 `SystemFault_*` 接口。
+- 故障停机时同步执行 `Chassis_Brake()` 和 `Gimbal_Stop()`，并通过 `Ui_RenderStatusPage()` 显示错误页。
+- 删除旧 `middleware/runtime/system_error_state.h` 和 `middleware/system/error_handler.*`。
+- 为系统故障处理服务补充中文接口文档 `docs/interfaces/middleware_system_fault.md`。
 - 新增 `middleware/ui` 轻量 OLED UI 渲染层，提供文本页、状态页、列表页和行刷新接口。
 - 为 UI 渲染层补充中文接口文档 `docs/interfaces/middleware_ui.md`。
 - 新增 `middleware/line_follow` 巡线运行状态服务，公开传感器快照、边线计数和转弯状态接口。
@@ -13,7 +17,6 @@
 - 为云台组合服务补充中文接口文档 `docs/interfaces/middleware_gimbal.md`。
 - 新增 `middleware/chassis` 底盘组合服务，对接 `TB6612FNG_*` 与 `HallEncoder_*`，公开 `Chassis_*` 接口。
 - 删除旧 `middleware/system/motor_system.*`，不再在底盘模块中混放巡线状态和错误消息全局变量。
-- 将旧 `error_handler()` 的停车动作临时改为调用 `Chassis_Brake()`，等待后续 `middleware/fault` 重写。
 - 为底盘组合服务补充中文接口文档 `docs/interfaces/middleware_chassis.md`。
 - 重写 `bsp/oled` 公开边界：头文件只保留显示接口和硬件宏，软件 I2C 与 SSD1306 低层写入函数收敛为内部实现。
 - 为 OLED 显示接口补充中文接口文档 `docs/interfaces/bsp_oled.md`。
