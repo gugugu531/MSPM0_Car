@@ -2,7 +2,8 @@
 
 - 后续根据真实系统时钟复核 `BSP_TIME_CPUCLK_HZ`，必要时改为从时钟配置自动派生。
 - 后续将 `app`、`core` 中的旧 `Motor_*`、`Encoder_*` 调用迁移到 `Chassis_*`。
-- 后续建立 `middleware/line_follow`，承接 `Digital[]`、`sInedge`、`edge`、`turning` 和原 `UpdateSInedge()` 职责。
+- 后续将 `app`、`core` 中的旧 `Digital[]`、`edge`、`turning` 访问迁移到 `LineFollow_*`。
+- 后续在具体使用点重新设计旧 `sInedge` 和 `UpdateSInedge()` 对应的阶段距离逻辑，优先评估 `Chassis_GetDistance()` / `Chassis_ResetDistance()`。
 - 后续建立 `middleware/fault`，承接 `error_message` 和旧 `error_handler()` 职责。
 - 后续将 `app`、`core` 中的旧 `YP_SMotor_*`、`GetYaw()`、`GetPitch()` 调用迁移到 `Gimbal_*`。
 - 后续重写 `middleware/runtime/vision_state.h`、视觉坐标处理和 UART2 中断入口，对接新的 `CanMvUart_*` 接口。

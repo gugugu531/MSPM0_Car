@@ -2,6 +2,10 @@
 
 ## 未发布
 
+- 新增 `middleware/line_follow` 巡线运行状态服务，公开传感器快照、边线计数和转弯状态接口。
+- 删除旧 `middleware/runtime/tracking_runtime.h`，不再暴露 `Digital[]`、`edge`、`turning` 全局变量声明。
+- 明确旧 `sInedge` 和 `UpdateSInedge()` 不迁入 `line_follow`，后续在具体使用点重新设计阶段距离逻辑。
+- 为巡线运行状态服务补充中文接口文档 `docs/interfaces/middleware_line_follow.md`。
 - 新增 `middleware/gimbal` 云台组合服务，对接 `StepMotor_*`，公开 `Gimbal_*` 接口并只保留 pitch 软件限位。
 - 删除旧 `middleware/system/step_motor_system.*`。
 - 为云台组合服务补充中文接口文档 `docs/interfaces/middleware_gimbal.md`。
