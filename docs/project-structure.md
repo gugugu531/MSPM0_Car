@@ -44,7 +44,7 @@
 - `kinematics/`：角度、位姿、差速混控和二维几何计算。
 - `rotation/`：欧拉角、旋转矩阵和三维向量旋转计算。
 - `geometry/`：二维矩形插值、纸面到矩形映射和圆点计算。
-- `tracking.*`
+- `line_tracking/`：巡线偏差计算、PID 修正和底盘输出。
 - `step_motor_ctrl.*`
 
 该层可以使用 `middleware` 提供的组合能力，也可以调用必要的 `bsp` 数据接口，但不能包含 `app` 头文件。

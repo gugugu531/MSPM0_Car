@@ -2,6 +2,9 @@
 
 ## 未发布
 
+- 新增 `core/line_tracking` 巡线控制模块，对接 `middleware/line_follow`、`core/pid`、`core/kinematics` 和 `middleware/chassis`。
+- 删除旧 `core/tracking.*`，移除 `PID_IR_Calc_Custom()` 和 `Motion_Car_Control()`。
+- 将 `app/mode.c` 中 `lineWalking_low()` 调用最小替换为 `LineTracking_Update()`。
 - 新增 `core/common/core_types.h`，将二维点和二维姿态类型迁移为 `CORE_POINT2F`、`CORE_ATTITUDE2F`。
 - 新增 `core/geometry` 二维平面映射模块，提供矩形插值、纸面到矩形映射和圆点计算接口。
 - 删除旧 `core/sensor_proc.*`，灰度巡线相关处理不再放入该模块，后续由 `core/line_tracking` 和 `middleware/line_follow` 承担。

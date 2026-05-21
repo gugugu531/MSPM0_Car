@@ -1,9 +1,7 @@
 # Todo
 
 - 后续在 `app` 完成重写后，评估移除 `core/kinematics` 中的 `DEG_TO_RAD`、`RAD_TO_DEG` 和 `RotationAngles` 兼容定义。
-- 后续将 `app/mode.c` 中的旧 `half_Detect()`、`empty_Detect()`、`Digital[]` 等巡线流程迁移到 `middleware/line_follow` 和 `core/line_tracking`。
-- 后续将旧 `Motion_Car_Control()` 迁移为 `Kinematics_DifferentialMix()` 计算加 `Chassis_SetDuty()` 执行。
-- 后续将 `core/tracking` 中的旧 `PID_IR_Calc_Custom()` 迁移到通用 `PID_CONTROLLER`。
+- 后续将 `app/mode.c` 中的旧 `half_Detect()`、`empty_Detect()`、`Digital[]` 等巡线流程迁移到 `middleware/line_follow`。
 - 后续将 `core/step_motor_ctrl` 重写为 `core/gimbal_tracking`，并改为调用 `middleware/gimbal`。
 - 后续根据真实系统时钟复核 `BSP_TIME_CPUCLK_HZ`，必要时改为从时钟配置自动派生。
 - 后续将 `app`、`core` 中的旧 `Motor_*`、`Encoder_*` 调用迁移到 `Chassis_*`。

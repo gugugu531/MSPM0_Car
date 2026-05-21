@@ -13,7 +13,7 @@
 - `kinematics/kinematics.h`：角度、位姿、差速混控和二维几何计算，详细说明见 `docs/interfaces/core_kinematics.md`。
 - `rotation/rotation.h`：欧拉角、旋转矩阵和三维向量旋转计算，详细说明见 `docs/interfaces/core_rotation.md`。
 - `geometry/geometry.h`：二维矩形插值、纸面到矩形映射和圆点计算，详细说明见 `docs/interfaces/core_geometry.md`。
-- `tracking.h`：巡线控制入口。
+- `line_tracking/line_tracking.h`：巡线偏差计算、PID 修正和底盘输出接口，详细说明见 `docs/interfaces/core_line_tracking.md`。
 - `step_motor_ctrl.h`：基于视觉目标的云台控制逻辑。
 
 ## middleware

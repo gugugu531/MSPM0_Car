@@ -15,7 +15,7 @@
 #include "oled.h"
 #include "geometry/geometry.h"
 #include "step_motor_ctrl.h"
-#include "tracking.h"
+#include "line_tracking/line_tracking.h"
 #include "grayscale_sensor.h"
 
 extern char CircleNum;
@@ -103,7 +103,7 @@ void mode_test_connection(void){
 void mode_test_tracking(void){
     while (1){
         GrayscaleSensor_Read(Digital);
-        lineWalking_low();
+        (void)LineTracking_Update(0.01f);
         if (Mode_IsEmptyDetected()){
             Motor_Brake();
             return;
@@ -129,7 +129,7 @@ void mode_problem_b_1(void){
         }
 
         if (!mode_turn_step()){
-            lineWalking_low();
+            (void)LineTracking_Update(0.01f);
         }
 
         BSP_DelayMs(10);
@@ -171,7 +171,7 @@ void mode_problem_h_1(void){
 
         if (!mode_turn_step()){
             DL_GPIO_setPins(LED_PORT, LED_LED0_PIN);
-            lineWalking_low();
+            (void)LineTracking_Update(0.05f);
         } else{
             DL_GPIO_clearPins(LED_PORT, LED_LED0_PIN);
         }
@@ -202,7 +202,7 @@ void mode_problem_h_2(void){
         }
 
         if (!mode_turn_step()){
-            lineWalking_low();
+            (void)LineTracking_Update(0.01f);
         }
 
         SetLaserPosition();
