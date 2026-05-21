@@ -107,4 +107,4 @@ step_frequency = abs(speed_deg_per_s) / step_angle_deg * microstep
 
 ## 对接说明
 
-本轮只重写 BSP 驱动。当前上层仍使用旧 `SMotor_*` 类型和接口，后续重写 `middleware/system/step_motor_system.*` 时再统一迁移到 `StepMotor_*`。
+旧 `SMotor_*` 类型和接口已不再作为当前应用层入口使用。云台组合服务通过 `StepMotor_*` 控制 yaw/pitch 双轴。

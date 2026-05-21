@@ -102,4 +102,4 @@ typedef enum {
 
 ## 对接说明
 
-本轮只重写 BSP 驱动。当前上层仍使用旧 `Encoder_*` 接口，后续重写 `middleware/system/motor_system.*` 和相关调用时再统一迁移到 `HallEncoder_*`。
+旧 `Encoder_*` 接口已不再作为当前应用层入口使用。底盘组合服务通过 `HallEncoder_*` 获取速度和距离估计。

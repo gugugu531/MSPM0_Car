@@ -1,30 +1,39 @@
-/**
- * @file  main.c
- * @brief 系统主入口，完成基础外设初始化并启动应用流程
- */
+#include "app_device_check.h"
 #include "app_launcher.h"
 #include "bsp_time.h"
-#include "hall_encoder.h"
-#include "motor_system.h"
+#include "canmv_uart.h"
+#include "chassis.h"
+#include "gimbal.h"
 #include "key.h"
-#include "laser_usart.h"
-#include "oled.h"
+#include "line_follow.h"
+#include "system_fault.h"
 #include "ti_msp_dl_config.h"
+#include "ui.h"
 
-int main(void){
+#include <stdint.h>
+
+static void App_InitSystems(void){
     SYSCFG_DL_init();
     BSP_Time_Init();
     __enable_irq();
 
-    Encoder_Init();
-    Encoder_TimerInit();
-    DL_TimerG_startCounter(TIMER_0_INST);
-
-    Laser_USART_Init();
-    OLED_Init();
-    Motor_SystemInit();
+    Ui_Init();
     Key_Init();
 
+    (void)Chassis_Init();
+    (void)Gimbal_Init();
+    (void)LineFollow_Init();
+    (void)CanMvUart_Init();
+    SystemFault_Clear();
+
+    DL_TimerA_startCounter(TIMER_0_INST);
+    DL_UART_Main_enableInterrupt(Debug_INST, DL_UART_MAIN_INTERRUPT_RX);
+    NVIC_ClearPendingIRQ(Debug_INST_INT_IRQN);
+    NVIC_EnableIRQ(Debug_INST_INT_IRQN);
+}
+
+int main(void){
+    App_InitSystems();
     App_Launch();
 
     while (1){
@@ -32,27 +41,25 @@ int main(void){
 }
 
 void UART0_IRQHandler(void){
-    App_DebugUartHandler();
+    if (DL_UART_getPendingInterrupt(Debug_INST) == DL_UART_IIDX_RX){
+        AppDeviceCheck_ProcessImuByte((uint8_t)DL_UART_Main_receiveData(Debug_INST));
+    }
 }
 
 void UART2_IRQHandler(void){
-    switch (DL_UART_getPendingInterrupt(LASER_UART)){
-        case DL_UART_IIDX_RX:
-            CanMV_Process();
-            break;
-        default:
-            break;
+    if (DL_UART_getPendingInterrupt(CANMV_UART_INST) == DL_UART_IIDX_RX){
+        CanMvUart_ProcessRx();
     }
 }
 
 void SysTick_Handler(void){
-    static int scan_divider = 0;
+    static uint8_t scan_divider = 0U;
 
-    scan_divider++;
     BSP_Time_TickInc();
 
-    if (scan_divider == 10){
+    scan_divider++;
+    if (scan_divider >= 10U){
         Key_Scan();
-        scan_divider = 0;
+        scan_divider = 0U;
     }
 }

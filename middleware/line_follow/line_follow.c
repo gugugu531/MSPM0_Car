@@ -70,6 +70,41 @@ uint8_t LineFollow_GetSensorValue(uint8_t index){
     return s_line_follow_state.sensor.value[index];
 }
 
+uint8_t LineFollow_GetActiveCount(void){
+    uint8_t active_count = 0U;
+
+    for (uint8_t i = 0U; i < LINE_FOLLOW_SENSOR_COUNT; i++){
+        if (s_line_follow_state.sensor.value[i] == 0U){
+            active_count++;
+        }
+    }
+
+    return active_count;
+}
+
+bool LineFollow_IsActiveCountInRange(uint8_t min_count, uint8_t max_count){
+    uint8_t active_count = LineFollow_GetActiveCount();
+
+    return (active_count >= min_count) && (active_count <= max_count);
+}
+
+bool LineFollow_IsEmpty(void){
+    return LineFollow_GetActiveCount() == 0U;
+}
+
+bool LineFollow_IsHalfDetected(void){
+    return LineFollow_IsActiveCountInRange(3U, 6U);
+}
+
+bool LineFollow_IsCrossDetected(void){
+    return LineFollow_IsActiveCountInRange(7U, 8U);
+}
+
+bool LineFollow_IsCenterActive(void){
+    return (s_line_follow_state.sensor.value[3] == 0U) ||
+           (s_line_follow_state.sensor.value[4] == 0U);
+}
+
 int32_t LineFollow_GetEdgeCount(void){
     return s_line_follow_state.edge_count;
 }

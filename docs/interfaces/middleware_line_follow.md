@@ -90,6 +90,30 @@ typedef struct {
 
 返回指定通道传感器值。`index >= LINE_FOLLOW_SENSOR_COUNT` 时返回 `0`。
 
+### `uint8_t LineFollow_GetActiveCount(void)`
+
+返回当前检测到黑线的通道数量。当前灰度传感器语义为 `0` 表示检测到线。
+
+### `bool LineFollow_IsActiveCountInRange(uint8_t min_count, uint8_t max_count)`
+
+判断当前检测到线的通道数量是否位于指定范围。
+
+### `bool LineFollow_IsEmpty(void)`
+
+判断当前是否没有任何通道检测到线。
+
+### `bool LineFollow_IsHalfDetected(void)`
+
+判断当前是否满足半线/边线粗略判定。当前实现为检测到线的通道数量在 `3..6` 之间。
+
+### `bool LineFollow_IsCrossDetected(void)`
+
+判断当前是否满足十字线粗略判定。当前实现为检测到线的通道数量在 `7..8` 之间。
+
+### `bool LineFollow_IsCenterActive(void)`
+
+判断中间通道是否检测到线。当前实现使用第 `3`、`4` 两路通道中的任意一路。
+
 ### `int32_t LineFollow_GetEdgeCount(void)`
 
 返回当前边线计数。

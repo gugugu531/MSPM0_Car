@@ -103,4 +103,4 @@ typedef enum {
 
 ## 对接说明
 
-本轮只重写 BSP 驱动。当前 `middleware/system/motor_system.*` 仍使用旧的 `Motor_*` 类型和函数，后续重写上层电机组合模块时再对接 `TB6612FNG_*` 接口。
+旧 `Motor_*` 类型和函数已不再作为当前应用层入口使用。底盘组合服务通过 `TB6612FNG_*` 设置左右轮输出。

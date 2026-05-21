@@ -2,6 +2,13 @@
 
 ## 未发布
 
+- 重写 `app` 层为 2025 年电赛 E 题前三项任务入口，删除旧 `mode/menu/circle_list/mode_tree` 流程。
+- 新增 `app/app_e_task.*`，提供寻迹 1 到 5 圈、2 秒靶心瞄准和 4 秒靶心瞄准任务。
+- 新增 `docs/interfaces/app_launcher.md`、`docs/interfaces/app_e_task.md` 和 `docs/interfaces/app_device_check.md`，记录应用层当前公开边界。
+- 新增 `app/app_device_check.*`，提供底盘、云台、灰度、视觉和 IMU 简化检查页面。
+- 重写 `app/main.c`，统一初始化 `Chassis`、`Gimbal`、`LineFollow`、`CanMvUart`、`Ui` 和按键。
+- 为 `middleware/line_follow` 增加 `LineFollow_GetActiveCount()`、空线、半线、十字和中心检测接口。
+- 删除已无引用的 `middleware/runtime/vision_state.h` 和 `middleware/runtime/project_build_config.h`。
 - 新增 `core/gimbal_tracking` 云台视觉跟踪模块，对接 `bsp/canmv`、`core/geometry`、`core/pid` 和 `middleware/gimbal`。
 - 删除旧 `core/step_motor_ctrl.*`，移除直接调用 `YP_SMotor_*` 的云台控制路径。
 - 旧 `Compute_excur()`、`getDistance()` 和 LED 调试逻辑不迁入 `gimbal_tracking`。

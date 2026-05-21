@@ -2,9 +2,10 @@
 
 ## app
 
-- `main.c`：完成 SysConfig、IRQ、BSP 设备和中间层 provider 初始化，然后进入 `App_Launch()`。
-- `app_launcher.h`：提供 `App_Launch()` 和 `App_DebugUartHandler()`。
-- `menu.h`、`mode.h`：提供菜单与题目流程入口。
+- `main.c`：完成 SysConfig、BSP、middleware 初始化和中断分发，然后进入 `App_Launch()`。
+- `app_launcher.h`：提供 E 题前三项任务和设备检查的顶层菜单入口，详细说明见 `docs/interfaces/app_launcher.md`。
+- `app_e_task.h`：提供 E 题基本要求 1、2、3 的任务流程入口，详细说明见 `docs/interfaces/app_e_task.md`。
+- `app_device_check.h`：提供设备检查页面和 IMU 调试 UART 字节处理入口，详细说明见 `docs/interfaces/app_device_check.md`。
 
 ## core
 
@@ -23,7 +24,6 @@
 - `line_follow.h`：巡线运行状态服务，详细说明见 `docs/interfaces/middleware_line_follow.md`。
 - `ui.h`：轻量 OLED UI 渲染层，详细说明见 `docs/interfaces/middleware_ui.md`。
 - `system_fault.h`：系统故障处理服务，详细说明见 `docs/interfaces/middleware_system_fault.md`。
-- `vision_state.h`：当前仍是视觉状态兼容层，后续需迁移到 `bsp/canmv/canmv_uart.h`。
 
 ## bsp
 

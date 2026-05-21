@@ -1,24 +1,15 @@
 # Todo
 
-- 后续在 `app` 完成重写后，评估移除 `core/kinematics` 中的 `DEG_TO_RAD`、`RAD_TO_DEG` 和 `RotationAngles` 兼容定义。
-- 后续将 `app/mode.c` 中的旧 `half_Detect()`、`empty_Detect()`、`Digital[]` 等巡线流程迁移到 `middleware/line_follow`。
+- 后续评估移除 `core/kinematics` 中的 `DEG_TO_RAD`、`RAD_TO_DEG` 和 `RotationAngles` 兼容定义。
 - 后续重新设计旧 `Compute_excur()` 对应的转弯期间云台补偿策略，避免在 core 中直接依赖 LED GPIO、旧 `edge/sInedge` 和编码器全局接口。
+- 上板校准 E1 循迹圈数计数策略，重点检查 `LineFollow_IsHalfDetected()` 判定范围、最小距离门限和不同车速下的重复计数问题。
 - 后续根据真实系统时钟复核 `BSP_TIME_CPUCLK_HZ`，必要时改为从时钟配置自动派生。
-- 后续将 `app`、`core` 中的旧 `Motor_*`、`Encoder_*` 调用迁移到 `Chassis_*`。
-- 后续将 `app`、`core` 中的旧 `Digital[]`、`edge`、`turning` 访问迁移到 `LineFollow_*`。
 - 后续在具体使用点重新设计旧 `sInedge` 和 `UpdateSInedge()` 对应的阶段距离逻辑，优先评估 `Chassis_GetDistance()` / `Chassis_ResetDistance()`。
-- 后续将 `app/app_launcher.c` 的 `App_ShowLines()`、`App_UpdateTestLines()` 和简单 OLED 页面渲染迁移到 `Ui_*`。
-- 后续将 `app/menu.c` 的列表绘制迁移到 `Ui_RenderListPage()`，菜单树和按键逻辑仍保留在 app。
-- 后续将 `app/menu.c`、`app/circle_list.c`、`app/mode_tree.c`、`app/mode.c` 从旧 `error_message + error_handler()` 迁移到 `SystemFault_Handler()`。
-- 后续将 `app` 中的旧 `YP_SMotor_*`、`GetYaw()`、`GetPitch()` 调用迁移到 `Gimbal_*`。
-- 后续重写 `middleware/runtime/vision_state.h`、视觉坐标处理和 UART2 中断入口，对接新的 `CanMvUart_*` 接口。
 - 后续整体框架确认后，将 CCS、Keil 和编辑器配置中的 `bsp/laser/laser_usart` 路径统一更新为 `bsp/canmv/canmv_uart`。
-- 后续迁移 IMU 自检和上层姿态读取代码，从直接访问 `GyroscopeChannelData[]` 改为调用 `WitGetData()` 或对应 getter。
 - 后续如增加第二个实体按键，在 `KEY_ID`、硬件映射宏和 `bsp/key` 内部配置表中同步扩展。
 - 后续整体框架确认后，将 CCS、Keil 和编辑器配置中的 `bsp/tracking_sensor` 路径统一更新为 `bsp/grayscale_sensor`。
 - 后续构建具体 BSP 外设时，继续按 SDK 风格统一公开类型和枚举成员命名。
 - 在确认本地 MSPM0 SDK 环境变量后运行 CCS/ticlang 构建。
 - 在确认本地 Keil MDK/ArmClang 安装路径后运行 Keil 构建。
-- 继续把 `middleware/runtime` 中的全局运行时状态收敛为显式上下文结构。
 - 如需要更彻底的 API 统一，后续可把公开 C 函数也改为 snake_case。
 - 上板验证启动页、任务菜单、设备自检、UART0 IMU、UART2 视觉和 SysTick 按键扫描。

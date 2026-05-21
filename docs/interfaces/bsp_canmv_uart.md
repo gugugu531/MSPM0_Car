@@ -111,4 +111,4 @@ typedef struct {
 
 ## 对接说明
 
-本轮只重写 BSP 驱动。当前上层仍使用旧 `Laser_*`、`Rect_*`、`CanMV_Process()` 和全局视觉状态，后续重写 `middleware/runtime/vision_state` 与视觉处理相关模块时再统一迁移到 `CanMvUart_*`。
+旧 `Laser_*`、`Rect_*`、`CanMV_Process()` 和全局视觉状态接口已不再作为当前应用层入口使用。新的视觉数据读取统一通过 `CanMvUart_*` 接口完成。

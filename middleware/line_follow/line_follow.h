@@ -36,6 +36,12 @@ BSP_STATUS LineFollow_GetState(LINE_FOLLOW_STATE *out);
 BSP_STATUS LineFollow_GetSensor(LINE_FOLLOW_SENSOR_STATE *out);
 uint8_t LineFollow_GetSensorMask(void);
 uint8_t LineFollow_GetSensorValue(uint8_t index);
+uint8_t LineFollow_GetActiveCount(void);
+bool LineFollow_IsActiveCountInRange(uint8_t min_count, uint8_t max_count);
+bool LineFollow_IsEmpty(void);
+bool LineFollow_IsHalfDetected(void);
+bool LineFollow_IsCrossDetected(void);
+bool LineFollow_IsCenterActive(void);
 
 int32_t LineFollow_GetEdgeCount(void);
 void LineFollow_SetEdgeCount(int32_t edge_count);

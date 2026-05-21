@@ -15,8 +15,7 @@
 
 - `app/`
 - `core/`
-- `middleware/runtime/`
-- `middleware/system/`
+- `middleware/`
 - `bsp/`
 - `board/sys_config/`
 
@@ -64,8 +63,9 @@
 编译通过后仍需上板验证：
 
 - 上电后进入启动页
-- `Task flow` 可进入任务菜单
-- `Device check` 五个测试页可正常切换
+- E 题前三项任务菜单可进入
+- E1 可选择 1 到 5 圈
+- `Device check` 五个测试页可正常切换和刷新
 - `UART0_IRQHandler` 可处理 IMU 调试串口数据
 - `UART2_IRQHandler` 可更新视觉定位数据
 - `SysTick_Handler` 可按周期扫描按键
