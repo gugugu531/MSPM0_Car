@@ -16,21 +16,20 @@
 系统主入口位于 `app/main.c`：
 
 - 调用 `SYSCFG_DL_init()` 并使能中断
-- 初始化编码器、激光串口、OLED、底盘电机、按键
-- 为 BSP 注入必要 provider，例如按键时间源和 OLED 延时函数
+- 初始化 `Ui`、按键、底盘、云台、巡线状态、CanMV UART 和故障状态
+- 使能编码器采样定时器、UART0 IMU 接收中断和 UART2 CanMV 接收中断
 - 进入 `app/app_launcher.c` 的 `App_Launch()`
 
 ## 分层目录
 
 - `app/`
-  - 主入口、中断分发、启动器、菜单、题目模式和设备自检页面
+  - 主入口、中断分发、E 题前三项任务入口和设备自检页面
 - `core/`
-  - PID、运动学、巡线控制、传感处理、视觉云台控制等算法逻辑
+  - PID、运动学、几何、旋转、巡线控制和视觉云台控制等算法逻辑
 - `middleware/`
-  - `runtime/`：系统时间、错误信息、巡线运行时状态等共享状态声明
-  - `system/`：延时、错误处理、底盘电机组合控制、云台组合控制
+  - 底盘、云台、巡线状态、轻量 UI 和故障处理等组合能力
 - `bsp/`
-  - `common/`、`imu/`、`key/`、`laser/`、`motor/`、`oled/`、`step_motor/`、`tracking_sensor/`
+  - `common/`、`canmv/`、`grayscale_sensor/`、`imu/`、`key/`、`motor/`、`oled/`、`step_motor/`、`time/`
 - `board/`
   - `sys_config/`：SysConfig 输入和生成代码
   - `startup/`：启动和链接相关资源
@@ -51,16 +50,18 @@
 - `middleware` 可以调用 `bsp`
 - `bsp` 不能调用任何上层模块
 
-当前已把 BSP 中原本依赖上层的时间、延时和共享状态访问改为 provider 注入或由 BSP 自己导出状态。
+当前已把 BSP 中原本依赖上层的时间、延时和共享状态访问改为明确的下层接口或由对应模块自己导出状态。
 
 ## 任务与调试入口
 
-固件启动后进入启动页，提供两个一级入口：
+固件启动后进入启动页，当前顶层菜单提供：
 
-- `Task flow`：进入正式任务菜单
-- `Device check`：进入设备自检页
+- `E1 Line 1 lap` 到 `E1 Line 5 laps`
+- `E2 Aim 2s`
+- `E3 Aim 4s`
+- `Device check`
 
-正式任务菜单包含 `Task B`、`Task H` 相关流程；设备自检页包含底盘电机、云台、IMU、视觉定位和巡线传感器检查。
+设备自检页包含底盘、云台、IMU、CanMV 视觉和 8 路灰度传感器检查。
 
 ## 构建入口
 
@@ -68,6 +69,11 @@
 - Keil 工程文件：`project/keil/NUEDC2025_MSPM0G3507.uvprojx`
 
 修改源码布局后需要同步维护两套工程文件。当前工程文件已指向新的分层目录。
+
+最近一次验证：
+
+- CCS/ticlang 直接交叉编译通过，使用 `C:\ti\ti_cgt_arm_llvm_4.0.2.LTS\bin\tiarmclang.exe`
+- Keil/ArmClang rebuild 通过，使用 `D:\Keil_v5\UV4\UV4.exe`
 
 ## 文档
 
@@ -77,4 +83,3 @@
 - `docs/project-structure.md`
 - `docs/changelog.md`
 - `docs/todo.md`
-

@@ -21,6 +21,8 @@
 
 构建时必须同时包含这些 include path。按照当前重写流程，新增源码先完成分层框架和接口收敛；整体框架确认后，再统一维护 `project/ccs/NUEDC2025_MSPM0G3507_ticlang.projectspec` 和 `project/keil/NUEDC2025_MSPM0G3507.uvprojx`。
 
+当前两套工程文件已同步到分层源码树。
+
 ## CCS 构建
 
 入口文件：
@@ -35,6 +37,12 @@
 - SysConfig 输入和生成文件位于 `board/sys_config/`
 - CCS 构建输出目录视为可再生本地产物
 
+本地已验证的直接交叉编译命令使用：
+
+- 编译器：`C:\ti\ti_cgt_arm_llvm_4.0.2.LTS\bin\tiarmclang.exe`
+- SDK：`C:\ti\mspm0_sdk_2_10_00_04`
+- 产物：`build/ccs/NUEDC2025_MSPM0G3507.out`
+
 ## Keil 构建
 
 入口文件：
@@ -47,6 +55,14 @@
 - Keil 使用 SDK 中的 uVision 启动文件
 - Scatter 文件位于 `board/startup/mspm0g3507.sct`
 - `uvoptx`、`uvguix.*` 属于本地会话文件，不作为稳定源码依赖
+
+本地已验证的 Keil 命令：
+
+```powershell
+& 'D:\Keil_v5\UV4\UV4.exe' -r 'NUEDC2025_MSPM0G3507.uvprojx' -o 'keil_build.log'
+```
+
+运行目录为 `project/keil/`，构建结果为 `Objects/NUEDC2025_MSPM0G3507.axf` 和对应 hex，最近一次 rebuild 为 `0 Error(s), 0 Warning(s)`。
 
 ## SysConfig 和生成文件
 

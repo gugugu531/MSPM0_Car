@@ -1,10 +1,7 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
 <Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="project_projx.xsd">
-
   <SchemaVersion>2.1</SchemaVersion>
-
   <Header>### uVision Project, (C) Keil Software</Header>
-
   <Targets>
     <Target>
       <TargetName>NUEDC2025_MSPM0G3507</TargetName>
@@ -340,7 +337,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include;C:\ti\mspm0_sdk_2_10_00_04\source;..\..\middleware\runtime;..\..\app;..\..\board\sys_config;..\..;..\..\bsp\common;..\..\middleware\system;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\laser;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\step_motor;..\..\bsp\tracking_sensor;..\..\core;..\..\app</IncludePath>
+              <IncludePath>C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include;C:\ti\mspm0_sdk_2_10_00_04\source;..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\geometry;..\..\core\gimbal_tracking;..\..\core\kinematics;..\..\core\line_tracking;..\..\core\pid;..\..\core\rotation;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\gimbal;..\..\middleware\line_follow;..\..\middleware\ui;..\..\bsp\canmv;..\..\bsp\common;..\..\bsp\grayscale_sensor;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\step_motor;..\..\bsp\time;..\..\board\sys_config</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -385,9 +382,219 @@
           <GroupName>app</GroupName>
           <Files>
             <File>
+              <FileName>app_device_check.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_device_check.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_e_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_e_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_launcher.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_launcher.c</FilePath>
+            </File>
+            <File>
               <FileName>main.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\app\main.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>core/geometry</GroupName>
+          <Files>
+            <File>
+              <FileName>geometry.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\core\geometry\geometry.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>core/gimbal_tracking</GroupName>
+          <Files>
+            <File>
+              <FileName>gimbal_tracking.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\core\gimbal_tracking\gimbal_tracking.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>core/kinematics</GroupName>
+          <Files>
+            <File>
+              <FileName>kinematics.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\core\kinematics\kinematics.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>core/line_tracking</GroupName>
+          <Files>
+            <File>
+              <FileName>line_tracking.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\core\line_tracking\line_tracking.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>core/pid</GroupName>
+          <Files>
+            <File>
+              <FileName>pid.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\core\pid\pid.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>core/rotation</GroupName>
+          <Files>
+            <File>
+              <FileName>rotation.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\core\rotation\rotation.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>middleware/chassis</GroupName>
+          <Files>
+            <File>
+              <FileName>chassis.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\middleware\chassis\chassis.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>middleware/fault</GroupName>
+          <Files>
+            <File>
+              <FileName>system_fault.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\middleware\fault\system_fault.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>middleware/gimbal</GroupName>
+          <Files>
+            <File>
+              <FileName>gimbal.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\middleware\gimbal\gimbal.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>middleware/line_follow</GroupName>
+          <Files>
+            <File>
+              <FileName>line_follow.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\middleware\line_follow\line_follow.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>middleware/ui</GroupName>
+          <Files>
+            <File>
+              <FileName>ui.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\middleware\ui\ui.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>bsp/canmv</GroupName>
+          <Files>
+            <File>
+              <FileName>canmv_uart.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\canmv\canmv_uart.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>bsp/grayscale_sensor</GroupName>
+          <Files>
+            <File>
+              <FileName>grayscale_sensor.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\grayscale_sensor\grayscale_sensor.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>bsp/imu</GroupName>
+          <Files>
+            <File>
+              <FileName>wit_sdk.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\imu\wit_sdk.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>bsp/key</GroupName>
+          <Files>
+            <File>
+              <FileName>key.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\key\key.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>bsp/motor</GroupName>
+          <Files>
+            <File>
+              <FileName>hall_encoder.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\motor\hall_encoder.c</FilePath>
+            </File>
+            <File>
+              <FileName>tb6612fng.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\motor\tb6612fng.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>bsp/oled</GroupName>
+          <Files>
+            <File>
+              <FileName>oled.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\oled\oled.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>bsp/step_motor</GroupName>
+          <Files>
+            <File>
+              <FileName>step_motor.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\step_motor\step_motor.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>bsp/time</GroupName>
+          <Files>
+            <File>
+              <FileName>bsp_time.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\time\bsp_time.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -412,142 +619,7 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>middleware/system</GroupName>
-          <Files>
-            <File>
-              <FileName>delay.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\middleware\system\delay.c</FilePath>
-            </File>
-            <File>
-              <FileName>error_handler.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\middleware\system\error_handler.c</FilePath>
-            </File>
-            <File>
-              <FileName>motor_system.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\middleware\system\motor_system.c</FilePath>
-            </File>
-            <File>
-              <FileName>step_motor_system.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\middleware\system\step_motor_system.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>core</GroupName>
-          <Files>
-            <File>
-              <FileName>pid.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\core\pid.c</FilePath>
-            </File>
-            <File>
-              <FileName>kinematics.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\core\kinematics.c</FilePath>
-            </File>
-            <File>
-              <FileName>rotation.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\core\rotation.c</FilePath>
-            </File>
-            <File>
-              <FileName>tracking.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\core\tracking.c</FilePath>
-            </File>
-            <File>
-              <FileName>sensor_proc.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\core\sensor_proc.c</FilePath>
-            </File>
-            <File>
-              <FileName>step_motor_ctrl.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\core\step_motor_ctrl.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>app</GroupName>
-          <Files>
-            <File>
-              <FileName>app_launcher.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\app\app_launcher.c</FilePath>
-            </File>
-            <File>
-              <FileName>mode.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\app\mode.c</FilePath>
-            </File>
-            <File>
-              <FileName>menu.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\app\menu.c</FilePath>
-            </File>
-            <File>
-              <FileName>mode_tree.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\app\mode_tree.c</FilePath>
-            </File>
-            <File>
-              <FileName>circle_list.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\app\circle_list.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>bsp</GroupName>
-          <Files>
-            <File>
-              <FileName>tb6612fng.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\motor\tb6612fng.c</FilePath>
-            </File>
-            <File>
-              <FileName>hall_encoder.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\motor\hall_encoder.c</FilePath>
-            </File>
-            <File>
-              <FileName>oled.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\oled\oled.c</FilePath>
-            </File>
-            <File>
-              <FileName>key.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\key\key.c</FilePath>
-            </File>
-            <File>
-              <FileName>laser_usart.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\laser\laser_usart.c</FilePath>
-            </File>
-            <File>
-              <FileName>step_motor.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\step_motor\step_motor.c</FilePath>
-            </File>
-            <File>
-              <FileName>tracking_sensor.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\tracking_sensor\tracking_sensor.c</FilePath>
-            </File>
-            <File>
-              <FileName>wit_sdk.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\imu\wit_sdk.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>Driverlib</GroupName>
+          <GroupName>driverlib</GroupName>
           <Files>
             <File>
               <FileName>driverlib.a</FileName>
@@ -559,13 +631,11 @@
       </Groups>
     </Target>
   </Targets>
-
   <RTE>
-    <apis/>
-    <components/>
-    <files/>
+    <apis />
+    <components />
+    <files />
   </RTE>
-
   <LayerInfo>
     <Layers>
       <Layer>
@@ -574,5 +644,4 @@
       </Layer>
     </Layers>
   </LayerInfo>
-
 </Project>
