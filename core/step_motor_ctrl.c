@@ -10,13 +10,17 @@
 #include <math.h>
 #include "hall_encoder.h"
 #include "motor_system.h"
-#include "sensor_proc.h"
+#include "geometry/geometry.h"
 
-static BSP_POINT2F laser_position = {0.0f, 0.0f};
-static BSP_POINT2F target_position = {0.0f, 0.0f};
+static CORE_POINT2F laser_position = {0.0f, 0.0f};
+static CORE_POINT2F target_position = {0.0f, 0.0f};
 static bool is_updated = false;
 static bool is_new_mode = true;
-static BSP_ATTITUDE2F cor = {0.0f, 0.0f};
+static CORE_ATTITUDE2F cor = {0.0f, 0.0f};
+
+#define STEP_MOTOR_CTRL_PAPER_WIDTH_MM 315.0f
+#define STEP_MOTOR_CTRL_PAPER_HEIGHT_MM 212.0f
+#define STEP_MOTOR_CTRL_CIRCLE_RADIUS_MM 60.0f
 
 void PID_SMotor_Cont(void){
     static PID_CONTROLLER pid_x, pid_y;
@@ -83,7 +87,31 @@ void SetLaserPosition(void){
 
 void SetTargetCircle(void){
     if (Rect_error == CANMV_STATUS_OK){
-        target_position = paper_to_camera(get_target_coordinate());
+        uint16_t rect_data[8] = {
+            Rect_Loc[0],
+            Rect_Loc[1],
+            Rect_Loc[2],
+            Rect_Loc[3],
+            Rect_Loc[4],
+            Rect_Loc[5],
+            Rect_Loc[6],
+            Rect_Loc[7],
+        };
+        GEOMETRY_RECT2F rect;
+        CORE_POINT2F paper_center = {
+            .x = STEP_MOTOR_CTRL_PAPER_WIDTH_MM / 2.0f,
+            .y = STEP_MOTOR_CTRL_PAPER_HEIGHT_MM / 2.0f,
+        };
+        float target_angle_deg = (float)(edge - 1) * 90.0f + sInedge;
+        CORE_POINT2F paper_target = Geometry_CirclePointDeg(paper_center,
+                                                            STEP_MOTOR_CTRL_CIRCLE_RADIUS_MM,
+                                                            target_angle_deg);
+
+        Geometry_RectFromArray(rect_data, &rect);
+        target_position = Geometry_PaperToRectPoint(paper_target,
+                                                    STEP_MOTOR_CTRL_PAPER_WIDTH_MM,
+                                                    STEP_MOTOR_CTRL_PAPER_HEIGHT_MM,
+                                                    &rect);
         is_updated = true;
     }
 }

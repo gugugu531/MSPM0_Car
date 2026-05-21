@@ -7,12 +7,13 @@
 #include "error_handler.h"
 #include "tracking_runtime.h"
 #include "vision_state.h"
+#include <stdint.h>
 #include <stdio.h>
 #include "bsp_time.h"
 #include "motor_system.h"
 #include "kinematics/kinematics.h"
 #include "oled.h"
-#include "sensor_proc.h"
+#include "geometry/geometry.h"
 #include "step_motor_ctrl.h"
 #include "tracking.h"
 #include "grayscale_sensor.h"
@@ -20,6 +21,26 @@
 extern char CircleNum;
 
 static int turn_state = 0;
+
+static bool Mode_IsRoadDetected(int num_min, int num_max){
+    int active_count = 0;
+
+    for (uint8_t i = 0; i < GRAYSCALE_SENSOR_CHANNEL_COUNT; i++){
+        if (Digital[i] == 0U){
+            active_count++;
+        }
+    }
+
+    return (active_count >= num_min) && (active_count <= num_max);
+}
+
+static bool Mode_IsHalfDetected(void){
+    return Mode_IsRoadDetected(3, 6);
+}
+
+static bool Mode_IsEmptyDetected(void){
+    return Mode_IsRoadDetected(0, 0);
+}
 
 void mode_test_distance(void){
     while (1){
@@ -59,10 +80,21 @@ void mode_test_circle(void){
 void mode_test_connection(void){
     char message[50];
     while (1){
-        BSP_POINT2F cor = {0.0f, 0.0f};
-        BSP_POINT2F paper = {0.1f, 0.1f};
+        CORE_POINT2F paper = {0.1f, 0.1f};
+        uint16_t rect_data[8] = {
+            Rect_Loc[0],
+            Rect_Loc[1],
+            Rect_Loc[2],
+            Rect_Loc[3],
+            Rect_Loc[4],
+            Rect_Loc[5],
+            Rect_Loc[6],
+            Rect_Loc[7],
+        };
+        GEOMETRY_RECT2F rect;
 
-        cor = paper_to_camera(paper);
+        Geometry_RectFromArray(rect_data, &rect);
+        CORE_POINT2F cor = Geometry_PaperToRectPoint(paper, 315.0f, 212.0f, &rect);
         sprintf(message, "Camera: (%.2f, %.2f)", cor.x, cor.y);
         OLED_ShowString(0, 0, message, 8);
     }
@@ -72,7 +104,7 @@ void mode_test_tracking(void){
     while (1){
         GrayscaleSensor_Read(Digital);
         lineWalking_low();
-        if (empty_Detect()){
+        if (Mode_IsEmptyDetected()){
             Motor_Brake();
             return;
         }
@@ -91,7 +123,7 @@ void mode_problem_b_1(void){
         GrayscaleSensor_Read(Digital);
         UpdateSInedge();
 
-        if (half_Detect() && (cn * 4 == edge - 1)){
+        if (Mode_IsHalfDetected() && (cn * 4 == edge - 1)){
             Motor_Brake();
             return;
         }
@@ -132,7 +164,7 @@ void mode_problem_h_1(void){
         GrayscaleSensor_Read(Digital);
         UpdateSInedge();
 
-        if (half_Detect() && (cn * 4 == edge)){
+        if (Mode_IsHalfDetected() && (cn * 4 == edge)){
             Motor_Brake();
             return;
         }
@@ -162,7 +194,7 @@ void mode_problem_h_2(void){
         GrayscaleSensor_Read(Digital);
         UpdateSInedge();
 
-        if (half_Detect() && (4 == edge)){
+        if (Mode_IsHalfDetected() && (4 == edge)){
             Motor_Brake();
             DL_GPIO_clearPins(SMotor_IO_PORT, SMotor_IO_EN1_PIN);
             DL_GPIO_clearPins(SMotor_IO_PORT, SMotor_IO_EN2_PIN);
@@ -194,7 +226,7 @@ int mode_set_circle_num(char num){
 bool mode_turn_step(void){
     static float now_s_inedge = 0.0f;
 
-    if (half_Detect() && turn_state == 0){
+    if (Mode_IsHalfDetected() && turn_state == 0){
         turn_state = 1;
         now_s_inedge = sInedge;
     }

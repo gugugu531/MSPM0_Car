@@ -2,7 +2,7 @@
 
 ## 职责
 
-`bsp/common/bsp_common.h` 只定义跨 BSP 外设复用、且不属于任何具体外设协议的基础类型。
+`bsp/common/bsp_common.h` 只定义跨 BSP 外设复用、且不属于任何具体外设协议的 BSP 状态类型。
 
 该文件不包含业务状态，不包含 CanMV、OLED、按键、电机等具体外设状态，也不提供通用 inline 工具。
 
@@ -34,35 +34,10 @@ typedef enum {
 - `BSP_STATUS_NOT_READY` 表示驱动尚未初始化或外设未就绪。
 - `BSP_STATUS_ERROR` 用于无法归类的通用错误。
 
-### `BSP_POINT2F`
-
-二维浮点坐标。
-
-```c
-typedef struct {
-    float x;
-    float y;
-} BSP_POINT2F;
-```
-
-当前用于视觉坐标、纸面坐标和相机坐标换算。
-
-### `BSP_ATTITUDE2F`
-
-二维姿态量。
-
-```c
-typedef struct {
-    float yaw;
-    float pitch;
-} BSP_ATTITUDE2F;
-```
-
-当前用于云台 yaw/pitch 修正量。
-
 ## 不放入 common 的内容
 
 - CanMV 状态码：属于 `bsp/canmv/canmv_uart.h`。
 - 时间和延时函数：已由 `bsp/time` 单独提供。
 - duty 限幅、频率换算等工具：放在对应外设驱动的 `.c` 文件中。
+- 二维点和二维姿态类型：属于 `core/common/core_types.h`。
 - 业务运行时状态：放在上层 runtime 或具体拥有该状态的 BSP 驱动中。

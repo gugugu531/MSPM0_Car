@@ -17,14 +17,4 @@ typedef enum {
     BSP_STATUS_NOT_READY = -6,
 } BSP_STATUS;
 
-typedef struct {
-    float x;
-    float y;
-} BSP_POINT2F;
-
-typedef struct {
-    float yaw;
-    float pitch;
-} BSP_ATTITUDE2F;
-
 #endif /* BSP_COMMON_H */

@@ -39,11 +39,12 @@
 
 `core` 放置和硬件无关或弱硬件相关的控制逻辑：
 
+- `common/`：core 层基础数据类型。
 - `pid/`：位置式和增量式 PID 控制器。
 - `kinematics/`：角度、位姿、差速混控和二维几何计算。
 - `rotation/`：欧拉角、旋转矩阵和三维向量旋转计算。
+- `geometry/`：二维矩形插值、纸面到矩形映射和圆点计算。
 - `tracking.*`
-- `sensor_proc.*`
 - `step_motor_ctrl.*`
 
 该层可以使用 `middleware` 提供的组合能力，也可以调用必要的 `bsp` 数据接口，但不能包含 `app` 头文件。

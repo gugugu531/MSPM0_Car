@@ -9,10 +9,11 @@
 ## core
 
 - `pid/pid.h`：位置式和增量式 PID 控制器，详细说明见 `docs/interfaces/core_pid.md`。
+- `common/core_types.h`：core 层基础二维点和二维姿态类型，详细说明见 `docs/interfaces/core_common.md`。
 - `kinematics/kinematics.h`：角度、位姿、差速混控和二维几何计算，详细说明见 `docs/interfaces/core_kinematics.md`。
 - `rotation/rotation.h`：欧拉角、旋转矩阵和三维向量旋转计算，详细说明见 `docs/interfaces/core_rotation.md`。
+- `geometry/geometry.h`：二维矩形插值、纸面到矩形映射和圆点计算，详细说明见 `docs/interfaces/core_geometry.md`。
 - `tracking.h`：巡线控制入口。
-- `sensor_proc.h`：目标点提取、纸面坐标和相机坐标转换。
 - `step_motor_ctrl.h`：基于视觉目标的云台控制逻辑。
 
 ## middleware
@@ -26,7 +27,7 @@
 
 ## bsp
 
-- `common/bsp_common.h`：BSP 公共状态和基础数据结构，详细说明见 `docs/interfaces/bsp_common.md`。
+- `common/bsp_common.h`：BSP 公共状态，详细说明见 `docs/interfaces/bsp_common.md`。
 - `time/bsp_time.h`：BSP 系统时间和阻塞延时服务，详细说明见 `docs/interfaces/bsp_time.md`。
 - `key.h`：按键读取、消抖和事件生成，详细说明见 `docs/interfaces/bsp_key.md`。
 - `oled.h`：SSD1306 OLED 软件 I2C 显示接口，详细说明见 `docs/interfaces/bsp_oled.md`。

@@ -2,6 +2,10 @@
 
 ## 未发布
 
+- 新增 `core/common/core_types.h`，将二维点和二维姿态类型迁移为 `CORE_POINT2F`、`CORE_ATTITUDE2F`。
+- 新增 `core/geometry` 二维平面映射模块，提供矩形插值、纸面到矩形映射和圆点计算接口。
+- 删除旧 `core/sensor_proc.*`，灰度巡线相关处理不再放入该模块，后续由 `core/line_tracking` 和 `middleware/line_follow` 承担。
+- 从 `bsp/common/bsp_common.h` 移除 `BSP_POINT2F` 和 `BSP_ATTITUDE2F`，BSP common 回归为 BSP 状态公共契约。
 - 重写 `core/rotation` 为独立子目录，使用 `ROTATION_EULER` 和 `ROTATION_MATRIX` 明确表达姿态角和旋转矩阵。
 - 移除旧 `rotation_matrix()`、`matrix_multiplication()`、`matrix_transpose()` 和 `matrix_to_angles()` 接口。
 - 为旋转数学模块补充中文接口文档 `docs/interfaces/core_rotation.md`。
@@ -47,7 +51,7 @@
 - 新增 `bsp/time`，统一提供 `BSP_Time_GetMs()`、`BSP_DelayUs()` 和 `BSP_DelayMs()`。
 - 删除 `middleware/system/delay.*` 和 `middleware/runtime/system_time.h`，系统时间与阻塞延时下沉到 BSP 层。
 - 将按键消抖和 OLED 软件 I2C 延时改为直接使用 `bsp/time`，移除对应 provider 注入接口。
-- 重写 `bsp/common` 公共契约：统一使用 SDK 风格的全大写类型名 `BSP_STATUS`、`BSP_POINT2F`、`BSP_ATTITUDE2F`。
+- 重写 `bsp/common` 公共契约：统一使用 SDK 风格的全大写类型名 `BSP_STATUS`。
 - 将 CanMV 状态码从 `bsp/common` 移入 CanMV UART 驱动，由对接 CanMV 的驱动自行维护。
 - 将工程源码重构为 `app`、`core`、`middleware`、`bsp` 四层结构。
 - 将自维护源码和目录统一为小写加下划线命名。

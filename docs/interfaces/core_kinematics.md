@@ -14,7 +14,7 @@
 #define KINEMATICS_RAD_TO_DEG(rad) ((rad) * (180.0f / KINEMATICS_PI))
 ```
 
-为兼容当前尚未重写的 `rotation`、`sensor_proc` 和 `app` 代码，模块暂时保留：
+为兼容当前尚未重写的 `app` 代码，模块暂时保留：
 
 ```c
 #define DEG_TO_RAD(deg) KINEMATICS_DEG_TO_RAD(deg)

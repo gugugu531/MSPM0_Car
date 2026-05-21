@@ -8,7 +8,7 @@
 
 ## 命名说明
 
-模块命名为 `grayscale_sensor`，强调外设本身是“光敏灰度传感器”。巡线、边缘判断等用途由上层 `core/tracking`、`core/sensor_proc` 或应用流程决定。
+模块命名为 `grayscale_sensor`，强调外设本身是“光敏灰度传感器”。巡线、边缘判断等用途由上层 `middleware/line_follow` 和 `core/line_tracking` 决定。
 
 ## 通道顺序
 
