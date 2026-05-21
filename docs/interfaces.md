@@ -14,7 +14,7 @@
 - `rotation/rotation.h`：欧拉角、旋转矩阵和三维向量旋转计算，详细说明见 `docs/interfaces/core_rotation.md`。
 - `geometry/geometry.h`：二维矩形插值、纸面到矩形映射和圆点计算，详细说明见 `docs/interfaces/core_geometry.md`。
 - `line_tracking/line_tracking.h`：巡线偏差计算、PID 修正和底盘输出接口，详细说明见 `docs/interfaces/core_line_tracking.md`。
-- `step_motor_ctrl.h`：基于视觉目标的云台控制逻辑。
+- `gimbal_tracking/gimbal_tracking.h`：基于 CanMV 目标和 PID 的云台视觉跟踪控制，详细说明见 `docs/interfaces/core_gimbal_tracking.md`。
 
 ## middleware
 

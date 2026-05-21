@@ -2,6 +2,9 @@
 
 ## 未发布
 
+- 新增 `core/gimbal_tracking` 云台视觉跟踪模块，对接 `bsp/canmv`、`core/geometry`、`core/pid` 和 `middleware/gimbal`。
+- 删除旧 `core/step_motor_ctrl.*`，移除直接调用 `YP_SMotor_*` 的云台控制路径。
+- 旧 `Compute_excur()`、`getDistance()` 和 LED 调试逻辑不迁入 `gimbal_tracking`。
 - 新增 `core/line_tracking` 巡线控制模块，对接 `middleware/line_follow`、`core/pid`、`core/kinematics` 和 `middleware/chassis`。
 - 删除旧 `core/tracking.*`，移除 `PID_IR_Calc_Custom()` 和 `Motion_Car_Control()`。
 - 将 `app/mode.c` 中 `lineWalking_low()` 调用最小替换为 `LineTracking_Update()`。

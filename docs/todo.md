@@ -2,7 +2,7 @@
 
 - 后续在 `app` 完成重写后，评估移除 `core/kinematics` 中的 `DEG_TO_RAD`、`RAD_TO_DEG` 和 `RotationAngles` 兼容定义。
 - 后续将 `app/mode.c` 中的旧 `half_Detect()`、`empty_Detect()`、`Digital[]` 等巡线流程迁移到 `middleware/line_follow`。
-- 后续将 `core/step_motor_ctrl` 重写为 `core/gimbal_tracking`，并改为调用 `middleware/gimbal`。
+- 后续重新设计旧 `Compute_excur()` 对应的转弯期间云台补偿策略，避免在 core 中直接依赖 LED GPIO、旧 `edge/sInedge` 和编码器全局接口。
 - 后续根据真实系统时钟复核 `BSP_TIME_CPUCLK_HZ`，必要时改为从时钟配置自动派生。
 - 后续将 `app`、`core` 中的旧 `Motor_*`、`Encoder_*` 调用迁移到 `Chassis_*`。
 - 后续将 `app`、`core` 中的旧 `Digital[]`、`edge`、`turning` 访问迁移到 `LineFollow_*`。
@@ -10,7 +10,7 @@
 - 后续将 `app/app_launcher.c` 的 `App_ShowLines()`、`App_UpdateTestLines()` 和简单 OLED 页面渲染迁移到 `Ui_*`。
 - 后续将 `app/menu.c` 的列表绘制迁移到 `Ui_RenderListPage()`，菜单树和按键逻辑仍保留在 app。
 - 后续将 `app/menu.c`、`app/circle_list.c`、`app/mode_tree.c`、`app/mode.c` 从旧 `error_message + error_handler()` 迁移到 `SystemFault_Handler()`。
-- 后续将 `app`、`core` 中的旧 `YP_SMotor_*`、`GetYaw()`、`GetPitch()` 调用迁移到 `Gimbal_*`。
+- 后续将 `app` 中的旧 `YP_SMotor_*`、`GetYaw()`、`GetPitch()` 调用迁移到 `Gimbal_*`。
 - 后续重写 `middleware/runtime/vision_state.h`、视觉坐标处理和 UART2 中断入口，对接新的 `CanMvUart_*` 接口。
 - 后续整体框架确认后，将 CCS、Keil 和编辑器配置中的 `bsp/laser/laser_usart` 路径统一更新为 `bsp/canmv/canmv_uart`。
 - 后续迁移 IMU 自检和上层姿态读取代码，从直接访问 `GyroscopeChannelData[]` 改为调用 `WitGetData()` 或对应 getter。

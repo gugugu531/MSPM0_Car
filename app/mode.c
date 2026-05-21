@@ -10,11 +10,13 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "bsp_time.h"
+#include "canmv_uart.h"
 #include "motor_system.h"
 #include "kinematics/kinematics.h"
 #include "oled.h"
 #include "geometry/geometry.h"
-#include "step_motor_ctrl.h"
+#include "gimbal.h"
+#include "gimbal_tracking/gimbal_tracking.h"
 #include "line_tracking/line_tracking.h"
 #include "grayscale_sensor.h"
 
@@ -50,17 +52,17 @@ void mode_test_distance(void){
 }
 
 void mode_test_coordinate(void){
-    YP_SMotor_Init();
+    (void)Gimbal_Init();
 
     while (1){
-        YP_SMotor_SetSpeed(180, 0);
+        (void)Gimbal_SetSpeed(180.0f, 0.0f);
         Motor_SetLeft(300);
         Motor_SetRight(300);
         BSP_DelayMs(500);
 
         Motor_SetLeft(-300);
         Motor_SetRight(-300);
-        YP_SMotor_SetSpeed(-180, 0);
+        (void)Gimbal_SetSpeed(-180.0f, 0.0f);
         BSP_DelayMs(500);
     }
 }
@@ -141,12 +143,10 @@ void mode_problem_b_2_3(void){
     OLED_ShowString(0, 0, "Task B Laser", 8);
 #endif
 
-    YP_SMotor_Init();
+    GimbalTracking_Init(NULL);
     while (1){
-        SetLaserPosition();
-        SetTargetCenter();
         if (mode_init_guard()){
-            PID_SMotor_Cont();
+            (void)GimbalTracking_UpdateLaserCenter(0.01f);
         }
         BSP_DelayMs(10);
     }
@@ -159,7 +159,7 @@ void mode_problem_h_1(void){
 
     int cn = mode_set_circle_num(1);
 
-    YP_SMotor_Init();
+    GimbalTracking_Init(NULL);
     while (1){
         GrayscaleSensor_Read(Digital);
         UpdateSInedge();
@@ -176,10 +176,7 @@ void mode_problem_h_1(void){
             DL_GPIO_clearPins(LED_PORT, LED_LED0_PIN);
         }
 
-        SetLaserPosition();
-        SetTargetCenter();
-        Compute_excur();
-        PID_SMotor_Cont();
+        (void)GimbalTracking_UpdateLaserCenter(0.05f);
         BSP_DelayMs(50);
     }
 }
@@ -189,7 +186,7 @@ void mode_problem_h_2(void){
     OLED_ShowString(0, 0, "Task H Track", 8);
 #endif
 
-    YP_SMotor_Init();
+    GimbalTracking_Init(NULL);
     while (1){
         GrayscaleSensor_Read(Digital);
         UpdateSInedge();
@@ -205,10 +202,7 @@ void mode_problem_h_2(void){
             (void)LineTracking_Update(0.01f);
         }
 
-        SetLaserPosition();
-        SetTargetCircle();
-        Compute_excur();
-        PID_SMotor_Cont();
+        (void)GimbalTracking_UpdateRectCircle(edge, sInedge, 0.01f);
         BSP_DelayMs(10);
     }
 }
@@ -258,8 +252,8 @@ bool mode_turn_step(void){
 }
 
 bool mode_init_guard(void){
-    if (Laser_error == CANMV_STATUS_NOT_FOUND){
-        YP_SMotor_SetSpeed(-90, 0);
+    if (CanMvUart_GetStatus(CANMV_TARGET_LASER) == CANMV_STATUS_NOT_FOUND){
+        (void)Gimbal_SetSpeed(-90.0f, 0.0f);
         return false;
     }
 
