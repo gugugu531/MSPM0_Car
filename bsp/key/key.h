@@ -41,11 +41,17 @@ extern "C" {
 #define KEY_DOUBLE_CLICK_MS 300U
 #endif
 
+/**
+ * @brief 按键编号。
+ */
 typedef enum {
     KEY_ID_1 = 0,
     KEY_ID_MAX
 } KEY_ID;
 
+/**
+ * @brief 按键事件类型。
+ */
 typedef enum {
     KEY_EVENT_NONE = 0,
     KEY_EVENT_SHORT_PRESS,
@@ -53,14 +59,50 @@ typedef enum {
     KEY_EVENT_DOUBLE_CLICK
 } KEY_EVENT;
 
+/**
+ * @brief 初始化按键状态机。
+ */
 void Key_Init(void);
+
+/**
+ * @brief 执行一次按键扫描和消抖。
+ * @note 建议由固定周期定时器或 SysTick 调用。
+ */
 void Key_Scan(void);
+
+/**
+ * @brief 获取指定按键最近事件，不自动清除事件。
+ */
 KEY_EVENT Key_GetEvent(KEY_ID key_id);
+
+/**
+ * @brief 判断指定按键当前是否处于按下状态。
+ */
 bool Key_IsPressed(KEY_ID key_id);
+
+/**
+ * @brief 判断指定按键是否产生短按事件。
+ */
 bool Key_IsShortPress(KEY_ID key_id);
+
+/**
+ * @brief 判断指定按键是否产生长按事件。
+ */
 bool Key_IsLongPress(KEY_ID key_id);
+
+/**
+ * @brief 判断指定按键是否产生双击事件。
+ */
 bool Key_IsDoubleClick(KEY_ID key_id);
+
+/**
+ * @brief 清除指定按键事件。
+ */
 void Key_ClearEvent(KEY_ID key_id);
+
+/**
+ * @brief 清除全部按键事件。
+ */
 void Key_ClearAllEvents(void);
 
 #define Key_Read()         Key_IsPressed(KEY_ID_1)

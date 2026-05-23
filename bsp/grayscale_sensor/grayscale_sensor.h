@@ -82,6 +82,9 @@ extern "C" {
 #define GRAYSCALE_SENSOR_ACTIVE_LOW 1U
 #endif
 
+/**
+ * @brief 灰度传感器通道编号。
+ */
 typedef enum {
     GRAYSCALE_SENSOR_CHANNEL_0 = 0,
     GRAYSCALE_SENSOR_CHANNEL_1,
@@ -94,8 +97,23 @@ typedef enum {
     GRAYSCALE_SENSOR_CHANNEL_MAX
 } GRAYSCALE_SENSOR_CHANNEL;
 
+/**
+ * @brief 读取全部 8 路灰度传感器数字状态。
+ * @param digital_array 输出数组，长度必须不小于 GRAYSCALE_SENSOR_CHANNEL_COUNT。
+ * @note 输出值已经根据 GRAYSCALE_SENSOR_ACTIVE_LOW 转换为“有效为 1”。
+ */
 void GrayscaleSensor_Read(uint8_t digital_array[GRAYSCALE_SENSOR_CHANNEL_COUNT]);
+
+/**
+ * @brief 读取 8 路灰度传感器位掩码。
+ * @return bit0 对应通道 0，置 1 表示该通道有效。
+ */
 uint8_t GrayscaleSensor_ReadMask(void);
+
+/**
+ * @brief 读取单个灰度传感器通道。
+ * @return 1 表示有效，0 表示无效或通道非法。
+ */
 uint8_t GrayscaleSensor_ReadSingle(GRAYSCALE_SENSOR_CHANNEL channel);
 
 #define TrackingSensor_Read(digital_array) GrayscaleSensor_Read(digital_array)

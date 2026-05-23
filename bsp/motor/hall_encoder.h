@@ -65,21 +65,59 @@ extern "C" {
 #define HALL_ENCODER_DISTANCE_SCALE 1.05f
 #endif
 
+/**
+ * @brief 霍尔编码器方向。
+ */
 typedef enum {
     HALL_ENCODER_DIR_FORWARD = 0,
     HALL_ENCODER_DIR_REVERSE
 } HALL_ENCODER_DIR;
 
+/**
+ * @brief 初始化霍尔编码器计数和采样状态。
+ */
 BSP_STATUS HallEncoder_Init(void);
+
+/**
+ * @brief 处理编码器 GPIO 中断。
+ * @param gpio_status GPIO 中断状态寄存器值。
+ */
 void HallEncoder_HandleGpioIrq(uint32_t gpio_status);
+
+/**
+ * @brief 更新一次速度采样。
+ * @note 通常由固定周期定时器中断调用。
+ */
 void HallEncoder_UpdateSample(void);
 
+/**
+ * @brief 获取累计编码器计数。
+ */
 int32_t HallEncoder_GetCount(void);
+
+/**
+ * @brief 获取最近判断的编码器方向。
+ */
 HALL_ENCODER_DIR HallEncoder_GetDir(void);
+
+/**
+ * @brief 获取估算线速度，单位 m/s。
+ */
 float HallEncoder_GetSpeed(void);
+
+/**
+ * @brief 获取累计距离估计，单位 m。
+ */
 float HallEncoder_GetDistance(void);
 
+/**
+ * @brief 清零计数、速度和距离状态。
+ */
 void HallEncoder_Reset(void);
+
+/**
+ * @brief 只清零累计距离，不清零编码器原始计数。
+ */
 void HallEncoder_ResetDistance(void);
 
 #ifdef __cplusplus

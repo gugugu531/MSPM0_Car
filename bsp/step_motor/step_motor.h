@@ -73,27 +73,73 @@ extern "C" {
 #define STEP_MOTOR_MAX_ARR 65535U
 #endif
 
+/**
+ * @brief 步进电机通道。
+ */
 typedef enum {
     STEP_MOTOR_CHANNEL_YAW = 0,
     STEP_MOTOR_CHANNEL_PITCH,
     STEP_MOTOR_CHANNEL_MAX
 } STEP_MOTOR_CHANNEL;
 
+/**
+ * @brief 初始化两路步进电机输出并使能驱动器。
+ */
 BSP_STATUS StepMotor_Init(void);
 
+/**
+ * @brief 设置指定通道开环速度。
+ * @param channel 步进电机通道。
+ * @param speed_deg_per_s 速度，单位 deg/s；正负表示方向，0 表示停止脉冲。
+ */
 BSP_STATUS StepMotor_SetSpeed(STEP_MOTOR_CHANNEL channel, float speed_deg_per_s);
+
+/**
+ * @brief 阻塞运行指定时间后停止。
+ * @param channel 步进电机通道。
+ * @param speed_deg_per_s 速度，单位 deg/s。
+ * @param duration_ms 运行时间，单位 ms。
+ */
 BSP_STATUS StepMotor_RunFor(STEP_MOTOR_CHANNEL channel,
                             float speed_deg_per_s,
                             uint32_t duration_ms);
 
+/**
+ * @brief 停止指定通道脉冲输出。
+ */
 BSP_STATUS StepMotor_Stop(STEP_MOTOR_CHANNEL channel);
+
+/**
+ * @brief 停止全部通道脉冲输出。
+ */
 BSP_STATUS StepMotor_StopAll(void);
 
+/**
+ * @brief 按当前速度和时间差更新开环估计位置。
+ * @param now_ms 当前毫秒时间戳。
+ */
 BSP_STATUS StepMotor_UpdateState(STEP_MOTOR_CHANNEL channel, uint32_t now_ms);
+
+/**
+ * @brief 更新全部通道开环估计位置。
+ */
 BSP_STATUS StepMotor_UpdateAllState(uint32_t now_ms);
 
+/**
+ * @brief 获取指定通道最近设置速度，单位 deg/s。
+ */
 float StepMotor_GetSpeed(STEP_MOTOR_CHANNEL channel);
+
+/**
+ * @brief 获取指定通道开环估计位置，单位 deg。
+ * @note 该值不是编码器或传感器反馈位置。
+ */
 float StepMotor_GetEstimatedPosition(STEP_MOTOR_CHANNEL channel);
+
+/**
+ * @brief 将指定通道开环估计位置清零。
+ * @note 不执行物理归零，也不会停止电机。
+ */
 void StepMotor_ResetEstimatedPosition(STEP_MOTOR_CHANNEL channel);
 
 #ifdef __cplusplus

@@ -73,3 +73,4 @@
 - 将 SysConfig 和启动资源迁入 `board`，IDE 工程元数据迁入 `project`，脚本目录统一为 `tools`。
 - 移除 BSP 对上层的反向依赖：按键和 OLED 改为依赖 `bsp/time`，步进电机状态更新时间改为显式传参，视觉和 IMU 状态由 BSP 接口导出。
 - 更新 CCS 和 Keil 工程路径，使其指向新的分层源码树。
+- 为 `app`、`core`、`middleware`、`bsp` 主要公开头文件补充 Doxygen 风格中文注释，明确模块职责、结构体字段、函数参数、单位和调用约束。
