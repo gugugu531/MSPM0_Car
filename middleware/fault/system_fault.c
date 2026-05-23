@@ -81,6 +81,7 @@ void SystemFault_Handler(SYSTEM_FAULT_CODE code, const char *message){
 }
 
 void SystemFault_Halt(void){
+    /* 故障停机优先让执行机构进入安全状态，再刷新错误页。 */
     (void)Chassis_Brake();
     (void)Gimbal_Stop();
 

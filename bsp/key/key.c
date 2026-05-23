@@ -140,6 +140,7 @@ static void Key_UpdateReleaseDebounce(KEY_ID key_id, KEY_LEVEL level, uint32_t n
     state->stable_level = KEY_LEVEL_RELEASED;
     state->release_time_ms = now_ms;
 
+    /* 长按已在按下期间上报，释放时不再生成短按事件。 */
     if (state->long_reported || state->suppress_release_event){
         state->suppress_release_event = false;
         state->state = KEY_STATE_RELEASED;
@@ -156,6 +157,7 @@ static void Key_UpdateReleaseDebounce(KEY_ID key_id, KEY_LEVEL level, uint32_t n
 static void Key_UpdateWaitDouble(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
     KEY_STATE_CONTEXT *state = &s_key_state[key_id];
 
+    /* 双击窗口超时后，才确认前一次释放对应的是短按。 */
     if (now_ms - state->release_time_ms >= KEY_DOUBLE_CLICK_MS){
         Key_PushEvent(key_id, KEY_EVENT_SHORT_PRESS);
         state->state = KEY_STATE_RELEASED;
@@ -182,6 +184,7 @@ static void Key_UpdateDoubleDebounce(KEY_ID key_id, KEY_LEVEL level, uint32_t no
         state->stable_level = KEY_LEVEL_PRESSED;
         state->press_start_ms = now_ms;
         state->long_reported = false;
+        /* 双击第二次释放不应再生成短按。 */
         state->suppress_release_event = true;
         state->state = KEY_STATE_PRESSED;
     }

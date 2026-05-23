@@ -120,16 +120,19 @@ BSP_STATUS CanMvUart_Init(void){
 
 void CanMvUart_ProcessByte(uint8_t byte){
     if (byte == CANMV_FRAME_START){
+        /* 新帧头到来时立即重新同步，丢弃此前可能残缺的帧内容。 */
         CanMvUart_ResetRxState();
         s_canmv_receiving = true;
     }
 
     if (!s_canmv_receiving){
+        /* 未见帧头前收到的字节不参与解析，标记为丢帧便于上层诊断。 */
         CanMvUart_SetAllStatus(CANMV_STATUS_FRAME_DROP);
         return;
     }
 
     if (s_canmv_rx_count >= CANMV_RX_BUFFER_LEN){
+        /* 缓冲区满仍未等到帧尾，说明协议已经失步。 */
         CanMvUart_ResetRxState();
         CanMvUart_SetAllStatus(CANMV_STATUS_FRAME_DROP);
         return;
@@ -142,11 +145,13 @@ void CanMvUart_ProcessByte(uint8_t byte){
     }
 
     if (s_canmv_rx_count < CANMV_MIN_FRAME_LEN){
+        /* 帧尾过早出现时不解析，避免把短帧误识别为有效目标。 */
         CanMvUart_ResetRxState();
         CanMvUart_SetAllStatus(CANMV_STATUS_FRAME_DROP);
         return;
     }
 
+    /* 解析前复制完整帧，随后复位接收状态，保证下一帧可以马上开始接收。 */
     memcpy(s_canmv_frame, s_canmv_rx_buffer, sizeof(s_canmv_frame));
     CanMvUart_ResetRxState();
     CanMvUart_ParseFrame();

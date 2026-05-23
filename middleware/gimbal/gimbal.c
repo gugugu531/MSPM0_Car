@@ -23,6 +23,7 @@ static BSP_STATUS Gimbal_CombineStatus(BSP_STATUS current, BSP_STATUS next){
 static float Gimbal_ApplyPitchLimit(float pitch_speed_deg_s){
     float pitch_deg = StepMotor_GetEstimatedPosition(STEP_MOTOR_CHANNEL_PITCH);
 
+    /* 当前没有 pitch 反馈传感器，只能用步进电机开环估计位置做软件限位。 */
     if (pitch_deg >= s_gimbal_limit.pitch_max_deg && pitch_speed_deg_s > 0.0f){
         return 0.0f;
     }
@@ -41,6 +42,7 @@ BSP_STATUS Gimbal_Init(void){
 }
 
 BSP_STATUS Gimbal_SetSpeed(float yaw_deg_s, float pitch_deg_s){
+    /* 切换速度前先积分上一段开环运动，避免估计位置在变速点丢失时间。 */
     (void)Gimbal_Update();
 
     float limited_pitch_speed = Gimbal_ApplyPitchLimit(pitch_deg_s);

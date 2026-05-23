@@ -100,6 +100,7 @@ BSP_STATUS LineTracking_Compute(const LINE_FOLLOW_SENSOR_STATE *sensor,
     float position_sum = 0.0f;
     uint8_t active_count = 0U;
 
+    /* 灰度传感器在当前硬件上为低有效，value 为 0 表示检测到线。 */
     for (uint8_t i = 0; i < LINE_FOLLOW_SENSOR_COUNT; i++){
         if (sensor->value[i] == 0U){
             position_sum += s_sensor_position[i];
@@ -118,10 +119,12 @@ BSP_STATUS LineTracking_Compute(const LINE_FOLLOW_SENSOR_STATE *sensor,
         return BSP_STATUS_OK;
     }
 
+    /* 用有效传感器位置均值描述线中心偏移，避免多路同时触发时只取单点。 */
     float average_position = position_sum / (float)active_count;
     out->error = average_position * s_line_tracking_config.sensor_position_scale;
     out->correction = PID_Update(&s_line_tracking_pid, out->error, 0.0f, dt_s);
 
+    /* forward 为基础占空比，turn 为 PID 修正量，最终由运动学工具做统一限幅。 */
     KINEMATICS_DIFFERENTIAL_OUTPUT duty =
         Kinematics_DifferentialMix(s_line_tracking_config.base_duty,
                                    out->correction,

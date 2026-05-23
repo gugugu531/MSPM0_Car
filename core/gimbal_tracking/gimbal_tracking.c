@@ -41,6 +41,7 @@ static void GimbalTracking_EnsureInitialized(void){
 }
 
 static CORE_POINT2F GimbalTracking_ImagePoint(uint16_t x, uint16_t y){
+    /* CanMV 图像坐标原点在左上角，控制计算统一改为左下角坐标系。 */
     CORE_POINT2F point = {
         .x = (float)x,
         .y = s_gimbal_tracking_config.image_height - (float)y,
@@ -60,6 +61,7 @@ static BSP_STATUS GimbalTracking_ReadLaser(CORE_POINT2F *target,
         return BSP_STATUS_NOT_READY;
     }
 
+    /* 前两个值为目标中心，旧协议用 0,0 表示未识别到目标。 */
     if ((data->value[0] == 0U) || (data->value[1] == 0U)){
         s_gimbal_tracking_state.target_valid = false;
         return BSP_STATUS_NOT_READY;
@@ -164,6 +166,8 @@ BSP_STATUS GimbalTracking_UpdateRectCircle(int32_t edge_index,
         .x = s_gimbal_tracking_config.paper_width / 2.0f,
         .y = s_gimbal_tracking_config.paper_height / 2.0f,
     };
+
+    /* 先在题目纸面坐标系中生成圆轨迹目标，再映射到 CanMV 识别到的四边形。 */
     float target_angle_deg = (float)(edge_index - 1) * 90.0f + angle_offset_deg;
     CORE_POINT2F paper_target = Geometry_CirclePointDeg(paper_center,
                                                         s_gimbal_tracking_config.circle_radius,
@@ -192,6 +196,7 @@ BSP_STATUS GimbalTracking_TrackPoints(CORE_POINT2F target,
     float yaw_output = PID_Update(&s_yaw_pid, target.x, laser.x, dt_s);
     float pitch_output = PID_Update(&s_pitch_pid, target.y, laser.y, dt_s);
 
+    /* 输出方向系数用于隔离电机安装方向差异，避免在 PID 误差定义中混入硬件极性。 */
     s_gimbal_tracking_state.yaw_speed = s_gimbal_tracking_config.yaw_output_sign * yaw_output;
     s_gimbal_tracking_state.pitch_speed = s_gimbal_tracking_config.pitch_output_sign * pitch_output;
 
