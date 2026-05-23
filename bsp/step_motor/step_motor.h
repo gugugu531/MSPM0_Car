@@ -73,6 +73,10 @@ extern "C" {
 #define STEP_MOTOR_MAX_ARR 65535U
 #endif
 
+#ifndef STEP_MOTOR_MAX_SPEED_DEG_S
+#define STEP_MOTOR_MAX_SPEED_DEG_S 240.0f
+#endif
+
 /**
  * @brief 步进电机通道。
  */
@@ -91,6 +95,7 @@ BSP_STATUS StepMotor_Init(void);
  * @brief 设置指定通道开环速度。
  * @param channel 步进电机通道。
  * @param speed_deg_per_s 速度，单位 deg/s；正负表示方向，0 表示停止脉冲。
+ * @note 速度会被限制到 [-STEP_MOTOR_MAX_SPEED_DEG_S, STEP_MOTOR_MAX_SPEED_DEG_S]。
  */
 BSP_STATUS StepMotor_SetSpeed(STEP_MOTOR_CHANNEL channel, float speed_deg_per_s);
 

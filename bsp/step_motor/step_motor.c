@@ -48,6 +48,18 @@ static float StepMotor_Abs(float value){
     return (value < 0.0f) ? -value : value;
 }
 
+static float StepMotor_LimitSpeed(float speed_deg_per_s){
+    if (speed_deg_per_s > STEP_MOTOR_MAX_SPEED_DEG_S){
+        return STEP_MOTOR_MAX_SPEED_DEG_S;
+    }
+
+    if (speed_deg_per_s < -STEP_MOTOR_MAX_SPEED_DEG_S){
+        return -STEP_MOTOR_MAX_SPEED_DEG_S;
+    }
+
+    return speed_deg_per_s;
+}
+
 static uint32_t StepMotor_GetStepFrequency(float speed_deg_per_s){
     float abs_speed = StepMotor_Abs(speed_deg_per_s);
 
@@ -161,14 +173,16 @@ BSP_STATUS StepMotor_SetSpeed(STEP_MOTOR_CHANNEL channel, float speed_deg_per_s)
         return BSP_STATUS_INVALID_ARG;
     }
 
+    float limited_speed_deg_per_s = StepMotor_LimitSpeed(speed_deg_per_s);
+
     (void)StepMotor_UpdateState(channel, BSP_Time_GetMs());
 
-    BSP_STATUS status = StepMotor_ApplySpeed(channel, speed_deg_per_s);
+    BSP_STATUS status = StepMotor_ApplySpeed(channel, limited_speed_deg_per_s);
     if (status != BSP_STATUS_OK){
         return status;
     }
 
-    s_step_motor_state[channel].speed_deg_per_s = speed_deg_per_s;
+    s_step_motor_state[channel].speed_deg_per_s = limited_speed_deg_per_s;
     return BSP_STATUS_OK;
 }
 
