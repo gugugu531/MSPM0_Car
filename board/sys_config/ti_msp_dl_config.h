@@ -158,9 +158,9 @@ extern "C" {
 #define GPIO_Debug_IOMUX_TX                                      (IOMUX_PINCM12)
 #define GPIO_Debug_IOMUX_RX_FUNC                       IOMUX_PINCM13_PF_UART0_RX
 #define GPIO_Debug_IOMUX_TX_FUNC                       IOMUX_PINCM12_PF_UART0_TX
-#define Debug_BAUD_RATE                                                   (9600)
-#define Debug_IBRD_32_MHZ_9600_BAUD                                        (208)
-#define Debug_FBRD_32_MHZ_9600_BAUD                                         (21)
+#define Debug_BAUD_RATE                                                 (115200)
+#define Debug_IBRD_32_MHZ_115200_BAUD                                       (17)
+#define Debug_FBRD_32_MHZ_115200_BAUD                                       (23)
 /* Defines for K230 */
 #define K230_INST                                                          UART2
 #define K230_INST_FREQUENCY                                             32000000

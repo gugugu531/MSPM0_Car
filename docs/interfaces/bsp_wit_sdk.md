@@ -89,6 +89,12 @@ typedef struct {
 
 ## 数据来源说明
 
-当前应用自检路径通过 `GYROSCOPE_DATA_Decoder()` 解析 33 字节 JY61P 帧，并写入 `GyroscopeChannelData[]`。因此本轮新增 getter 优先从该数组读取，避免改动已有接收与解析路径。
+当前应用自检路径通过 `GYROSCOPE_DATA_Decoder()` 解析 JY61P 标准串口子帧，并写入 `GyroscopeChannelData[]`。每个子帧固定 11 字节，以 `0x55` 开头，第二字节表示数据类型：
+
+- `0x51`：加速度和温度。
+- `0x52`：角速度，单位换算为 `deg/s`。
+- `0x53`：姿态角，单位换算为度。
+
+`GYROSCOPE_DATA_Decoder()` 当前解析单个 11 字节子帧；旧 `IT_JY61P()` 仍可处理 33 字节三帧连续缓存。应用层 UART0 中断当前按 11 字节子帧校验和解析，因此启用或关闭某类 JY61P 回传数据后，不再要求加速度、角速度、姿态角必须以固定 33 字节组合出现。
 
 如果后续统一改为厂家 `WitSerialDataIn()` 和 `sReg[]` 路径，再评估是否将 getter 的数据来源切换到 `sReg[]`。

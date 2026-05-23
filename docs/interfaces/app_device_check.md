@@ -10,7 +10,7 @@
 - 云台：yaw/pitch 估计角度和速度。
 - 灰度：8 路传感器 mask、有效通道数量、半线和十字粗略判定。
 - 视觉：CanMV 激光点和矩形目标状态、坐标。
-- IMU：姿态角和接收到的有效帧数量。
+- IMU：姿态角、角速度、加速度、温度和接收状态。
 
 ## 公开接口
 
@@ -20,6 +20,8 @@
 
 ### `void AppDeviceCheck_ProcessImuByte(uint8_t byte)`
 
-处理 UART0 接收到的 IMU 字节。该函数由 `UART0_IRQHandler()` 调用，内部组 33 字节帧并校验三段和校验，通过后调用 `GYROSCOPE_DATA_Decoder()` 更新 WitMotion 数据。
+处理 UART0 接收到的 IMU 字节。该函数由 `UART0_IRQHandler()` 调用，内部按 JY61P 标准 11 字节子帧滑动组包和校验，通过后调用 `GYROSCOPE_DATA_Decoder()` 更新 WitMotion 数据。
 
-该函数只负责调试串口字节处理，不主动打开 UART 中断；UART 初始化和中断使能由 `app/main.c` 完成。
+该函数只负责调试串口字节处理，不主动打开 UART 中断；UART 初始化和中断使能由 `app/main.c` 完成。当前 UART0 接收只使用中断路径，`app/main.c` 会将 RX FIFO 中断阈值设置为 1 字节，进入 `UART0_IRQHandler()` 后一次性排空当前 RX FIFO。
+
+设备检查中 IMU 拆分为姿态角、角速度、加速度和状态页。状态页显示 UART0 收到的字节数、有效帧数、无效帧数和最近一次有效子帧类型，便于上板判断故障在串口输入、帧校验还是数据显示链路。

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #define GYROSCOPE_BUFFER_SIZE    33
+#define JY61P_FRAME_SIZE         11
 #define GYROSCOPE_CH_DATA_SIZE   10
 
 static SerialWrite p_WitSerialWriteFunc = NULL;
@@ -21,6 +22,54 @@ uint8_t GyroscopeUsart3RxBuffer[33];
 double GyroscopeChannelData[10] = {0};
 #define FuncW 0x06
 #define FuncR 0x03
+
+static int16_t JY61P_ReadI16(const uint8_t *buf, uint8_t low_index);
+static uint8_t JY61P_FrameChecksum(const uint8_t *buf);
+static void JY61P_DecodeFrame(const uint8_t *buf);
+
+static int16_t JY61P_ReadI16(const uint8_t *buf, uint8_t low_index)
+{
+    return (int16_t)(((uint16_t)buf[(uint8_t)(low_index + 1U)] << 8) | buf[low_index]);
+}
+
+static uint8_t JY61P_FrameChecksum(const uint8_t *buf)
+{
+    uint16_t sum = 0U;
+
+    for(uint8_t i = 0U; i < (JY61P_FRAME_SIZE - 1U); i++){
+        sum += buf[i];
+    }
+
+    return (uint8_t)(sum & 0xFFU);
+}
+
+static void JY61P_DecodeFrame(const uint8_t *buf)
+{
+    if((buf == NULL) || (buf[0] != 0x55U) || (buf[10] != JY61P_FrameChecksum(buf))){
+        return;
+    }
+
+    switch(buf[1]){
+        case WIT_ACC:
+            GyroscopeChannelData[0] = (double)JY61P_ReadI16(buf, 2U) / 32768.0 * 16.0;
+            GyroscopeChannelData[1] = (double)JY61P_ReadI16(buf, 4U) / 32768.0 * 16.0;
+            GyroscopeChannelData[2] = (double)JY61P_ReadI16(buf, 6U) / 32768.0 * 16.0;
+            GyroscopeChannelData[9] = (double)JY61P_ReadI16(buf, 8U) / 100.0;
+            break;
+        case WIT_GYRO:
+            GyroscopeChannelData[3] = (double)JY61P_ReadI16(buf, 2U) / 32768.0 * 2000.0;
+            GyroscopeChannelData[4] = (double)JY61P_ReadI16(buf, 4U) / 32768.0 * 2000.0;
+            GyroscopeChannelData[5] = (double)JY61P_ReadI16(buf, 6U) / 32768.0 * 2000.0;
+            break;
+        case WIT_ANGLE:
+            GyroscopeChannelData[6] = (double)JY61P_ReadI16(buf, 2U) / 32768.0 * 180.0;
+            GyroscopeChannelData[7] = (double)JY61P_ReadI16(buf, 4U) / 32768.0 * 180.0;
+            GyroscopeChannelData[8] = (double)JY61P_ReadI16(buf, 6U) / 32768.0 * 180.0;
+            break;
+        default:
+            break;
+    }
+}
 
 static const uint8_t __auchCRCHi[256] = {
     0x00, 0xC1, 0x81, 0x40, 0x01, 0xC0, 0x80, 0x41, 0x01, 0xC0, 0x80, 0x41, 0x00, 0xC1, 0x81,
@@ -521,7 +570,9 @@ void IT_JY61P(void){
         && GyroscopeUsart3RxBuffer[2*GYROSCOPE_BUFFER_SIZE/3-1] == (uint8_t)(AngularSumData & 0x00FF)
         && GyroscopeUsart3RxBuffer[GYROSCOPE_BUFFER_SIZE-1] == (uint8_t)(AngleSumData & 0x00FF))
         {
-            GYROSCOPE_DATA_Decoder(GyroscopeUsart3RxBuffer);
+            JY61P_DecodeFrame(GyroscopeUsart3RxBuffer);
+            JY61P_DecodeFrame(&GyroscopeUsart3RxBuffer[11]);
+            JY61P_DecodeFrame(&GyroscopeUsart3RxBuffer[22]);
         }
     }
     else
@@ -532,29 +583,12 @@ void IT_JY61P(void){
 
 void GYROSCOPE_DATA_Decoder(uint8_t *buf)
 {
-    if(buf[1] == 0x51)//����X��Y��Z���ٶ�����
-    {
-        GyroscopeChannelData[0] = (int16_t)((int16_t)buf[3]<<8|buf[2])/32768.0*16.0;//X����ٶȣ�m/s*s��
-        GyroscopeChannelData[1] = (int16_t)((int16_t)buf[5]<<8|buf[4])/32768.0*16.0;//Y����ٶ�
-        GyroscopeChannelData[2] = (int16_t)((int16_t)buf[7]<<8|buf[6])/32768.0*16.0;//Z����ٶ�
-        GyroscopeChannelData[9] = (int16_t)((int16_t)buf[9]<<8|buf[8])/100.0;//ʵʱ�¶ȣ����϶ȣ�
-			  
+    if(buf == NULL){
+        return;
     }
 
-    if(buf[12] == 0x52)//����X��Y��Z���ٶ�����
-    {
-        GyroscopeChannelData[3] = (int16_t)((int16_t)buf[14]<<8|buf[13])/32768.0*2000.0;//X����ٶȣ���/s��
-        GyroscopeChannelData[4] = (int16_t)((int16_t)buf[16]<<8|buf[15])/32768.0*2000.0;//Y����ٶ�
-        GyroscopeChannelData[5] = (int16_t)((int16_t)buf[18]<<8|buf[17])/32768.0*2000.0;//Z����ٶ�
-    }
- 
-    if(buf[23] == 0x53)//����X��Y��Z�Ƕ�����
-    {
-        GyroscopeChannelData[6] = (int16_t)((int16_t)buf[25]<<8|buf[24])/32768.0*180.0;//X��(��ת��)�Ƕȣ��㣩
-        GyroscopeChannelData[7] = (int16_t)((int16_t)buf[27]<<8|buf[26])/32768.0*180.0;//Y��(������)�Ƕ�
-        GyroscopeChannelData[8] = (int16_t)((int16_t)buf[29]<<8|buf[28])/32768.0*180.0;//Z��(ƫ����)�Ƕ�
-        //GyroscopeChannelData[9] = (double)((int16_t)buf[31]<<8|(int16_t)buf[30])/100.0;//ʵʱ�¶ȣ����϶ȣ�
-    }	
+    /* JY61P 标准串口输出为 11 字节子帧：0x51 加速度、0x52 角速度、0x53 姿态角。 */
+    JY61P_DecodeFrame(buf);
 }
 
 void JY61P_Init(UART_Regs *uart){

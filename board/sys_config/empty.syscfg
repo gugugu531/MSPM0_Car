@@ -132,10 +132,10 @@ I2C1.sdaPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric0";
 I2C1.sdaPinConfig.hideOutputInversion  = scripting.forceWrite(false);
 I2C1.sdaPinConfig.onlyInternalResistor = scripting.forceWrite(false);
 I2C1.sdaPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
-I2C1.sclPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric2";
 I2C1.sclPinConfig.hideOutputInversion  = scripting.forceWrite(false);
 I2C1.sclPinConfig.onlyInternalResistor = scripting.forceWrite(false);
 I2C1.sclPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
+I2C1.sclPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric2";
 
 PWM1.$name                              = "Motor";
 PWM1.clockDivider                       = 8;
@@ -207,6 +207,7 @@ TIMER1.timerPeriod        = "100ms";
 TIMER1.peripheral.$assign = "TIMA0";
 
 UART1.$name                            = "Debug";
+UART1.targetBaudRate                   = 115200;
 UART1.peripheral.$assign               = "UART0";
 UART1.peripheral.rxPin.$assign         = "PB1";
 UART1.peripheral.txPin.$assign         = "PB0";

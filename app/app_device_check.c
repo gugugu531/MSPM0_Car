@@ -12,8 +12,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <string.h>
 
-#define APP_DEVICE_IMU_FRAME_SIZE 33U
+#define APP_DEVICE_IMU_FRAME_SIZE 11U
 #define APP_DEVICE_LOOP_DELAY_MS 20U
 #define APP_DEVICE_RENDER_PERIOD_MS 200U
 
@@ -22,7 +23,11 @@ typedef enum {
     APP_DEVICE_PAGE_GIMBAL,
     APP_DEVICE_PAGE_LINE,
     APP_DEVICE_PAGE_VISION,
-    APP_DEVICE_PAGE_IMU,
+    APP_DEVICE_PAGE_IMU_ANGLE,
+    APP_DEVICE_PAGE_IMU_GYRO,
+    APP_DEVICE_PAGE_IMU_ACC,
+    APP_DEVICE_PAGE_IMU_STATUS,
+    APP_DEVICE_PAGE_IMU_IRQ,
     APP_DEVICE_PAGE_COUNT
 } APP_DEVICE_PAGE;
 
@@ -30,32 +35,64 @@ static uint8_t s_imu_rx_buffer[APP_DEVICE_IMU_FRAME_SIZE];
 static uint8_t s_imu_rx_index;
 static uint32_t s_imu_frame_count;
 
-static bool AppDeviceCheck_IsImuFrameValid(const uint8_t *frame){
-    uint16_t sum_acc = 0U;
-    uint16_t sum_gyro = 0U;
-    uint16_t sum_angle = 0U;
+volatile uint32_t g_app_device_imu_rx_byte_count;
+volatile uint32_t g_app_device_imu_valid_frame_count;
+volatile uint32_t g_app_device_imu_invalid_frame_count;
+volatile uint8_t g_app_device_imu_last_type;
+volatile uint8_t g_app_device_imu_last_byte;
 
-    if ((frame[0] != 0x55U) || (frame[11] != 0x55U) || (frame[22] != 0x55U)){
+extern volatile uint32_t g_app_debug_uart_irq_count;
+extern volatile uint32_t g_app_debug_uart_rx_irq_count;
+extern volatile uint32_t g_app_debug_uart_drained_byte_count;
+extern volatile uint32_t g_app_debug_uart_empty_rx_irq_count;
+extern volatile uint32_t g_app_debug_uart_unhandled_irq_count;
+extern volatile uint8_t g_app_debug_uart_last_iidx;
+
+static bool AppDeviceCheck_IsImuFrameValid(const uint8_t *frame){
+    uint16_t sum = 0U;
+
+    if (frame[0] != 0x55U){
         return false;
     }
 
     for (uint8_t i = 0U; i < 10U; i++){
-        sum_acc += frame[i];
-        sum_gyro += frame[11U + i];
-        sum_angle += frame[22U + i];
+        sum += frame[i];
     }
 
-    return (frame[10] == (uint8_t)(sum_acc & 0xFFU)) &&
-           (frame[21] == (uint8_t)(sum_gyro & 0xFFU)) &&
-           (frame[32] == (uint8_t)(sum_angle & 0xFFU));
+    return frame[10] == (uint8_t)(sum & 0xFFU);
+}
+
+static bool AppDeviceCheck_IsImuFrameType(uint8_t type){
+    return (type == 0x51U) || (type == 0x52U) || (type == 0x53U);
+}
+
+static void AppDeviceCheck_ResyncImuFrame(void){
+    for (uint8_t i = 1U; i < APP_DEVICE_IMU_FRAME_SIZE; i++){
+        if (s_imu_rx_buffer[i] == 0x55U){
+            uint8_t remain = (uint8_t)(APP_DEVICE_IMU_FRAME_SIZE - i);
+            memmove(s_imu_rx_buffer, &s_imu_rx_buffer[i], remain);
+            s_imu_rx_index = remain;
+            return;
+        }
+    }
+
+    s_imu_rx_index = 0U;
 }
 
 void AppDeviceCheck_ProcessImuByte(uint8_t byte){
+    g_app_device_imu_rx_byte_count++;
+    g_app_device_imu_last_byte = byte;
+
     if ((s_imu_rx_index == 0U) && (byte != 0x55U)){
         return;
     }
 
     s_imu_rx_buffer[s_imu_rx_index++] = byte;
+
+    if ((s_imu_rx_index == 2U) && !AppDeviceCheck_IsImuFrameType(s_imu_rx_buffer[1])){
+        AppDeviceCheck_ResyncImuFrame();
+        return;
+    }
 
     if (s_imu_rx_index < APP_DEVICE_IMU_FRAME_SIZE){
         return;
@@ -64,9 +101,14 @@ void AppDeviceCheck_ProcessImuByte(uint8_t byte){
     if (AppDeviceCheck_IsImuFrameValid(s_imu_rx_buffer)){
         GYROSCOPE_DATA_Decoder(s_imu_rx_buffer);
         s_imu_frame_count++;
+        g_app_device_imu_valid_frame_count++;
+        g_app_device_imu_last_type = s_imu_rx_buffer[1];
+        s_imu_rx_index = 0U;
+        return;
     }
 
-    s_imu_rx_index = 0U;
+    g_app_device_imu_invalid_frame_count++;
+    AppDeviceCheck_ResyncImuFrame();
 }
 
 static const char *AppDeviceCheck_CanMvStatusText(CANMV_STATUS status){
@@ -128,18 +170,53 @@ static void AppDeviceCheck_Render(APP_DEVICE_PAGE page){
             Ui_RenderLines("Check Vision", line0, line1, line2, line3, "Short:next", "Long:back");
             break;
         }
-        case APP_DEVICE_PAGE_IMU:
-        default:{
+        case APP_DEVICE_PAGE_IMU_ANGLE:{
             WIT_IMU_DATA data = {0};
             (void)WitGetData(&data);
             snprintf(line0, sizeof(line0), "Yaw:%0.1f", data.attitude_deg.yaw);
-            snprintf(line1, sizeof(line1), "Pit:%0.1f", data.attitude_deg.pitch);
+            snprintf(line1, sizeof(line1), "Pitch:%0.1f", data.attitude_deg.pitch);
             snprintf(line2, sizeof(line2), "Roll:%0.1f", data.attitude_deg.roll);
             snprintf(line3, sizeof(line3), "Frm:%lu", (unsigned long)s_imu_frame_count);
-            Ui_RenderLines("Check IMU", line0, line1, line2, line3, "Short:next", "Long:back");
+            Ui_RenderLines("IMU Angle", line0, line1, line2, line3, "Short:next", "Long:back");
             break;
         }
-    }
+        case APP_DEVICE_PAGE_IMU_GYRO:{
+            WIT_IMU_DATA data = {0};
+            (void)WitGetData(&data);
+            snprintf(line0, sizeof(line0), "Gx:%0.1f", data.gyro_deg_s.x);
+            snprintf(line1, sizeof(line1), "Gy:%0.1f", data.gyro_deg_s.y);
+            snprintf(line2, sizeof(line2), "Gz:%0.1f", data.gyro_deg_s.z);
+            snprintf(line3, sizeof(line3), "Frm:%lu", (unsigned long)s_imu_frame_count);
+            Ui_RenderLines("IMU Gyro", line0, line1, line2, line3, "Short:next", "Long:back");
+            break;
+        }
+        case APP_DEVICE_PAGE_IMU_ACC:{
+            WIT_IMU_DATA data = {0};
+            (void)WitGetData(&data);
+            snprintf(line0, sizeof(line0), "Ax:%0.2f", data.acc_g.x);
+            snprintf(line1, sizeof(line1), "Ay:%0.2f", data.acc_g.y);
+            snprintf(line2, sizeof(line2), "Az:%0.2f", data.acc_g.z);
+            snprintf(line3, sizeof(line3), "Temp:%0.1f", data.temperature_c);
+            Ui_RenderLines("IMU Acc", line0, line1, line2, line3, "Short:next", "Long:back");
+            break;
+        }
+        case APP_DEVICE_PAGE_IMU_STATUS:
+            snprintf(line0, sizeof(line0), "Rx:%lu", (unsigned long)g_app_device_imu_rx_byte_count);
+            snprintf(line1, sizeof(line1), "Ok:%lu", (unsigned long)g_app_device_imu_valid_frame_count);
+            snprintf(line2, sizeof(line2), "Bad:%lu", (unsigned long)g_app_device_imu_invalid_frame_count);
+            snprintf(line3, sizeof(line3), "Type:0x%02X", g_app_device_imu_last_type);
+            Ui_RenderLines("IMU Status", line0, line1, line2, line3, "Short:next", "Long:back");
+            break;
+        case APP_DEVICE_PAGE_IMU_IRQ:
+        default:
+            snprintf(line0, sizeof(line0), "Irq:%lu", (unsigned long)g_app_debug_uart_irq_count);
+            snprintf(line1, sizeof(line1), "RxIrq:%lu", (unsigned long)g_app_debug_uart_rx_irq_count);
+            snprintf(line2, sizeof(line2), "Byte:%lu", (unsigned long)g_app_debug_uart_drained_byte_count);
+            snprintf(line3, sizeof(line3), "IIDX:%u E:%lu", g_app_debug_uart_last_iidx,
+                     (unsigned long)(g_app_debug_uart_empty_rx_irq_count + g_app_debug_uart_unhandled_irq_count));
+            Ui_RenderLines("IMU IRQ", line0, line1, line2, line3, "Short:next", "Long:back");
+            break;
+        }
 }
 
 void AppDeviceCheck_Run(void){
