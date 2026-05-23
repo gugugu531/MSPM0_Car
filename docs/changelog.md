@@ -3,6 +3,7 @@
 ## 未发布
 
 - 重写 `app` 层为 2025 年电赛 E 题前三项任务入口，删除旧 `mode/menu/circle_list/mode_tree` 流程。
+- 将 `bsp/oled` 从 GPIO 软件 I2C 适配为 SysConfig 生成的硬件 I2C 控制器，使用 `OLED_INST` 和 SSD1306 7 位地址 `0x3C` 完成阻塞式显示写入。
 - 更新 CCS projectspec 和 Keil uvprojx，使两套工程文件指向当前 `app/core/middleware/bsp/board` 源码树。
 - 验证 CCS/ticlang 直接交叉编译和 Keil/ArmClang rebuild 均通过。
 - 为 `bsp/step_motor` 增加统一速度限幅宏 `STEP_MOTOR_MAX_SPEED_DEG_S`，默认限制 yaw/pitch 步进电机速度到 `240 deg/s`。

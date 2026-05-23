@@ -2,29 +2,22 @@
 
 ## 模块职责
 
-`bsp/oled` 负责 SSD1306 OLED 的初始化、清屏、清行、字符、字符串、数字和位图显示。当前实现使用软件 I2C，并依赖 `bsp/time` 提供微秒和毫秒阻塞延时。
+`bsp/oled` 负责 SSD1306 OLED 的初始化、清屏、清行、字符、字符串、数字和位图显示。当前实现使用 SysConfig 配置的硬件 I2C 控制器，并依赖 `bsp/time` 提供初始化阶段所需的毫秒阻塞延时。
 
 该模块不负责菜单布局、错误文案组织、页面刷新策略或业务状态显示。
 
-## 硬件映射宏
+## 硬件映射
+
+I2C 外设实例、总线速率和 PA10/PA11 引脚复用由 SysConfig 生成文件提供。当前生成配置中存在：
 
 ```c
-#ifndef OLED_GPIO_PORT
-#ifdef OLED_PORT
-#define OLED_GPIO_PORT OLED_PORT
-#else
-#define OLED_GPIO_PORT GPIOA
-#endif
-#endif
+#define OLED_INST         I2C0
+#define OLED_BUS_SPEED_HZ 400000
+#define GPIO_OLED_SDA_PIN DL_GPIO_PIN_10
+#define GPIO_OLED_SCL_PIN DL_GPIO_PIN_11
 ```
 
-`OLED_SCL_PIN` 和 `OLED_SDA_PIN` 来自 SysConfig 生成文件。当前生成配置中存在：
-
-```c
-#define OLED_PORT    (GPIOA)
-#define OLED_SDA_PIN (DL_GPIO_PIN_10)
-#define OLED_SCL_PIN (DL_GPIO_PIN_11)
-```
+SSD1306 的 7 位 I2C 地址在驱动内部固定为 `0x3C`。旧软件 I2C 中使用的 `0x78` 是包含写方向位的 8 位地址，不再作为硬件 I2C 传输地址使用。
 
 ## 屏幕尺寸宏
 
@@ -100,7 +93,7 @@
 
 - SSD1306 写命令和写数据
 - 设置页地址和列地址
-- 软件 I2C 起始、停止、发送字节、等待 ACK
+- 硬件 I2C 阻塞发送、总线空闲等待和分段页数据写入
 - 数字显示使用的幂函数
 
 上层应只调用公开显示接口。

@@ -13,14 +13,6 @@
 extern "C" {
 #endif
 
-#ifndef OLED_GPIO_PORT
-#ifdef OLED_PORT
-#define OLED_GPIO_PORT OLED_PORT
-#else
-#define OLED_GPIO_PORT GPIOA
-#endif
-#endif
-
 #define OLED_WIDTH      128U
 #define OLED_HEIGHT     64U
 #define OLED_PAGE_COUNT 8U

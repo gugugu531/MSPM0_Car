@@ -58,6 +58,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_init(void)
     SYSCFG_DL_SMotor_1_init();
     SYSCFG_DL_SMotor_2_init();
     SYSCFG_DL_TIMER_0_init();
+    SYSCFG_DL_OLED_init();
     SYSCFG_DL_Debug_init();
     SYSCFG_DL_K230_init();
     SYSCFG_DL_SYSTICK_init();
@@ -103,6 +104,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_TimerG_reset(SMotor_1_INST);
     DL_TimerG_reset(SMotor_2_INST);
     DL_TimerA_reset(TIMER_0_INST);
+    DL_I2C_reset(OLED_INST);
     DL_UART_Main_reset(Debug_INST);
     DL_UART_Main_reset(K230_INST);
 
@@ -113,6 +115,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_TimerG_enablePower(SMotor_1_INST);
     DL_TimerG_enablePower(SMotor_2_INST);
     DL_TimerA_enablePower(TIMER_0_INST);
+    DL_I2C_enablePower(OLED_INST);
     DL_UART_Main_enablePower(Debug_INST);
     DL_UART_Main_enablePower(K230_INST);
 
@@ -130,6 +133,17 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
     DL_GPIO_enableOutput(GPIO_SMotor_1_C0_PORT, GPIO_SMotor_1_C0_PIN);
     DL_GPIO_initPeripheralOutputFunction(GPIO_SMotor_2_C1_IOMUX,GPIO_SMotor_2_C1_IOMUX_FUNC);
     DL_GPIO_enableOutput(GPIO_SMotor_2_C1_PORT, GPIO_SMotor_2_C1_PIN);
+
+    DL_GPIO_initPeripheralInputFunctionFeatures(GPIO_OLED_IOMUX_SDA,
+        GPIO_OLED_IOMUX_SDA_FUNC, DL_GPIO_INVERSION_DISABLE,
+        DL_GPIO_RESISTOR_NONE, DL_GPIO_HYSTERESIS_DISABLE,
+        DL_GPIO_WAKEUP_DISABLE);
+    DL_GPIO_initPeripheralInputFunctionFeatures(GPIO_OLED_IOMUX_SCL,
+        GPIO_OLED_IOMUX_SCL_FUNC, DL_GPIO_INVERSION_DISABLE,
+        DL_GPIO_RESISTOR_NONE, DL_GPIO_HYSTERESIS_DISABLE,
+        DL_GPIO_WAKEUP_DISABLE);
+    DL_GPIO_enableHiZ(GPIO_OLED_IOMUX_SDA);
+    DL_GPIO_enableHiZ(GPIO_OLED_IOMUX_SCL);
 
     DL_GPIO_initPeripheralOutputFunction(
         GPIO_Debug_IOMUX_TX, GPIO_Debug_IOMUX_TX_FUNC);
@@ -216,20 +230,8 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
 		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
 
-    DL_GPIO_initDigitalOutputFeatures(OLED_SDA_IOMUX,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_UP,
-		 DL_GPIO_DRIVE_STRENGTH_LOW, DL_GPIO_HIZ_DISABLE);
-
-    DL_GPIO_initDigitalOutputFeatures(OLED_SCL_IOMUX,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_UP,
-		 DL_GPIO_DRIVE_STRENGTH_LOW, DL_GPIO_HIZ_DISABLE);
-
-    DL_GPIO_clearPins(GPIOA, Motor_IO_AIN1_PIN |
-		OLED_SDA_PIN |
-		OLED_SCL_PIN);
-    DL_GPIO_enableOutput(GPIOA, Motor_IO_AIN1_PIN |
-		OLED_SDA_PIN |
-		OLED_SCL_PIN);
+    DL_GPIO_clearPins(GPIOA, Motor_IO_AIN1_PIN);
+    DL_GPIO_enableOutput(GPIOA, Motor_IO_AIN1_PIN);
     DL_GPIO_setLowerPinsPolarity(GPIOA, DL_GPIO_PIN_2_EDGE_RISE);
     DL_GPIO_setUpperPinsPolarity(GPIOA, DL_GPIO_PIN_21_EDGE_RISE);
     DL_GPIO_setLowerPinsInputFilter(GPIOA, DL_GPIO_PIN_2_INPUT_FILTER_3_CYCLES);
@@ -456,6 +458,34 @@ SYSCONFIG_WEAK void SYSCFG_DL_TIMER_0_init(void) {
 
 }
 
+
+static const DL_I2C_ClockConfig gOLEDClockConfig = {
+    .clockSel = DL_I2C_CLOCK_BUSCLK,
+    .divideRatio = DL_I2C_CLOCK_DIVIDE_1,
+};
+
+SYSCONFIG_WEAK void SYSCFG_DL_OLED_init(void) {
+
+    DL_I2C_setClockConfig(OLED_INST,
+        (DL_I2C_ClockConfig *) &gOLEDClockConfig);
+    DL_I2C_setAnalogGlitchFilterPulseWidth(OLED_INST,
+        DL_I2C_ANALOG_GLITCH_FILTER_WIDTH_50NS);
+    DL_I2C_enableAnalogGlitchFilter(OLED_INST);
+
+    /* Configure Controller Mode */
+    DL_I2C_resetControllerTransfer(OLED_INST);
+    /* Set frequency to 400000 Hz*/
+    DL_I2C_setTimerPeriod(OLED_INST, 7);
+    DL_I2C_setControllerTXFIFOThreshold(OLED_INST, DL_I2C_TX_FIFO_LEVEL_EMPTY);
+    DL_I2C_setControllerRXFIFOThreshold(OLED_INST, DL_I2C_RX_FIFO_LEVEL_BYTES_1);
+    DL_I2C_enableControllerClockStretching(OLED_INST);
+
+
+    /* Enable module */
+    DL_I2C_enableController(OLED_INST);
+
+
+}
 
 static const DL_UART_Main_ClockConfig gDebugClockConfig = {
     .clockSel    = DL_UART_MAIN_CLOCK_BUSCLK,

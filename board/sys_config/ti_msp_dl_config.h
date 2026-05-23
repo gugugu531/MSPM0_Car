@@ -129,6 +129,22 @@ extern "C" {
 
 
 
+
+/* Defines for OLED */
+#define OLED_INST                                                           I2C0
+#define OLED_INST_IRQHandler                                     I2C0_IRQHandler
+#define OLED_INST_INT_IRQN                                         I2C0_INT_IRQn
+#define OLED_BUS_SPEED_HZ                                                 400000
+#define GPIO_OLED_SDA_PORT                                                 GPIOA
+#define GPIO_OLED_SDA_PIN                                         DL_GPIO_PIN_10
+#define GPIO_OLED_IOMUX_SDA                                      (IOMUX_PINCM21)
+#define GPIO_OLED_IOMUX_SDA_FUNC                       IOMUX_PINCM21_PF_I2C0_SDA
+#define GPIO_OLED_SCL_PORT                                                 GPIOA
+#define GPIO_OLED_SCL_PIN                                         DL_GPIO_PIN_11
+#define GPIO_OLED_IOMUX_SCL                                      (IOMUX_PINCM22)
+#define GPIO_OLED_IOMUX_SCL_FUNC                       IOMUX_PINCM22_PF_I2C0_SCL
+
+
 /* Defines for Debug */
 #define Debug_INST                                                         UART0
 #define Debug_INST_FREQUENCY                                            32000000
@@ -254,15 +270,7 @@ extern "C" {
 #define Tracking_Tracking_8_PORT                                         (GPIOA)
 #define Tracking_Tracking_8_PIN                                 (DL_GPIO_PIN_13)
 #define Tracking_Tracking_8_IOMUX                                (IOMUX_PINCM35)
-/* Port definition for Pin Group OLED */
-#define OLED_PORT                                                        (GPIOA)
 
-/* Defines for SDA: GPIOA.10 with pinCMx 21 on package pin 56 */
-#define OLED_SDA_PIN                                            (DL_GPIO_PIN_10)
-#define OLED_SDA_IOMUX                                           (IOMUX_PINCM21)
-/* Defines for SCL: GPIOA.11 with pinCMx 22 on package pin 57 */
-#define OLED_SCL_PIN                                            (DL_GPIO_PIN_11)
-#define OLED_SCL_IOMUX                                           (IOMUX_PINCM22)
 
 
 
@@ -276,6 +284,7 @@ void SYSCFG_DL_Motor_init(void);
 void SYSCFG_DL_SMotor_1_init(void);
 void SYSCFG_DL_SMotor_2_init(void);
 void SYSCFG_DL_TIMER_0_init(void);
+void SYSCFG_DL_OLED_init(void);
 void SYSCFG_DL_Debug_init(void);
 void SYSCFG_DL_K230_init(void);
 
