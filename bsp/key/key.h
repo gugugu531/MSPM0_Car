@@ -86,6 +86,13 @@ bool Key_IsPressed(KEY_ID key_id);
 bool Key_IsShortPress(KEY_ID key_id);
 
 /**
+ * @brief 判断指定按键是否刚完成一次短按释放确认。
+ * @note 该接口在释放消抖完成后立即返回 true，不等待双击窗口超时。
+ *       若被消费，本次点击后续不会再生成普通短按事件。
+ */
+bool Key_IsShortRelease(KEY_ID key_id);
+
+/**
  * @brief 判断指定按键是否产生长按事件。
  */
 bool Key_IsLongPress(KEY_ID key_id);

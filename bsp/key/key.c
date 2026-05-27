@@ -35,6 +35,8 @@ typedef struct {
     KEY_EVENT pending_event;
     bool long_reported;
     bool suppress_release_event;
+    bool short_release_pending;
+    bool short_release_consumed;
 } KEY_STATE_CONTEXT;
 
 static const KEY_HW_CONFIG s_key_hw[KEY_ID_MAX] = {
@@ -79,6 +81,8 @@ void Key_Init(void){
         s_key_state[i].pending_event = KEY_EVENT_NONE;
         s_key_state[i].long_reported = false;
         s_key_state[i].suppress_release_event = false;
+        s_key_state[i].short_release_pending = false;
+        s_key_state[i].short_release_consumed = false;
     }
 }
 
@@ -148,6 +152,8 @@ static void Key_UpdateReleaseDebounce(KEY_ID key_id, KEY_LEVEL level, uint32_t n
     }
 
     if (now_ms - state->press_start_ms >= KEY_SHORT_PRESS_MIN_MS){
+        state->short_release_pending = true;
+        state->short_release_consumed = false;
         state->state = KEY_STATE_WAIT_DOUBLE;
     } else{
         state->state = KEY_STATE_RELEASED;
@@ -159,7 +165,11 @@ static void Key_UpdateWaitDouble(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms
 
     /* 双击窗口超时后，才确认前一次释放对应的是短按。 */
     if (now_ms - state->release_time_ms >= KEY_DOUBLE_CLICK_MS){
-        Key_PushEvent(key_id, KEY_EVENT_SHORT_PRESS);
+        if (!state->short_release_consumed){
+            Key_PushEvent(key_id, KEY_EVENT_SHORT_PRESS);
+        }
+        state->short_release_pending = false;
+        state->short_release_consumed = false;
         state->state = KEY_STATE_RELEASED;
         return;
     }
@@ -181,6 +191,8 @@ static void Key_UpdateDoubleDebounce(KEY_ID key_id, KEY_LEVEL level, uint32_t no
 
     if (now_ms - state->debounce_start_ms >= KEY_DEBOUNCE_MS){
         Key_PushEvent(key_id, KEY_EVENT_DOUBLE_CLICK);
+        state->short_release_pending = false;
+        state->short_release_consumed = false;
         state->stable_level = KEY_LEVEL_PRESSED;
         state->press_start_ms = now_ms;
         state->long_reported = false;
@@ -262,6 +274,20 @@ bool Key_IsShortPress(KEY_ID key_id){
     return Key_ConsumeIf(key_id, KEY_EVENT_SHORT_PRESS);
 }
 
+bool Key_IsShortRelease(KEY_ID key_id){
+    if (!Key_IsValidId(key_id)){
+        return false;
+    }
+
+    if (!s_key_state[key_id].short_release_pending){
+        return false;
+    }
+
+    s_key_state[key_id].short_release_pending = false;
+    s_key_state[key_id].short_release_consumed = true;
+    return true;
+}
+
 bool Key_IsLongPress(KEY_ID key_id){
     return Key_ConsumeIf(key_id, KEY_EVENT_LONG_PRESS);
 }
@@ -273,11 +299,15 @@ bool Key_IsDoubleClick(KEY_ID key_id){
 void Key_ClearEvent(KEY_ID key_id){
     if (Key_IsValidId(key_id)){
         s_key_state[key_id].pending_event = KEY_EVENT_NONE;
+        s_key_state[key_id].short_release_pending = false;
+        s_key_state[key_id].short_release_consumed = false;
     }
 }
 
 void Key_ClearAllEvents(void){
     for (uint8_t i = 0U; i < (uint8_t)KEY_ID_MAX; i++){
         s_key_state[i].pending_event = KEY_EVENT_NONE;
+        s_key_state[i].short_release_pending = false;
+        s_key_state[i].short_release_consumed = false;
     }
 }

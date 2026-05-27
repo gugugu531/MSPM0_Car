@@ -212,6 +212,10 @@ static void AppDeviceCheck_RunStepPulse(STEP_MOTOR_CHANNEL channel){
     (void)StepMotor_RunFor(channel, -APP_DEVICE_STEP_SPEED_DEG_S, APP_DEVICE_STEP_RUN_MS);
 }
 
+static bool AppDeviceCheck_IsStepModule(APP_DEVICE_MODULE module){
+    return (module == APP_DEVICE_MODULE_YAW) || (module == APP_DEVICE_MODULE_PITCH);
+}
+
 static void AppDeviceCheck_EnterModule(APP_DEVICE_MODULE module){
     AppDeviceCheck_StopOutputs();
 
@@ -354,10 +358,16 @@ void AppDeviceCheck_Run(void){
         }
 
         if (Key_IsShortPress(KEY_ID_1)){
-            if (AppDeviceCheck_TestCount(module) > 0U){
+            if (!AppDeviceCheck_IsStepModule(module) && AppDeviceCheck_TestCount(module) > 0U){
                 AppDeviceCheck_AdvanceTest(module);
             }
             Key_ClearAllEvents();
+            AppDeviceCheck_Render(module);
+            last_render_ms = BSP_Time_GetMs();
+        }
+
+        if (AppDeviceCheck_IsStepModule(module) && Key_IsShortRelease(KEY_ID_1)){
+            AppDeviceCheck_AdvanceTest(module);
             AppDeviceCheck_Render(module);
             last_render_ms = BSP_Time_GetMs();
         }
