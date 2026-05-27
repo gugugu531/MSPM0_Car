@@ -9,9 +9,12 @@
 typedef struct {
     GPIO_Regs *dir_port;
     uint32_t dir_pin;
+    GPIO_Regs *en_port;
+    uint32_t en_pin;
     GPTIMER_Regs *pwm_timer;
     DL_TIMER_CC_INDEX pwm_channel;
     bool positive_dir_high;
+    bool enable_high;
 } STEP_MOTOR_HW_CONFIG;
 
 typedef struct {
@@ -25,16 +28,22 @@ static const STEP_MOTOR_HW_CONFIG s_step_motor_hw[STEP_MOTOR_CHANNEL_MAX] = {
     [STEP_MOTOR_CHANNEL_YAW] = {
         .dir_port = STEP_MOTOR_YAW_DIR_PORT,
         .dir_pin = STEP_MOTOR_YAW_DIR_PIN,
+        .en_port = STEP_MOTOR_YAW_EN_PORT,
+        .en_pin = STEP_MOTOR_YAW_EN_PIN,
         .pwm_timer = STEP_MOTOR_YAW_PWM_TIMER,
         .pwm_channel = STEP_MOTOR_YAW_PWM_CHANNEL,
         .positive_dir_high = (STEP_MOTOR_YAW_POSITIVE_DIR_HIGH != 0U),
+        .enable_high = (STEP_MOTOR_YAW_ENABLE_HIGH != 0U),
     },
     [STEP_MOTOR_CHANNEL_PITCH] = {
         .dir_port = STEP_MOTOR_PITCH_DIR_PORT,
         .dir_pin = STEP_MOTOR_PITCH_DIR_PIN,
+        .en_port = STEP_MOTOR_PITCH_EN_PORT,
+        .en_pin = STEP_MOTOR_PITCH_EN_PIN,
         .pwm_timer = STEP_MOTOR_PITCH_PWM_TIMER,
         .pwm_channel = STEP_MOTOR_PITCH_PWM_CHANNEL,
         .positive_dir_high = (STEP_MOTOR_PITCH_POSITIVE_DIR_HIGH != 0U),
+        .enable_high = (STEP_MOTOR_PITCH_ENABLE_HIGH != 0U),
     },
 };
 
@@ -84,6 +93,16 @@ static void StepMotor_SetDirection(const STEP_MOTOR_HW_CONFIG *hw, float speed_d
     }
 }
 
+static void StepMotor_SetEnable(const STEP_MOTOR_HW_CONFIG *hw, bool enable){
+    bool set_high = hw->enable_high ? enable : !enable;
+
+    if (set_high){
+        DL_GPIO_setPins(hw->en_port, hw->en_pin);
+    } else{
+        DL_GPIO_clearPins(hw->en_port, hw->en_pin);
+    }
+}
+
 static void StepMotor_DisablePulse(const STEP_MOTOR_HW_CONFIG *hw){
     DL_TimerG_setCaptureCompareValue(hw->pwm_timer, 0U, hw->pwm_channel);
 }
@@ -128,6 +147,7 @@ BSP_STATUS StepMotor_Init(void){
         s_step_motor_state[i].update_started = false;
 
         DL_GPIO_clearPins(hw->dir_port, hw->dir_pin);
+        StepMotor_SetEnable(hw, true);
         DL_TimerG_startCounter(hw->pwm_timer);
         StepMotor_DisablePulse(hw);
     }

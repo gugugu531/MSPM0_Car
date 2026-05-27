@@ -21,6 +21,18 @@ extern "C" {
 #define STEP_MOTOR_YAW_DIR_PIN SMotor_IO_DIR2_PIN
 #endif
 
+#ifndef STEP_MOTOR_YAW_EN_PORT
+#define STEP_MOTOR_YAW_EN_PORT SMotor_IO_PORT
+#endif
+
+#ifndef STEP_MOTOR_YAW_EN_PIN
+#define STEP_MOTOR_YAW_EN_PIN SMotor_IO_EN2_PIN
+#endif
+
+#ifndef STEP_MOTOR_YAW_ENABLE_HIGH
+#define STEP_MOTOR_YAW_ENABLE_HIGH 1U
+#endif
+
 #ifndef STEP_MOTOR_YAW_PWM_TIMER
 #define STEP_MOTOR_YAW_PWM_TIMER SMotor_2_INST
 #endif
@@ -39,6 +51,18 @@ extern "C" {
 
 #ifndef STEP_MOTOR_PITCH_DIR_PIN
 #define STEP_MOTOR_PITCH_DIR_PIN SMotor_IO_DIR1_PIN
+#endif
+
+#ifndef STEP_MOTOR_PITCH_EN_PORT
+#define STEP_MOTOR_PITCH_EN_PORT SMotor_IO_PORT
+#endif
+
+#ifndef STEP_MOTOR_PITCH_EN_PIN
+#define STEP_MOTOR_PITCH_EN_PIN SMotor_IO_EN1_PIN
+#endif
+
+#ifndef STEP_MOTOR_PITCH_ENABLE_HIGH
+#define STEP_MOTOR_PITCH_ENABLE_HIGH 1U
 #endif
 
 #ifndef STEP_MOTOR_PITCH_PWM_TIMER

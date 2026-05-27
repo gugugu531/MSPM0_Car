@@ -21,8 +21,10 @@ typedef enum {
 默认映射：
 
 - `STEP_MOTOR_YAW_DIR_PORT/PIN` -> `SMotor_IO_PORT` / `SMotor_IO_DIR2_PIN`
+- `STEP_MOTOR_YAW_EN_PORT/PIN` -> `SMotor_IO_PORT` / `SMotor_IO_EN2_PIN`
 - `STEP_MOTOR_YAW_PWM_TIMER/CHANNEL` -> `SMotor_2_INST` / `DL_TIMER_CC_1_INDEX`
 - `STEP_MOTOR_PITCH_DIR_PORT/PIN` -> `SMotor_IO_PORT` / `SMotor_IO_DIR1_PIN`
+- `STEP_MOTOR_PITCH_EN_PORT/PIN` -> `SMotor_IO_PORT` / `SMotor_IO_EN1_PIN`
 - `STEP_MOTOR_PITCH_PWM_TIMER/CHANNEL` -> `SMotor_1_INST` / `DL_TIMER_CC_0_INDEX`
 
 方向宏：
@@ -33,6 +35,15 @@ typedef enum {
 ```
 
 当速度为正时，方向引脚是否置高由上述宏决定；速度为负时方向取反。
+
+使能宏：
+
+```c
+#define STEP_MOTOR_YAW_ENABLE_HIGH   1U
+#define STEP_MOTOR_PITCH_ENABLE_HIGH 1U
+```
+
+`StepMotor_Init()` 会按上述极性使能两路步进电机驱动器。当前硬件与旧版 `YP_SMotor_Init()` 行为一致，默认将 `EN1/EN2` 置高。若后续更换为低电平有效的驱动器，只需把对应 `ENABLE_HIGH` 宏改为 `0U`。
 
 ## 电机和定时器参数宏
 
@@ -57,7 +68,7 @@ step_frequency = abs(speed_deg_per_s) / step_angle_deg * microstep
 
 ### `BSP_STATUS StepMotor_Init(void)`
 
-初始化两个通道状态，启动 PWM 定时器，并关闭脉冲输出。
+初始化两个通道状态，使能步进电机驱动器，启动 PWM 定时器，并关闭脉冲输出。
 
 ### `BSP_STATUS StepMotor_SetSpeed(STEP_MOTOR_CHANNEL channel, float speed_deg_per_s)`
 
