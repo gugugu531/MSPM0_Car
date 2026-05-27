@@ -6,6 +6,7 @@
 #include "key.h"
 #include "ui.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #define APP_MENU_DELAY_MS 20U
@@ -55,6 +56,10 @@ static void App_RenderMenu(APP_MENU_ITEM selected){
     Ui_RenderListPage(&page);
 }
 
+static bool App_IsNextMenuEvent(void){
+    return Key_IsShortPress(KEY_ID_1) || Key_IsDoubleClick(KEY_ID_1);
+}
+
 static void App_RunMenuItem(APP_MENU_ITEM selected){
     if (selected <= APP_MENU_E1_LINE_5){
         AppE_RunLineFollow((uint8_t)selected + 1U);
@@ -85,7 +90,7 @@ void App_Launch(void){
     App_RenderMenu(selected);
 
     while (1){
-        if (Key_IsShortPress(KEY_ID_1)){
+        if (App_IsNextMenuEvent()){
             selected = (APP_MENU_ITEM)(((uint8_t)selected + 1U) % (uint8_t)APP_MENU_COUNT);
             Key_ClearAllEvents();
             App_RenderMenu(selected);
