@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 新增 `k230/uart1_comm_test.py`，使用 K230 UART1（GPIO3 TX、GPIO4 RX）周期发送兼容旧 CanMV 协议的测试帧，用于验证 K230 与 MSPM0 之间的串口链路。
+- 在 `Device Check` 中新增 K230 通信检查页面，显示接收字节数、有效帧数、丢帧数、最后接收字节和解析出的目标/激光坐标。
 - 新增 `tools/k230_tool.py`，提供基于 pyserial/raw REPL 的 K230 脚本运行、写入和软复位辅助命令，并补充 `docs/k230-tool.md`。
 - 验证 K230 可通过 `COM15` 进入 MicroPython raw REPL、写入 `/sdcard` 文件并执行脚本；将 K230 工具默认写入路径调整为 `/sdcard/main.py`。
 - 为 `k230/rect_07.py` 增加 UART2 二进制帧发送，按旧 CanMV 协议向 MSPM0 回传靶心、图像中心和矩形角点。

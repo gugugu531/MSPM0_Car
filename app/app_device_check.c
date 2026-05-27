@@ -1,6 +1,7 @@
 #include "app_device_check.h"
 
 #include "bsp_time.h"
+#include "canmv_uart.h"
 #include "chassis.h"
 #include "hall_encoder.h"
 #include "key.h"
@@ -27,6 +28,7 @@ typedef enum {
     APP_DEVICE_MODULE_PITCH,
     APP_DEVICE_MODULE_LINE,
     APP_DEVICE_MODULE_IMU,
+    APP_DEVICE_MODULE_K230,
     APP_DEVICE_MODULE_COUNT
 } APP_DEVICE_MODULE;
 
@@ -135,6 +137,7 @@ static const char *AppDeviceCheck_ModuleTitle(APP_DEVICE_MODULE module){
         "Pitch Step",
         "Line Sensor",
         "IMU",
+        "K230",
     };
 
     return (module < APP_DEVICE_MODULE_COUNT) ? titles[module] : "Device";
@@ -149,6 +152,7 @@ static uint8_t AppDeviceCheck_TestCount(APP_DEVICE_MODULE module){
         case APP_DEVICE_MODULE_YAW:
         case APP_DEVICE_MODULE_PITCH:
         case APP_DEVICE_MODULE_LINE:
+        case APP_DEVICE_MODULE_K230:
         default:
             return 1U;
     }
@@ -233,6 +237,7 @@ static void AppDeviceCheck_EnterModule(APP_DEVICE_MODULE module){
             StepMotor_ResetEstimatedPosition(STEP_MOTOR_CHANNEL_PITCH);
             break;
         case APP_DEVICE_MODULE_LINE:
+        case APP_DEVICE_MODULE_K230:
         default:
             break;
     }
@@ -256,6 +261,7 @@ static void AppDeviceCheck_AdvanceTest(APP_DEVICE_MODULE module){
                 (uint8_t)APP_DEVICE_IMU_COUNT);
             break;
         case APP_DEVICE_MODULE_LINE:
+        case APP_DEVICE_MODULE_K230:
         default:
             break;
     }
@@ -303,6 +309,33 @@ static void AppDeviceCheck_Render(APP_DEVICE_MODULE module){
             snprintf(line1, sizeof(line1), "HEX:0x%02X", LineFollow_GetSensorMask());
             snprintf(line2, sizeof(line2), "Active:%u", LineFollow_GetActiveCount());
             snprintf(line3, sizeof(line3), "Realtime");
+            Ui_RenderLines(AppDeviceCheck_ModuleTitle(module), line0, line1, line2, line3, "2:module", NULL);
+            break;
+        }
+        case APP_DEVICE_MODULE_K230:{
+            const CANMV_TARGET_DATA *laser_data = CanMvUart_GetTargetData(CANMV_TARGET_LASER);
+
+            snprintf(line0, sizeof(line0), "Rx:%lu F:%lu",
+                     (unsigned long)g_canmv_uart_rx_byte_count,
+                     (unsigned long)g_canmv_uart_valid_frame_count);
+            snprintf(line1, sizeof(line1), "Drop:%lu B:%02X",
+                     (unsigned long)g_canmv_uart_drop_count,
+                     g_canmv_uart_last_byte);
+
+            if (laser_data != NULL && laser_data->count >= 4U){
+                snprintf(line2, sizeof(line2), "T:%u,%u",
+                         laser_data->value[0],
+                         laser_data->value[1]);
+                snprintf(line3, sizeof(line3), "L:%u,%u S:%d",
+                         laser_data->value[2],
+                         laser_data->value[3],
+                         (int)laser_data->status);
+            } else{
+                snprintf(line2, sizeof(line2), "T:--,--");
+                snprintf(line3, sizeof(line3), "L:--,-- S:%d",
+                         (int)CanMvUart_GetStatus(CANMV_TARGET_LASER));
+            }
+
             Ui_RenderLines(AppDeviceCheck_ModuleTitle(module), line0, line1, line2, line3, "2:module", NULL);
             break;
         }

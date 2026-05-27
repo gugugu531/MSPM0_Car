@@ -33,6 +33,12 @@ python tools/k230_tool.py list
 python tools/k230_tool.py --port COM15 run k230/rect_07.py
 ```
 
+临时运行 UART1 通信测试脚本：
+
+```powershell
+python tools/k230_tool.py --port COM15 run k230/uart1_comm_test.py
+```
+
 写入为 K230 端 `main.py`：
 
 ```powershell
@@ -52,6 +58,7 @@ python tools/k230_tool.py --port COM15 reset
 - 使用该工具前应关闭 CanMV IDE 对同一串口的连接，否则串口会被占用。
 - 如果 K230 当前运行的脚本占用 REPL 或关闭 USB 串口，`raw REPL` 进入可能失败，需要先在 IDE 中停止运行或重启 K230。
 - 该工具不烧录 K230 固件，只通过 MicroPython REPL 运行或写入 `.py` 文件。
+- `k230/uart1_comm_test.py` 使用 K230 GPIO3 作为 UART1 TX、GPIO4 作为 UART1 RX。与 MSPM0 通信时应使用 3.3V 电平、共地，并交叉连接 TX/RX。
 
 ## 当前验证结果
 

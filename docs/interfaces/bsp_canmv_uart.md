@@ -37,6 +37,8 @@ top_left_x/y,
 
 其中 `target_x/target_y` 为 K230 识别到的靶心坐标。当前 K230 脚本尚未识别激光点，`laser_x/laser_y` 暂时填入图像中心，使上层可执行“相机中心对准靶心”的控制链路。若后续增加激光光斑识别，应将该字段改为实际激光点坐标。
 
+`k230/uart1_comm_test.py` 是独立的通信测试脚本，使用 K230 UART1 从 GPIO3/TX1、GPIO4/RX1 以 115200 8N1 周期发送同格式测试帧。测试帧中的目标坐标会随计数递增而变化，便于在 Device Check 的 K230 页面确认链路实时工作。
+
 ## 硬件映射宏
 
 ```c
@@ -47,6 +49,8 @@ top_left_x/y,
 ```
 
 如果后续 UART 实例或缓冲区大小变化，应通过覆盖这些宏调整。
+
+当前 MSPM0 工程的 SysConfig 将 K230 通信映射到 `UART2`，K230 端测试脚本使用的是 K230 芯片自己的 `UART1`。两者不要求同名，只要物理连线满足 K230 UART1 TX 接 MSPM0 K230 RX、K230 UART1 RX 接 MSPM0 K230 TX，并且双方共地即可。
 
 `CanMvUart_Init()` 会显式关闭 SysConfig 可能开启的 TX 中断，只保留 RX 和 RX timeout 中断，并把 RX FIFO 阈值设为 1 字节，保证通信路径只通过接收中断进入解析器。
 
