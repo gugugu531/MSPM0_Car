@@ -30,6 +30,11 @@ static bool s_canmv_receiving;
 static bool s_canmv_target_seen[CANMV_TARGET_MAX];
 static CANMV_TARGET_DATA s_canmv_target_data[CANMV_TARGET_MAX];
 
+volatile uint32_t g_canmv_uart_rx_byte_count;
+volatile uint32_t g_canmv_uart_valid_frame_count;
+volatile uint32_t g_canmv_uart_drop_count;
+volatile uint8_t g_canmv_uart_last_byte;
+
 static bool CanMvUart_IsValidTarget(CANMV_TARGET target){
     return target < CANMV_TARGET_MAX;
 }
@@ -49,6 +54,10 @@ static bool CanMvUart_IsTargetEmpty(const CANMV_TARGET_DATA *data){
 }
 
 static void CanMvUart_SetAllStatus(CANMV_STATUS status){
+    if (status == CANMV_STATUS_FRAME_DROP){
+        g_canmv_uart_drop_count++;
+    }
+
     for (uint8_t i = 0U; i < (uint8_t)CANMV_TARGET_MAX; i++){
         s_canmv_target_data[i].status = status;
     }
@@ -112,13 +121,25 @@ BSP_STATUS CanMvUart_Init(void){
     CanMvUart_ResetRxState();
     memset(s_canmv_frame, 0, sizeof(s_canmv_frame));
     CanMvUart_ClearTargetData();
+    g_canmv_uart_rx_byte_count = 0U;
+    g_canmv_uart_valid_frame_count = 0U;
+    g_canmv_uart_drop_count = 0U;
+    g_canmv_uart_last_byte = 0U;
 
+    DL_UART_Main_setRXFIFOThreshold(CANMV_UART_INST, DL_UART_RX_FIFO_LEVEL_ONE_ENTRY);
+    DL_UART_Main_setRXInterruptTimeout(CANMV_UART_INST, 1U);
+    DL_UART_Main_disableInterrupt(CANMV_UART_INST, DL_UART_MAIN_INTERRUPT_TX);
+    DL_UART_Main_enableInterrupt(CANMV_UART_INST,
+        DL_UART_MAIN_INTERRUPT_RX | DL_UART_MAIN_INTERRUPT_RX_TIMEOUT_ERROR);
     NVIC_ClearPendingIRQ(CANMV_UART_IRQN);
     NVIC_EnableIRQ(CANMV_UART_IRQN);
     return BSP_STATUS_OK;
 }
 
 void CanMvUart_ProcessByte(uint8_t byte){
+    g_canmv_uart_rx_byte_count++;
+    g_canmv_uart_last_byte = byte;
+
     if (byte == CANMV_FRAME_START){
         /* 新帧头到来时立即重新同步，丢弃此前可能残缺的帧内容。 */
         CanMvUart_ResetRxState();
@@ -154,12 +175,15 @@ void CanMvUart_ProcessByte(uint8_t byte){
     /* 解析前复制完整帧，随后复位接收状态，保证下一帧可以马上开始接收。 */
     memcpy(s_canmv_frame, s_canmv_rx_buffer, sizeof(s_canmv_frame));
     CanMvUart_ResetRxState();
+    g_canmv_uart_valid_frame_count++;
     CanMvUart_ParseFrame();
 }
 
 void CanMvUart_ProcessRx(void){
-    uint8_t byte = DL_UART_Main_receiveData(CANMV_UART_INST);
-    CanMvUart_ProcessByte(byte);
+    while (!DL_UART_Main_isRXFIFOEmpty(CANMV_UART_INST)){
+        uint8_t byte = DL_UART_Main_receiveData(CANMV_UART_INST);
+        CanMvUart_ProcessByte(byte);
+    }
 }
 
 BSP_STATUS CanMvUart_SendByte(uint8_t byte){

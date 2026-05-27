@@ -29,7 +29,7 @@ typedef struct {
 ```
 
 - `yaw_pid` / `pitch_pid`：yaw 和 pitch 两个方向的 PID 参数。
-- `image_height`：图像高度，用于将旧图像坐标转换为当前使用的 y 轴方向。
+- `image_height`：图像高度，用于将旧图像坐标转换为当前使用的 y 轴方向；默认值为 `240`，对齐当前 `k230/rect_07.py` 的 `320x240` 输出。
 - `paper_width` / `paper_height`：纸面尺寸。
 - `circle_radius`：纸面圆路径半径。
 - `yaw_output_sign` / `pitch_output_sign`：输出方向系数，用于适配安装方向。

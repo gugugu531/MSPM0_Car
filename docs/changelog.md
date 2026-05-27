@@ -2,6 +2,9 @@
 
 ## 未发布
 
+- 为 `k230/rect_07.py` 增加 UART2 二进制帧发送，按旧 CanMV 协议向 MSPM0 回传靶心、图像中心和矩形角点。
+- 调整 `bsp/canmv` UART2 接收配置，关闭 TX 中断、保留 RX/RX timeout 中断并排空 RX FIFO，同时增加接收字节、有效帧和丢帧诊断变量。
+- 将 `core/gimbal_tracking` 默认图像高度调整为 `240`，对齐当前 K230 `320x240` 视觉输出。
 - 调整 `Device check` 中 yaw/pitch 步进电机测试触发方式，短按释放消抖完成后立即执行点动，不再等待双击窗口超时。
 - 为 `bsp/key` 增加 `Key_IsShortRelease()` 即时释放事件接口，供低延迟测试动作使用。
 - 修复 `bsp/step_motor` 初始化未拉起 `EN1/EN2` 的问题，将 yaw/pitch 步进电机使能脚纳入硬件映射宏，并默认按旧版行为置高使能。

@@ -40,6 +40,11 @@ extern "C" {
 
 #define CANMV_MIN_FRAME_LEN (CANMV_RECT_BEGIN + CANMV_RECT_BYTE_COUNT + 1U)
 
+extern volatile uint32_t g_canmv_uart_rx_byte_count;
+extern volatile uint32_t g_canmv_uart_valid_frame_count;
+extern volatile uint32_t g_canmv_uart_drop_count;
+extern volatile uint8_t g_canmv_uart_last_byte;
+
 /**
  * @brief CanMV 目标数据类型。
  */

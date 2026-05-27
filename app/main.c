@@ -88,9 +88,7 @@ void UART2_IRQHandler(void){
     switch (DL_UART_getPendingInterrupt(CANMV_UART_INST)){
         case DL_UART_IIDX_RX:
         case DL_UART_IIDX_RX_TIMEOUT_ERROR:
-            while (!DL_UART_Main_isRXFIFOEmpty(CANMV_UART_INST)){
-                CanMvUart_ProcessRx();
-            }
+            CanMvUart_ProcessRx();
             break;
         default:
             break;

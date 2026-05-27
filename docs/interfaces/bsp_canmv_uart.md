@@ -20,6 +20,23 @@
 
 每个 `uint16_t` 按高字节在前、低字节在后的方式组合。
 
+当前 `k230/rect_07.py` 会发送兼容旧 CanMV 协议的固定二进制帧：
+
+```text
+0x12, reserved,
+target_x_hi, target_x_lo,
+target_y_hi, target_y_lo,
+laser_x_hi,  laser_x_lo,
+laser_y_hi,  laser_y_lo,
+bottom_left_x/y,
+bottom_right_x/y,
+top_right_x/y,
+top_left_x/y,
+0x5B
+```
+
+其中 `target_x/target_y` 为 K230 识别到的靶心坐标。当前 K230 脚本尚未识别激光点，`laser_x/laser_y` 暂时填入图像中心，使上层可执行“相机中心对准靶心”的控制链路。若后续增加激光光斑识别，应将该字段改为实际激光点坐标。
+
 ## 硬件映射宏
 
 ```c
@@ -30,6 +47,8 @@
 ```
 
 如果后续 UART 实例或缓冲区大小变化，应通过覆盖这些宏调整。
+
+`CanMvUart_Init()` 会显式关闭 SysConfig 可能开启的 TX 中断，只保留 RX 和 RX timeout 中断，并把 RX FIFO 阈值设为 1 字节，保证通信路径只通过接收中断进入解析器。
 
 ## 公开类型
 
@@ -79,7 +98,7 @@ typedef struct {
 
 ### `BSP_STATUS CanMvUart_Init(void)`
 
-清空接收状态和目标数据，初始化目标状态为 `CANMV_STATUS_INIT`，并使能 CanMV UART 中断。
+清空接收状态和目标数据，初始化目标状态为 `CANMV_STATUS_INIT`，配置 UART2 接收中断，并使能 CanMV UART IRQ。
 
 ### `void CanMvUart_ProcessByte(uint8_t byte)`
 
@@ -87,7 +106,23 @@ typedef struct {
 
 ### `void CanMvUart_ProcessRx(void)`
 
-从 `CANMV_UART_INST` 读取一个字节，并调用 `CanMvUart_ProcessByte()`。
+排空 `CANMV_UART_INST` 当前 RX FIFO，并逐字节调用 `CanMvUart_ProcessByte()`。
+
+## 诊断变量
+
+```c
+extern volatile uint32_t g_canmv_uart_rx_byte_count;
+extern volatile uint32_t g_canmv_uart_valid_frame_count;
+extern volatile uint32_t g_canmv_uart_drop_count;
+extern volatile uint8_t g_canmv_uart_last_byte;
+```
+
+这些变量用于上板调试 UART2 通信：
+
+- `rx_byte_count`：UART2 已收到的字节数。
+- `valid_frame_count`：已解析到帧头帧尾完整且长度满足要求的帧数。
+- `drop_count`：接收失步、短帧或缓冲区溢出导致的丢帧次数。
+- `last_byte`：最近收到的原始字节。
 
 ### `BSP_STATUS CanMvUart_SendByte(uint8_t byte)`
 
