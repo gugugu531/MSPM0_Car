@@ -36,8 +36,10 @@ python tools/k230_tool.py --port COM15 run k230/rect_07.py
 写入为 K230 端 `main.py`：
 
 ```powershell
-python tools/k230_tool.py --port COM15 put k230/rect_07.py main.py
+python tools/k230_tool.py --port COM15 put k230/rect_07.py /sdcard/main.py
 ```
+
+如果省略远端路径，默认写入 `/sdcard/main.py`。K230 当前根目录 `/` 不可写，直接写 `main.py` 会返回 `OSError: [Errno 22] EINVAL`。
 
 软复位：
 
@@ -50,3 +52,13 @@ python tools/k230_tool.py --port COM15 reset
 - 使用该工具前应关闭 CanMV IDE 对同一串口的连接，否则串口会被占用。
 - 如果 K230 当前运行的脚本占用 REPL 或关闭 USB 串口，`raw REPL` 进入可能失败，需要先在 IDE 中停止运行或重启 K230。
 - 该工具不烧录 K230 固件，只通过 MicroPython REPL 运行或写入 `.py` 文件。
+
+## 当前验证结果
+
+已通过 `COM15` 验证以下能力：
+
+- 进入 MicroPython raw REPL 并执行 `print`。
+- 向 `/sdcard` 写入 `.py` 文件。
+- 从 `/sdcard` 读取并执行写入的 `.py` 文件。
+
+因此，当前可以直接通过 `COM15` 串口调试和使用 K230。

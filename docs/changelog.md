@@ -3,6 +3,7 @@
 ## 未发布
 
 - 新增 `tools/k230_tool.py`，提供基于 pyserial/raw REPL 的 K230 脚本运行、写入和软复位辅助命令，并补充 `docs/k230-tool.md`。
+- 验证 K230 可通过 `COM15` 进入 MicroPython raw REPL、写入 `/sdcard` 文件并执行脚本；将 K230 工具默认写入路径调整为 `/sdcard/main.py`。
 - 为 `k230/rect_07.py` 增加 UART2 二进制帧发送，按旧 CanMV 协议向 MSPM0 回传靶心、图像中心和矩形角点。
 - 调整 `bsp/canmv` UART2 接收配置，关闭 TX 中断、保留 RX/RX timeout 中断并排空 RX FIFO，同时增加接收字节、有效帧和丢帧诊断变量。
 - 将 `core/gimbal_tracking` 默认图像高度调整为 `240`，对齐当前 K230 `320x240` 视觉输出。

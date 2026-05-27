@@ -149,7 +149,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     put = sub.add_parser("put", help="Write a local file to the device filesystem")
     put.add_argument("local", type=Path)
-    put.add_argument("remote", nargs="?", default="main.py")
+    put.add_argument("remote", nargs="?", default="/sdcard/main.py")
 
     sub.add_parser("reset", help="Send Ctrl-D soft reset")
     return parser
