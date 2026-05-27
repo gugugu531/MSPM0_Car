@@ -171,8 +171,7 @@ static void AppDeviceCheck_FormatBinary8(uint8_t value, char *out, size_t out_si
     }
 
     for (uint8_t i = 0U; i < 8U; i++){
-        uint8_t bit = (uint8_t)(7U - i);
-        out[i] = ((value & (uint8_t)(1U << bit)) != 0U) ? '1' : '0';
+        out[i] = ((value & (uint8_t)(1U << i)) != 0U) ? '1' : '0';
     }
     out[8] = '\0';
 }
