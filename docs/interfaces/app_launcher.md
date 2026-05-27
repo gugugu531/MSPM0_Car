@@ -9,7 +9,7 @@
 - 渲染顶层菜单。
 - 用短按切换菜单项。
 - 用长按进入当前菜单项。
-- 为 E 题基本要求 1 提供 1 到 5 圈的选择入口。
+- 为 E 题基本要求 1 提供子菜单，在子菜单内选择 1 到 5 圈。
 
 该模块不负责：
 
@@ -26,13 +26,17 @@
 
 当前菜单项：
 
-- `E1 Line 1 lap`
-- `E1 Line 2 laps`
-- `E1 Line 3 laps`
-- `E1 Line 4 laps`
-- `E1 Line 5 laps`
+- `E1 Line`
 - `E2 Aim 2s`
 - `E3 Aim 4s`
 - `Device check`
 
-其中 E1 菜单项分别调用 `AppE_RunLineFollow(1..5)`，用于满足基础要求中 `N=1..5` 圈的选择。
+进入 `E1 Line` 后显示圈数子菜单：
+
+- `1 lap`
+- `2 laps`
+- `3 laps`
+- `4 laps`
+- `5 laps`
+
+E1 子菜单中短按或双击切换圈数，长按确认并调用 `AppE_RunLineFollow(1..5)`；任务返回后回到顶层菜单。
