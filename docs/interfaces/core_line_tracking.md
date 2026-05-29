@@ -91,5 +91,6 @@ output_limit = 60.0
 ## 边界说明
 
 - 空线、半线、十字、边线计数等流程判断不在本模块公开，后续应在 `middleware/line_follow` 或 app 任务流程中按实际需要设计。
+- 直角弯识别和转弯动作编排不在本模块中实现；当前 E1 在 `app/app_e_task` 中通过任务状态机组合 `core/motion` 原语完成。
 - 旧 `sInedge` 和 `UpdateSInedge()` 不迁入本模块。
 - 旧 `Motion_Car_Control()` 的职责已经拆分为 `Kinematics_DifferentialMix()` 和 `Chassis_SetDuty()`。

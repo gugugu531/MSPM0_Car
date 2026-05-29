@@ -2,6 +2,19 @@
 
 ## 未发布
 
+- 放宽 E1 循线任务的丢线判定：普通循线状态下不再因单帧空线立即进入 `Line lost`，而是连续空线超过宽限时间后再刹车提示，降低灰度抖动和短暂离线导致的误停概率。
+- 为 `middleware/line_follow` 增加灰度传感器坏道容错，默认屏蔽逻辑通道 3，并按右邻优先、左邻需排除左外侧连续压线的规则补偿该通道，降低单个常无效通道对循迹、半线和直角弯判断的影响。
+- 新增 `core/motion` 底盘运动原语执行器，统一提供刹车、滑行、直行、倒车、原地左右转和循线命令到 `Chassis` / `LineTracking` 的转换；该模块不包含时间、距离、捕线或任务完成条件判断。
+- 将 E1 循迹任务的底盘运动输出切换为 `Motion_CommandLineFollow()` + `Motion_Apply()`，圈数、边线计数、丢线和超时判断仍保留在 app 任务流程中。
+- 为 E1 任务增加直角弯状态机：普通循线识别到中心丢线且外侧多路触发后，组合 `Motion` 的刹车和原地转动原语完成转弯，中心重新捕线后恢复循线；`core/line_tracking` 保持纯 PID 巡线职责。
+- 在 `Device Check` 中新增 `Yaw Hold` 页面，单击后锁定当前 IMU yaw 角并用云台 yaw 轴闭环保持该角度，再次单击停止；闭环激活时降低控制循环延迟并降低 OLED 刷新频率，减少测试界面对稳定响应的影响。
+- 将 `Yaw Hold` 控制律调整为 IMU yaw 角速度前馈加 yaw 角度 PID 修正，并增加最小起转速度补偿、`±240 deg/s` 输出限幅和速度变化率限幅，用于改善云台起转迟滞和速度突变问题。
+- 增大 `Yaw Hold` 角速度前馈和最小起转补偿，提高外部旋转初期的云台响应速度。
+- 在实验分支中将 `Yaw Hold` 更新触发改为 IMU 有效帧驱动：UART0 中断只更新 IMU 数据和计数，Device Check 主循环检测到新帧后立即执行 yaw 保持控制，减少固定周期轮询带来的额外等待。
+- 为 `bsp/canmv` 增加坐标字节序自动纠正和更严格的固定帧校验：当高字节在前解析得到明显异常的五位数、交换字节后落在合理图像坐标范围内时，采用交换后的坐标值；若帧长不匹配或坐标仍不合理，则拒绝整帧，避免随机串口数据被显示为有效 T/L 坐标。
+- 将 E3 改为“正方向扫描寻找矩形，识别到有效矩形立即停止扫描并跟踪矩形中心”的流程，新增 `GimbalTracking_UpdateRectCenter()` 和 `GimbalTracking_IsRectValid()`。
+- 将 `Device Check` 中 yaw/pitch 步进电机测试触发方式从短按释放恢复为普通单击，保持与其他模块测试交互一致。
+- 将 pitch 开环估计位置限位下沉到 `bsp/step_motor`，默认限制为 `-30 deg` 到 `+30 deg`，新增 `StepMotor_SetPitchLimit()` / `StepMotor_GetPitchLimit()`，并让 `middleware/gimbal` 的限位配置同步到底层，避免直接调用 `StepMotor_*` 时绕过 pitch 旋转限幅。
 - 新增 `k230/uart1_comm_test.py`，使用 K230 UART1（GPIO3 TX、GPIO4 RX）周期发送兼容旧 CanMV 协议的测试帧，用于验证 K230 与 MSPM0 之间的串口链路。
 - 在 `Device Check` 中新增 K230 通信检查页面，显示接收字节数、有效帧数、丢帧数、最后接收字节和解析出的目标/激光坐标。
 - 新增 `tools/k230_tool.py`，提供基于 pyserial/raw REPL 的 K230 脚本运行、写入和软复位辅助命令，并补充 `docs/k230-tool.md`。

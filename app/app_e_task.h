@@ -19,7 +19,7 @@ void AppE_RunLineFollow(uint8_t lap_count);
 void AppE_RunAimCenter2s(void);
 
 /**
- * @brief 执行 4 秒靶心瞄准任务。
+ * @brief 执行 E3 矩形扫描和跟踪任务。
  */
 void AppE_RunAimCenter4s(void);
 

@@ -15,6 +15,10 @@ static PID_CONTROLLER s_line_tracking_pid;
 static bool s_line_tracking_initialized;
 
 static LINE_TRACKING_CONFIG LineTracking_DefaultConfig(void){
+    /*
+     * 默认参数偏向低速稳定巡线：
+     * base_duty 负责持续前进，PID 输出只作为左右轮差速修正。
+     */
     LINE_TRACKING_CONFIG config = {
         .base_duty = LINE_TRACKING_DEFAULT_BASE_DUTY,
         .sensor_position_scale = LINE_TRACKING_DEFAULT_POSITION_SCALE,
@@ -33,6 +37,7 @@ static LINE_TRACKING_CONFIG LineTracking_DefaultConfig(void){
 }
 
 static void LineTracking_EnsureInitialized(void){
+    /* 允许上层忘记显式 Init 时仍能使用默认参数运行。 */
     if (!s_line_tracking_initialized){
         LineTracking_Init(NULL);
     }
@@ -64,6 +69,7 @@ void LineTracking_Reset(void){
 BSP_STATUS LineTracking_Update(float dt_s){
     LineTracking_EnsureInitialized();
 
+    /* 完整闭环入口：先刷新 8 路灰度，再计算差速，最后下发到底盘。 */
     BSP_STATUS status = LineFollow_Update();
     if (status != BSP_STATUS_OK){
         return status;
@@ -81,6 +87,10 @@ BSP_STATUS LineTracking_Update(float dt_s){
     }
 
     if (s_line_tracking_output.line_lost){
+        /*
+         * 丢线时不在 core 层自行搜索或刹车。不同题目流程可能有不同恢复策略，
+         * 因此只返回 NOT_READY，由 app 决定是否刹车、等待或切换状态。
+         */
         return BSP_STATUS_NOT_READY;
     }
 
@@ -100,7 +110,10 @@ BSP_STATUS LineTracking_Compute(const LINE_FOLLOW_SENSOR_STATE *sensor,
     float position_sum = 0.0f;
     uint8_t active_count = 0U;
 
-    /* 灰度传感器在当前硬件上为低有效，value 为 0 表示检测到线。 */
+    /*
+     * 用 8 路传感器的横向位置建立线中心估计。
+     * 当前巡线逻辑沿用旧 Digital[] 语义：value == 0 表示检测到黑线。
+     */
     for (uint8_t i = 0; i < LINE_FOLLOW_SENSOR_COUNT; i++){
         if (sensor->value[i] == 0U){
             position_sum += s_sensor_position[i];
@@ -119,12 +132,18 @@ BSP_STATUS LineTracking_Compute(const LINE_FOLLOW_SENSOR_STATE *sensor,
         return BSP_STATUS_OK;
     }
 
-    /* 用有效传感器位置均值描述线中心偏移，避免多路同时触发时只取单点。 */
+    /*
+     * 多路同时触发时取位置均值，得到线相对车体中心的横向偏差。
+     * 偏差为负说明线更靠左，偏差为正说明线更靠右。
+     */
     float average_position = position_sum / (float)active_count;
     out->error = average_position * s_line_tracking_config.sensor_position_scale;
     out->correction = PID_Update(&s_line_tracking_pid, out->error, 0.0f, dt_s);
 
-    /* forward 为基础占空比，turn 为 PID 修正量，最终由运动学工具做统一限幅。 */
+    /*
+     * forward 为基础前进占空比，turn 为 PID 转向修正量。
+     * Kinematics_DifferentialMix() 负责把二者混成左右轮占空比并统一限幅。
+     */
     KINEMATICS_DIFFERENTIAL_OUTPUT duty =
         Kinematics_DifferentialMix(s_line_tracking_config.base_duty,
                                    out->correction,

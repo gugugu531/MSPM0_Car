@@ -6,10 +6,16 @@
 #include <stddef.h>
 
 typedef struct {
+    /** SysConfig 生成的 GPIO 端口。 */
     GPIO_Regs *port;
+    /** SysConfig 生成的 GPIO 引脚掩码。 */
     uint32_t pin;
 } GRAYSCALE_SENSOR_HW_CONFIG;
 
+/*
+ * 逻辑通道顺序沿用旧 Digital[8] 的顺序：channel 0 对应物理 Tracking_8，
+ * channel 7 对应物理 Tracking_1。这样上层巡线算法不需要关心板上排线方向。
+ */
 static const GRAYSCALE_SENSOR_HW_CONFIG s_grayscale_sensor_hw[GRAYSCALE_SENSOR_CHANNEL_COUNT] = {
     [GRAYSCALE_SENSOR_CHANNEL_0] = {
         .port = GRAYSCALE_SENSOR_8_PORT,
@@ -53,6 +59,10 @@ uint8_t GrayscaleSensor_ReadSingle(GRAYSCALE_SENSOR_CHANNEL channel){
     const GRAYSCALE_SENSOR_HW_CONFIG *hw = &s_grayscale_sensor_hw[channel];
     uint8_t high_level = (DL_GPIO_readPins(hw->port, hw->pin) != 0U) ? 1U : 0U;
 
+    /*
+     * 多数数字灰度模块为低电平有效。这里统一在 BSP 层完成有效电平翻转，
+     * 使调用者只看到抽象后的 0/1 状态。
+     */
     if (GRAYSCALE_SENSOR_ACTIVE_LOW != 0U){
         return (uint8_t)(!high_level);
     }
@@ -73,6 +83,7 @@ void GrayscaleSensor_Read(uint8_t digital_array[GRAYSCALE_SENSOR_CHANNEL_COUNT])
 uint8_t GrayscaleSensor_ReadMask(void){
     uint8_t mask = 0U;
 
+    /* bit i 对应逻辑通道 i，便于调试页用二进制形式快速观察 8 路状态。 */
     for (uint8_t i = 0U; i < GRAYSCALE_SENSOR_CHANNEL_COUNT; i++){
         if (GrayscaleSensor_ReadSingle((GRAYSCALE_SENSOR_CHANNEL)i) != 0U){
             mask |= (uint8_t)(1U << i);

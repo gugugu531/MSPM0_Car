@@ -31,7 +31,7 @@ typedef enum {
 static const char *const s_app_menu_items[APP_MENU_COUNT] = {
     "E1 Line",
     "E2 Aim 2s",
-    "E3 Aim 4s",
+    "E3 Rect",
     "Device check",
 };
 

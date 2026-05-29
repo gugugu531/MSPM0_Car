@@ -181,6 +181,41 @@ BSP_STATUS GimbalTracking_UpdateRectCircle(int32_t edge_index,
     return GimbalTracking_TrackPoints(target, laser, dt_s);
 }
 
+BSP_STATUS GimbalTracking_UpdateRectCenter(float dt_s){
+    GimbalTracking_EnsureInitialized();
+
+    CORE_POINT2F laser_target;
+    CORE_POINT2F laser;
+    BSP_STATUS status = GimbalTracking_ReadLaser(&laser_target, &laser);
+    (void)laser_target;
+
+    if (status != BSP_STATUS_OK){
+        return status;
+    }
+
+    GEOMETRY_RECT2F rect;
+    status = GimbalTracking_ReadRect(&rect);
+
+    if (status != BSP_STATUS_OK){
+        s_gimbal_tracking_state.target_valid = false;
+        return status;
+    }
+
+    CORE_POINT2F raw_center = Geometry_RectBilinearInterpolate(&rect, 0.5f, 0.5f);
+    CORE_POINT2F target = GimbalTracking_ImagePoint((uint16_t)raw_center.x,
+                                                    (uint16_t)raw_center.y);
+
+    s_gimbal_tracking_state.target_valid = true;
+    return GimbalTracking_TrackPoints(target, laser, dt_s);
+}
+
+bool GimbalTracking_IsRectValid(void){
+    GimbalTracking_EnsureInitialized();
+
+    GEOMETRY_RECT2F rect;
+    return GimbalTracking_ReadRect(&rect) == BSP_STATUS_OK;
+}
+
 BSP_STATUS GimbalTracking_TrackPoints(CORE_POINT2F target,
                                       CORE_POINT2F laser,
                                       float dt_s){

@@ -39,8 +39,30 @@ static bool CanMvUart_IsValidTarget(CANMV_TARGET target){
     return target < CANMV_TARGET_MAX;
 }
 
-static uint16_t CanMvUart_CombineBytes(uint8_t high, uint8_t low){
-    return (uint16_t)(((uint16_t)high << 8) | low);
+static bool CanMvUart_CombineCoordinate(uint8_t high, uint8_t low, uint16_t *out){
+    if (out == NULL){
+        return false;
+    }
+
+    uint16_t big_endian = (uint16_t)(((uint16_t)high << 8) | low);
+    uint16_t little_endian = (uint16_t)(((uint16_t)low << 8) | high);
+
+    /*
+     * 当前 K230 视觉坐标应落在图像尺寸附近。若按旧协议大端解析得到明显
+     * 异常的五位数，而交换字节后落在合理范围，则兼容 K230 端小端发送。
+     */
+    if ((big_endian > CANMV_COORDINATE_SANITY_LIMIT) &&
+        (little_endian <= CANMV_COORDINATE_SANITY_LIMIT)){
+        *out = little_endian;
+        return true;
+    }
+
+    if (big_endian <= CANMV_COORDINATE_SANITY_LIMIT){
+        *out = big_endian;
+        return true;
+    }
+
+    return false;
 }
 
 static bool CanMvUart_IsTargetEmpty(const CANMV_TARGET_DATA *data){
@@ -90,7 +112,7 @@ static void CanMvUart_UpdateTargetStatus(CANMV_TARGET target){
     s_canmv_target_seen[target] = true;
 }
 
-static void CanMvUart_ParseTarget(CANMV_TARGET target){
+static bool CanMvUart_ParseTarget(CANMV_TARGET target){
     const CANMV_TARGET_PARSE_CONFIG *config = &s_canmv_parse_config[target];
     CANMV_TARGET_DATA *data = &s_canmv_target_data[target];
     uint8_t value_count = (uint8_t)(config->byte_count / 2U);
@@ -104,16 +126,26 @@ static void CanMvUart_ParseTarget(CANMV_TARGET target){
 
     for (uint8_t i = 0U; i < value_count; i++){
         uint8_t frame_index = (uint8_t)(config->begin + (i * 2U));
-        data->value[i] = CanMvUart_CombineBytes(s_canmv_frame[frame_index],
-                                                s_canmv_frame[frame_index + 1U]);
+        if (!CanMvUart_CombineCoordinate(s_canmv_frame[frame_index],
+                                         s_canmv_frame[frame_index + 1U],
+                                         &data->value[i])){
+            memset(data->value, 0, sizeof(data->value));
+            data->count = 0U;
+            data->status = CANMV_STATUS_FRAME_DROP;
+            return false;
+        }
     }
 
     CanMvUart_UpdateTargetStatus(target);
+    return true;
 }
 
 static void CanMvUart_ParseFrame(void){
     for (uint8_t i = 0U; i < (uint8_t)CANMV_TARGET_MAX; i++){
-        CanMvUart_ParseTarget((CANMV_TARGET)i);
+        if (!CanMvUart_ParseTarget((CANMV_TARGET)i)){
+            CanMvUart_SetAllStatus(CANMV_STATUS_FRAME_DROP);
+            return;
+        }
     }
 }
 
@@ -165,8 +197,8 @@ void CanMvUart_ProcessByte(uint8_t byte){
         return;
     }
 
-    if (s_canmv_rx_count < CANMV_MIN_FRAME_LEN){
-        /* 帧尾过早出现时不解析，避免把短帧误识别为有效目标。 */
+    if (s_canmv_rx_count != CANMV_MIN_FRAME_LEN){
+        /* 固定帧必须长度精确匹配，避免把随机字节中的 0x12/0x5B 误判成有效帧。 */
         CanMvUart_ResetRxState();
         CanMvUart_SetAllStatus(CANMV_STATUS_FRAME_DROP);
         return;

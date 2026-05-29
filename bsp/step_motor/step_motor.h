@@ -101,6 +101,14 @@ extern "C" {
 #define STEP_MOTOR_MAX_SPEED_DEG_S 240.0f
 #endif
 
+#ifndef STEP_MOTOR_PITCH_MIN_POSITION_DEG
+#define STEP_MOTOR_PITCH_MIN_POSITION_DEG (-30.0f)
+#endif
+
+#ifndef STEP_MOTOR_PITCH_MAX_POSITION_DEG
+#define STEP_MOTOR_PITCH_MAX_POSITION_DEG 30.0f
+#endif
+
 /**
  * @brief 步进电机通道。
  */
@@ -109,6 +117,16 @@ typedef enum {
     STEP_MOTOR_CHANNEL_PITCH,
     STEP_MOTOR_CHANNEL_MAX
 } STEP_MOTOR_CHANNEL;
+
+/**
+ * @brief 步进电机开环估计位置限位。
+ */
+typedef struct {
+    /** 最小估计位置，单位 deg。 */
+    float min_deg;
+    /** 最大估计位置，单位 deg。 */
+    float max_deg;
+} STEP_MOTOR_POSITION_LIMIT;
 
 /**
  * @brief 初始化两路步进电机输出并使能驱动器。
@@ -170,6 +188,16 @@ float StepMotor_GetEstimatedPosition(STEP_MOTOR_CHANNEL channel);
  * @note 不执行物理归零，也不会停止电机。
  */
 void StepMotor_ResetEstimatedPosition(STEP_MOTOR_CHANNEL channel);
+
+/**
+ * @brief 设置 pitch 通道开环估计位置限位。
+ */
+BSP_STATUS StepMotor_SetPitchLimit(const STEP_MOTOR_POSITION_LIMIT *limit);
+
+/**
+ * @brief 获取 pitch 通道开环估计位置限位。
+ */
+STEP_MOTOR_POSITION_LIMIT StepMotor_GetPitchLimit(void);
 
 #ifdef __cplusplus
 }

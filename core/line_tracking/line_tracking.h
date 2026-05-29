@@ -27,7 +27,7 @@ extern "C" {
 typedef struct {
     /** 基础占空比，左右轮在无偏差时使用该输出。 */
     float base_duty;
-    /** 传感器位置到控制误差的缩放系数。 */
+    /** 传感器横向位置到控制误差的缩放系数。 */
     float sensor_position_scale;
     /** 左右轮最终输出绝对值限幅。 */
     float output_limit;
@@ -39,7 +39,7 @@ typedef struct {
  * @brief 巡线控制计算结果。
  */
 typedef struct {
-    /** 归一化或缩放后的巡线误差。 */
+    /** 缩放后的巡线误差，负值表示线偏左，正值表示线偏右。 */
     float error;
     /** PID 计算得到的转向修正量。 */
     float correction;

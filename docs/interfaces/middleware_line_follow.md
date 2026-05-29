@@ -32,6 +32,24 @@
 
 灰度传感器通道数量。
 
+### `LINE_FOLLOW_BAD_CHANNEL_MASK`
+
+```c
+#ifndef LINE_FOLLOW_BAD_CHANNEL_MASK
+#define LINE_FOLLOW_BAD_CHANNEL_MASK (1U << 3)
+#endif
+```
+
+疑似异常通道屏蔽掩码。当前默认屏蔽逻辑通道 `3`，对应 Device Check 中二进制显示从左往右数第 4 个字符。
+
+`LineFollow_UpdateSensor()` 读取 BSP 灰度值后会对坏道做一次轻量估计。当前默认逻辑通道 `3`（从左往右第 4 路）坏道常无效，因此估计策略为：
+
+- 第 4 路检测到黑线时，将第 3 路补为检测到线。
+- 第 2 路检测到黑线且第 1 路未检测到黑线时，将第 3 路补为检测到线。
+- 第 1、2 路同时检测到黑线时，不自动把第 3 路补为检测到线，避免左侧线团误判为中心区域。
+
+这样可以降低单个常无效通道对中心检测、PID 偏差、半线判断和直角弯判断的影响，同时避免明显左侧压线时错误补偿。
+
 ### `LINE_FOLLOW_SENSOR_STATE`
 
 ```c
@@ -73,6 +91,8 @@ typedef struct {
 ### `BSP_STATUS LineFollow_UpdateSensor(void)`
 
 调用 `GrayscaleSensor_Read()` 更新传感器数组，并重新计算 `mask`。
+
+该接口返回的是经过坏道容错后的传感器快照，Device Check 的 Line Sensor 页面也会显示修正后的状态。
 
 ### `BSP_STATUS LineFollow_GetState(LINE_FOLLOW_STATE *out)`
 

@@ -1,7 +1,10 @@
-<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
 <Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="project_projx.xsd">
+
   <SchemaVersion>2.1</SchemaVersion>
+
   <Header>### uVision Project, (C) Keil Software</Header>
+
   <Targets>
     <Target>
       <TargetName>NUEDC2025_MSPM0G3507</TargetName>
@@ -337,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include;C:\ti\mspm0_sdk_2_10_00_04\source;..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\geometry;..\..\core\gimbal_tracking;..\..\core\kinematics;..\..\core\line_tracking;..\..\core\pid;..\..\core\rotation;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\gimbal;..\..\middleware\line_follow;..\..\middleware\ui;..\..\bsp\canmv;..\..\bsp\common;..\..\bsp\grayscale_sensor;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\step_motor;..\..\bsp\time;..\..\board\sys_config</IncludePath>
+              <IncludePath>C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include;C:\ti\mspm0_sdk_2_10_00_04\source;..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\geometry;..\..\core\gimbal_tracking;..\..\core\kinematics;..\..\core\line_tracking;..\..\core\motion;..\..\core\pid;..\..\core\rotation;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\gimbal;..\..\middleware\line_follow;..\..\middleware\ui;..\..\bsp\canmv;..\..\bsp\common;..\..\bsp\grayscale_sensor;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\step_motor;..\..\bsp\time;..\..\board\sys_config</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -440,6 +443,16 @@
               <FileName>line_tracking.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\core\line_tracking\line_tracking.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>core/motion</GroupName>
+          <Files>
+            <File>
+              <FileName>motion.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\core\motion\motion.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -631,11 +644,13 @@
       </Groups>
     </Target>
   </Targets>
+
   <RTE>
-    <apis />
-    <components />
-    <files />
+    <apis/>
+    <components/>
+    <files/>
   </RTE>
+
   <LayerInfo>
     <Layers>
       <Layer>
@@ -644,4 +659,5 @@
       </Layer>
     </Layers>
   </LayerInfo>
+
 </Project>

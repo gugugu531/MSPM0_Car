@@ -2,9 +2,9 @@
 
 ## 模块职责
 
-`bsp/step_motor` 负责 yaw/pitch 两路步进电机的方向引脚、PWM 脉冲输出、速度设置、阻塞定时运行和开环位置估算。
+`bsp/step_motor` 负责 yaw/pitch 两路步进电机的方向引脚、PWM 脉冲输出、速度设置、阻塞定时运行、开环位置估算和 pitch 基础位置限位。
 
-该模块不负责云台组合控制、角度限幅、目标跟踪或闭环校正。这些能力应由上层 `middleware`、`service/core` 或 `app` 承接。
+该模块不负责云台组合控制、目标跟踪或闭环校正。这些能力应由上层 `middleware`、`service/core` 或 `app` 承接。
 
 ## 通道
 
@@ -54,6 +54,8 @@ typedef enum {
 #define STEP_MOTOR_TIMER_PRESCALER_FACTOR (32U * 8U * 2U)
 #define STEP_MOTOR_MAX_ARR               65535U
 #define STEP_MOTOR_MAX_SPEED_DEG_S       240.0f
+#define STEP_MOTOR_PITCH_MIN_POSITION_DEG (-30.0f)
+#define STEP_MOTOR_PITCH_MAX_POSITION_DEG 30.0f
 ```
 
 步进脉冲频率换算：
@@ -63,6 +65,8 @@ step_frequency = abs(speed_deg_per_s) / step_angle_deg * microstep
 ```
 
 `StepMotor_SetSpeed()` 会先将输入速度限制到 `[-STEP_MOTOR_MAX_SPEED_DEG_S, STEP_MOTOR_MAX_SPEED_DEG_S]`，默认最大速度为 `240 deg/s`。该限幅位于 BSP 入口，`Gimbal_SetSpeed()` 和 `StepMotor_RunFor()` 等上层调用都会统一生效。
+
+pitch 通道额外使用开环估计位置做基础限位。当前位置达到 `STEP_MOTOR_PITCH_MAX_POSITION_DEG` 时，继续输入正向速度会被置零；当前位置达到 `STEP_MOTOR_PITCH_MIN_POSITION_DEG` 时，继续输入反向速度会被置零。该限位同样位于 BSP 入口，直接调用 `StepMotor_*` 和通过 `Gimbal_*` 调用都会统一生效。
 
 ## 公开接口
 
@@ -78,6 +82,8 @@ step_frequency = abs(speed_deg_per_s) / step_angle_deg * microstep
 
 输入速度超出 `STEP_MOTOR_MAX_SPEED_DEG_S` 时会按符号夹紧，`StepMotor_GetSpeed()` 返回夹紧后的实际设置速度。
 
+对 pitch 通道，若当前开环估计位置已经处于限位边界，并继续输入越界方向速度，实际设置速度会变为 `0.0f`。
+
 ### `BSP_STATUS StepMotor_RunFor(STEP_MOTOR_CHANNEL channel, float speed_deg_per_s, uint32_t duration_ms)`
 
 阻塞式便捷接口：指定通道以 `speed_deg_per_s` 运行 `duration_ms` 后停止。
@@ -90,6 +96,8 @@ step_frequency = abs(speed_deg_per_s) / step_angle_deg * microstep
 4. 调用 `StepMotor_Stop()`
 
 运行期间当前执行流会被阻塞。
+
+对 pitch 通道，函数会根据当前开环估计位置、速度和目标运行时间计算允许运行时间，避免一次长时间阻塞点动直接越过软件限位。
 
 ### `BSP_STATUS StepMotor_Stop(STEP_MOTOR_CHANNEL channel)`
 
@@ -120,6 +128,14 @@ step_frequency = abs(speed_deg_per_s) / step_angle_deg * microstep
 将指定通道的开环估计位置清零，并把当前时刻作为新的估算起点。
 
 该函数不会让电机实际回到零点，不会停止电机，也不会执行任何归零动作。它只是告诉软件：“从现在开始，把当前位置视为估计零点”。
+
+### `BSP_STATUS StepMotor_SetPitchLimit(const STEP_MOTOR_POSITION_LIMIT *limit)`
+
+设置 pitch 通道开环估计位置限位。`limit == NULL` 返回 `BSP_STATUS_NULL`；`min_deg > max_deg` 返回 `BSP_STATUS_INVALID_ARG`。
+
+### `STEP_MOTOR_POSITION_LIMIT StepMotor_GetPitchLimit(void)`
+
+读取当前 pitch 通道开环估计位置限位。
 
 ## 对接说明
 

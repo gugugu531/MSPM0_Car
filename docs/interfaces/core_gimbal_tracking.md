@@ -78,6 +78,14 @@ PID_SMotor_Cont()
 
 该接口不读取旧 `edge` 和 `sInedge`，调用方负责传入阶段参数。
 
+### `BSP_STATUS GimbalTracking_UpdateRectCenter(float dt_s)`
+
+从 `CANMV_TARGET_RECT` 读取矩形角点，计算矩形中心，并让云台跟踪该中心点。
+
+### `bool GimbalTracking_IsRectValid(void)`
+
+检查当前是否已经收到有效矩形角点。该接口只用于任务流程判断，不输出云台速度。
+
 ### `BSP_STATUS GimbalTracking_TrackPoints(CORE_POINT2F target, CORE_POINT2F laser, float dt_s)`
 
 直接根据目标点和激光点执行一次 PID 控制并调用 `Gimbal_SetSpeed()`。

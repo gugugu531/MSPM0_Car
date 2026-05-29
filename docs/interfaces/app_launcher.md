@@ -28,7 +28,7 @@
 
 - `E1 Line`
 - `E2 Aim 2s`
-- `E3 Aim 4s`
+- `E3 Rect`
 - `Device check`
 
 进入 `E1 Line` 后显示圈数子菜单：

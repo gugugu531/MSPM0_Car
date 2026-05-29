@@ -11,7 +11,7 @@
 - 停止双轴。
 - 更新两轴开环估计位置。
 - 读取两轴估计角度和当前速度。
-- 维护 pitch 软件限位。
+- 配置和读取 pitch 软件限位。
 
 该模块不负责：
 
@@ -28,11 +28,15 @@
 默认限位：
 
 ```c
-#define GIMBAL_PITCH_MIN_DEG (-45.0f)
-#define GIMBAL_PITCH_MAX_DEG 45.0f
+#define GIMBAL_PITCH_MIN_DEG STEP_MOTOR_PITCH_MIN_POSITION_DEG
+#define GIMBAL_PITCH_MAX_DEG STEP_MOTOR_PITCH_MAX_POSITION_DEG
+#define STEP_MOTOR_PITCH_MIN_POSITION_DEG (-30.0f)
+#define STEP_MOTOR_PITCH_MAX_POSITION_DEG 30.0f
 ```
 
 当 pitch 已经达到上限且继续输入正速度时，pitch 速度会被置为 `0.0f`；当 pitch 已经达到下限且继续输入负速度时，pitch 速度会被置为 `0.0f`。yaw 速度不受该限位影响。
+
+该限位最终由 `bsp/step_motor` 执行，因此直接调用 `StepMotor_SetSpeed()` 或 `StepMotor_RunFor()` 的 pitch 测试路径也会受同一套限位约束。
 
 ## 公开类型
 
@@ -101,10 +105,12 @@ typedef struct {
 
 ### `BSP_STATUS Gimbal_SetSpeed(float yaw_deg_s, float pitch_deg_s)`
 
-设置 yaw/pitch 双轴速度。内部会先更新当前位置，再应用 pitch 限位，最后调用：
+设置 yaw/pitch 双轴速度。内部会先更新当前位置，然后调用：
 
 - `StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_YAW, yaw_deg_s)`
-- `StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_PITCH, limited_pitch_speed)`
+- `StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_PITCH, pitch_deg_s)`
+
+pitch 位置限位在 `StepMotor_SetSpeed()` 内部统一执行。
 
 ### `BSP_STATUS Gimbal_Stop(void)`
 
@@ -136,7 +142,7 @@ typedef struct {
 
 ### `BSP_STATUS Gimbal_SetLimit(const GIMBAL_LIMIT *limit)`
 
-设置 pitch 软限位。`limit == NULL` 返回 `BSP_STATUS_NULL`；`pitch_min_deg > pitch_max_deg` 返回 `BSP_STATUS_INVALID_ARG`。
+设置 pitch 软限位。`limit == NULL` 返回 `BSP_STATUS_NULL`；`pitch_min_deg > pitch_max_deg` 返回 `BSP_STATUS_INVALID_ARG`。该接口会同步调用 `StepMotor_SetPitchLimit()`，使底层直接调用路径也遵守同一限位。
 
 ### `GIMBAL_LIMIT Gimbal_GetLimit(void)`
 

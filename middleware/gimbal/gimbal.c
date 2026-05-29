@@ -7,11 +7,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-static GIMBAL_LIMIT s_gimbal_limit = {
-    .pitch_min_deg = GIMBAL_PITCH_MIN_DEG,
-    .pitch_max_deg = GIMBAL_PITCH_MAX_DEG,
-};
-
 static bool Gimbal_IsValidAxis(GIMBAL_AXIS axis){
     return axis < GIMBAL_AXIS_MAX;
 }
@@ -20,34 +15,26 @@ static BSP_STATUS Gimbal_CombineStatus(BSP_STATUS current, BSP_STATUS next){
     return (current == BSP_STATUS_OK) ? next : current;
 }
 
-static float Gimbal_ApplyPitchLimit(float pitch_speed_deg_s){
-    float pitch_deg = StepMotor_GetEstimatedPosition(STEP_MOTOR_CHANNEL_PITCH);
-
-    /* 当前没有 pitch 反馈传感器，只能用步进电机开环估计位置做软件限位。 */
-    if (pitch_deg >= s_gimbal_limit.pitch_max_deg && pitch_speed_deg_s > 0.0f){
-        return 0.0f;
-    }
-
-    if (pitch_deg <= s_gimbal_limit.pitch_min_deg && pitch_speed_deg_s < 0.0f){
-        return 0.0f;
-    }
-
-    return pitch_speed_deg_s;
-}
-
 BSP_STATUS Gimbal_Init(void){
-    s_gimbal_limit.pitch_min_deg = GIMBAL_PITCH_MIN_DEG;
-    s_gimbal_limit.pitch_max_deg = GIMBAL_PITCH_MAX_DEG;
-    return StepMotor_Init();
+    BSP_STATUS status = StepMotor_Init();
+    if (status != BSP_STATUS_OK){
+        return status;
+    }
+
+    GIMBAL_LIMIT limit = {
+        .pitch_min_deg = GIMBAL_PITCH_MIN_DEG,
+        .pitch_max_deg = GIMBAL_PITCH_MAX_DEG,
+    };
+
+    return Gimbal_SetLimit(&limit);
 }
 
 BSP_STATUS Gimbal_SetSpeed(float yaw_deg_s, float pitch_deg_s){
     /* 切换速度前先积分上一段开环运动，避免估计位置在变速点丢失时间。 */
     (void)Gimbal_Update();
 
-    float limited_pitch_speed = Gimbal_ApplyPitchLimit(pitch_deg_s);
     BSP_STATUS status = StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_YAW, yaw_deg_s);
-    BSP_STATUS pitch_status = StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_PITCH, limited_pitch_speed);
+    BSP_STATUS pitch_status = StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_PITCH, pitch_deg_s);
 
     return Gimbal_CombineStatus(status, pitch_status);
 }
@@ -114,10 +101,20 @@ BSP_STATUS Gimbal_SetLimit(const GIMBAL_LIMIT *limit){
         return BSP_STATUS_INVALID_ARG;
     }
 
-    s_gimbal_limit = *limit;
-    return BSP_STATUS_OK;
+    STEP_MOTOR_POSITION_LIMIT pitch_limit = {
+        .min_deg = limit->pitch_min_deg,
+        .max_deg = limit->pitch_max_deg,
+    };
+
+    return StepMotor_SetPitchLimit(&pitch_limit);
 }
 
 GIMBAL_LIMIT Gimbal_GetLimit(void){
-    return s_gimbal_limit;
+    STEP_MOTOR_POSITION_LIMIT pitch_limit = StepMotor_GetPitchLimit();
+    GIMBAL_LIMIT limit = {
+        .pitch_min_deg = pitch_limit.min_deg,
+        .pitch_max_deg = pitch_limit.max_deg,
+    };
+
+    return limit;
 }

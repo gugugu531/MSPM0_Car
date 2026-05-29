@@ -15,13 +15,17 @@ extern "C" {
 
 #define LINE_FOLLOW_SENSOR_COUNT 8U
 
+#ifndef LINE_FOLLOW_BAD_CHANNEL_MASK
+#define LINE_FOLLOW_BAD_CHANNEL_MASK (1U << 3)
+#endif
+
 /**
  * @brief 巡线传感器状态快照。
  */
 typedef struct {
-    /** 8 路传感器原始数字状态。 */
+    /** 8 路传感器最近一次数字状态，通道顺序与 GrayscaleSensor 逻辑通道一致。 */
     uint8_t value[LINE_FOLLOW_SENSOR_COUNT];
-    /** 8 路传感器位掩码，bit0 对应第 0 路。 */
+    /** 8 路传感器位掩码，bit0 对应第 0 路，bit 置位规则由 LineFollow_BuildMask() 决定。 */
     uint8_t mask;
 } LINE_FOLLOW_SENSOR_STATE;
 
@@ -31,7 +35,7 @@ typedef struct {
 typedef struct {
     /** 最近一次传感器状态。 */
     LINE_FOLLOW_SENSOR_STATE sensor;
-    /** 边线或阶段计数，由上层任务按规则维护。 */
+    /** 边线或阶段计数，由上层任务按规则维护；middleware 只保存数值。 */
     int32_t edge_count;
     /** 当前是否处于转弯状态。 */
     bool turning;

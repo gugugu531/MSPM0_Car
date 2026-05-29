@@ -48,6 +48,12 @@ static const STEP_MOTOR_HW_CONFIG s_step_motor_hw[STEP_MOTOR_CHANNEL_MAX] = {
 };
 
 static STEP_MOTOR_STATE s_step_motor_state[STEP_MOTOR_CHANNEL_MAX];
+static STEP_MOTOR_POSITION_LIMIT s_step_motor_pitch_limit = {
+    .min_deg = STEP_MOTOR_PITCH_MIN_POSITION_DEG,
+    .max_deg = STEP_MOTOR_PITCH_MAX_POSITION_DEG,
+};
+
+static void StepMotor_DisablePulse(const STEP_MOTOR_HW_CONFIG *hw);
 
 static bool StepMotor_IsValidChannel(STEP_MOTOR_CHANNEL channel){
     return channel < STEP_MOTOR_CHANNEL_MAX;
@@ -67,6 +73,62 @@ static float StepMotor_LimitSpeed(float speed_deg_per_s){
     }
 
     return speed_deg_per_s;
+}
+
+static float StepMotor_LimitPitchSpeedByPosition(STEP_MOTOR_CHANNEL channel, float speed_deg_per_s){
+    if (channel != STEP_MOTOR_CHANNEL_PITCH){
+        return speed_deg_per_s;
+    }
+
+    float position_deg = s_step_motor_state[STEP_MOTOR_CHANNEL_PITCH].estimated_position_deg;
+
+    if (position_deg >= s_step_motor_pitch_limit.max_deg && speed_deg_per_s > 0.0f){
+        return 0.0f;
+    }
+
+    if (position_deg <= s_step_motor_pitch_limit.min_deg && speed_deg_per_s < 0.0f){
+        return 0.0f;
+    }
+
+    return speed_deg_per_s;
+}
+
+static uint32_t StepMotor_LimitPitchDurationMs(STEP_MOTOR_CHANNEL channel,
+                                               float speed_deg_per_s,
+                                               uint32_t duration_ms){
+    if (channel != STEP_MOTOR_CHANNEL_PITCH){
+        return duration_ms;
+    }
+
+    if (speed_deg_per_s == 0.0f){
+        return 0U;
+    }
+
+    float position_deg = s_step_motor_state[STEP_MOTOR_CHANNEL_PITCH].estimated_position_deg;
+    float remain_deg = (speed_deg_per_s > 0.0f) ?
+        (s_step_motor_pitch_limit.max_deg - position_deg) :
+        (position_deg - s_step_motor_pitch_limit.min_deg);
+
+    if (remain_deg <= 0.0f){
+        return 0U;
+    }
+
+    uint32_t allowed_ms = (uint32_t)((remain_deg / StepMotor_Abs(speed_deg_per_s)) * 1000.0f);
+    return (allowed_ms < duration_ms) ? allowed_ms : duration_ms;
+}
+
+static void StepMotor_ClampPitchPosition(void){
+    STEP_MOTOR_STATE *state = &s_step_motor_state[STEP_MOTOR_CHANNEL_PITCH];
+
+    if (state->estimated_position_deg > s_step_motor_pitch_limit.max_deg){
+        state->estimated_position_deg = s_step_motor_pitch_limit.max_deg;
+        StepMotor_DisablePulse(&s_step_motor_hw[STEP_MOTOR_CHANNEL_PITCH]);
+        state->speed_deg_per_s = 0.0f;
+    } else if (state->estimated_position_deg < s_step_motor_pitch_limit.min_deg){
+        state->estimated_position_deg = s_step_motor_pitch_limit.min_deg;
+        StepMotor_DisablePulse(&s_step_motor_hw[STEP_MOTOR_CHANNEL_PITCH]);
+        state->speed_deg_per_s = 0.0f;
+    }
 }
 
 static uint32_t StepMotor_GetStepFrequency(float speed_deg_per_s){
@@ -171,6 +233,11 @@ BSP_STATUS StepMotor_UpdateState(STEP_MOTOR_CHANNEL channel, uint32_t now_ms){
     state->estimated_position_deg += state->speed_deg_per_s *
         (float)(now_ms - state->last_update_ms) * 1e-3f;
     state->last_update_ms = now_ms;
+
+    if (channel == STEP_MOTOR_CHANNEL_PITCH){
+        StepMotor_ClampPitchPosition();
+    }
+
     return BSP_STATUS_OK;
 }
 
@@ -193,9 +260,10 @@ BSP_STATUS StepMotor_SetSpeed(STEP_MOTOR_CHANNEL channel, float speed_deg_per_s)
         return BSP_STATUS_INVALID_ARG;
     }
 
-    float limited_speed_deg_per_s = StepMotor_LimitSpeed(speed_deg_per_s);
-
     (void)StepMotor_UpdateState(channel, BSP_Time_GetMs());
+
+    float limited_speed_deg_per_s = StepMotor_LimitSpeed(speed_deg_per_s);
+    limited_speed_deg_per_s = StepMotor_LimitPitchSpeedByPosition(channel, limited_speed_deg_per_s);
 
     BSP_STATUS status = StepMotor_ApplySpeed(channel, limited_speed_deg_per_s);
     if (status != BSP_STATUS_OK){
@@ -214,7 +282,10 @@ BSP_STATUS StepMotor_RunFor(STEP_MOTOR_CHANNEL channel,
         return status;
     }
 
-    BSP_DelayMs(duration_ms);
+    uint32_t limited_duration_ms = StepMotor_LimitPitchDurationMs(channel,
+                                                                  StepMotor_GetSpeed(channel),
+                                                                  duration_ms);
+    BSP_DelayMs(limited_duration_ms);
     (void)StepMotor_UpdateState(channel, BSP_Time_GetMs());
     return StepMotor_Stop(channel);
 }
@@ -268,4 +339,23 @@ void StepMotor_ResetEstimatedPosition(STEP_MOTOR_CHANNEL channel){
     s_step_motor_state[channel].estimated_position_deg = 0.0f;
     s_step_motor_state[channel].last_update_ms = BSP_Time_GetMs();
     s_step_motor_state[channel].update_started = true;
+}
+
+BSP_STATUS StepMotor_SetPitchLimit(const STEP_MOTOR_POSITION_LIMIT *limit){
+    if (limit == NULL){
+        return BSP_STATUS_NULL;
+    }
+
+    if (limit->min_deg > limit->max_deg){
+        return BSP_STATUS_INVALID_ARG;
+    }
+
+    s_step_motor_pitch_limit = *limit;
+    (void)StepMotor_UpdateState(STEP_MOTOR_CHANNEL_PITCH, BSP_Time_GetMs());
+    StepMotor_ClampPitchPosition();
+    return BSP_STATUS_OK;
+}
+
+STEP_MOTOR_POSITION_LIMIT StepMotor_GetPitchLimit(void){
+    return s_step_motor_pitch_limit;
 }

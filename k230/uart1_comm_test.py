@@ -6,8 +6,8 @@ import time
 from machine import FPIOA
 from machine import UART
 
-K230_UART_TX_PIN = 3
-K230_UART_RX_PIN = 4
+K230_UART_TX_PIN = 11
+K230_UART_RX_PIN = 12
 K230_UART_BAUDRATE = 115200
 
 FRAME_START = 0x12
@@ -19,12 +19,10 @@ IMAGE_CENTER_Y = 120
 
 def uart1_init():
     fpioa = FPIOA()
-    fpioa.set_function(K230_UART_TX_PIN, fpioa.UART1_TXD)
-    fpioa.set_function(K230_UART_RX_PIN, fpioa.UART1_RXD)
-    fpioa.set_function(K230_UART_TX_PIN, set_ie=1, set_oe=1)
-    fpioa.set_function(K230_UART_RX_PIN, set_ie=1, set_oe=1)
+    fpioa.set_function(K230_UART_TX_PIN, fpioa.UART2_TXD)
+    fpioa.set_function(K230_UART_RX_PIN, fpioa.UART2_RXD)
 
-    return UART(UART.UART1,
+    return UART(UART.UART2,
                 baudrate=K230_UART_BAUDRATE,
                 bits=UART.EIGHTBITS,
                 parity=UART.PARITY_NONE,
