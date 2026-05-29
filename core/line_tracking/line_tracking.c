@@ -9,6 +9,10 @@ static const float s_sensor_position[LINE_FOLLOW_SENSOR_COUNT] = {
     -3.5f, -2.5f, -1.5f, -0.5f, 0.5f, 1.5f, 2.5f, 3.5f,
 };
 
+static bool LineTracking_IsSensorEnabled(uint8_t index){
+    return ((LINE_TRACKING_ACTIVE_SENSOR_MASK & (1U << index)) != 0U);
+}
+
 static LINE_TRACKING_CONFIG s_line_tracking_config;
 static LINE_TRACKING_OUTPUT s_line_tracking_output;
 static PID_CONTROLLER s_line_tracking_pid;
@@ -23,8 +27,9 @@ static LINE_TRACKING_CONFIG LineTracking_DefaultConfig(void){
         .base_duty = LINE_TRACKING_DEFAULT_BASE_DUTY,
         .sensor_position_scale = LINE_TRACKING_DEFAULT_POSITION_SCALE,
         .output_limit = LINE_TRACKING_DEFAULT_OUTPUT_LIMIT,
+        .differential_limit = LINE_TRACKING_DEFAULT_DIFFERENTIAL_LIMIT,
         .pid_config = {
-            .kp = 30.0f,
+            .kp = 1.0f,
             .ki = 0.0f,
             .kd = 1.5f,
             .integral_limit = 500.0f,
@@ -111,11 +116,11 @@ BSP_STATUS LineTracking_Compute(const LINE_FOLLOW_SENSOR_STATE *sensor,
     uint8_t active_count = 0U;
 
     /*
-     * 用 8 路传感器的横向位置建立线中心估计。
+     * 用启用的灰度传感器横向位置建立线中心估计。
      * 当前巡线逻辑沿用旧 Digital[] 语义：value == 0 表示检测到黑线。
      */
     for (uint8_t i = 0; i < LINE_FOLLOW_SENSOR_COUNT; i++){
-        if (sensor->value[i] == 0U){
+        if (LineTracking_IsSensorEnabled(i) && sensor->value[i] == 0U){
             position_sum += s_sensor_position[i];
             active_count++;
         }
@@ -139,6 +144,17 @@ BSP_STATUS LineTracking_Compute(const LINE_FOLLOW_SENSOR_STATE *sensor,
     float average_position = position_sum / (float)active_count;
     out->error = average_position * s_line_tracking_config.sensor_position_scale;
     out->correction = PID_Update(&s_line_tracking_pid, out->error, 0.0f, dt_s);
+
+    /*
+     * 巡线时左右轮差值为 2 * correction。这里单独限制 correction，
+     * 只收敛循迹动作的差速强度，不影响 Motion 的直行、倒车和原地转向。
+     */
+    if (s_line_tracking_config.differential_limit > 0.0f){
+        float correction_limit = s_line_tracking_config.differential_limit * 0.5f;
+        out->correction = Kinematics_Clamp(out->correction,
+                                           -correction_limit,
+                                           correction_limit);
+    }
 
     /*
      * forward 为基础前进占空比，turn 为 PID 转向修正量。

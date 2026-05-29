@@ -15,6 +15,7 @@ typedef struct {
     float base_duty;
     float sensor_position_scale;
     float output_limit;
+    float differential_limit;
     PID_CONFIG pid_config;
 } LINE_TRACKING_CONFIG;
 ```
@@ -22,6 +23,7 @@ typedef struct {
 - `base_duty`：基础前进占空比百分比。
 - `sensor_position_scale`：灰度传感器位置到误差的缩放系数。
 - `output_limit`：左右轮最终占空比限幅。
+- `differential_limit`：循迹时左右轮占空比差值限幅，`<= 0` 表示不启用。
 - `pid_config`：巡线 PID 参数。
 
 ```c
@@ -47,7 +49,9 @@ typedef struct {
 #define LINE_TRACKING_DEFAULT_BASE_DUTY 35.0f
 #define LINE_TRACKING_DEFAULT_OUTPUT_LIMIT 100.0f
 #define LINE_TRACKING_DEFAULT_CORRECTION_LIMIT 60.0f
+#define LINE_TRACKING_DEFAULT_DIFFERENTIAL_LIMIT 10.0f
 #define LINE_TRACKING_DEFAULT_POSITION_SCALE 10.0f
+#define LINE_TRACKING_ACTIVE_SENSOR_MASK 0xF7U
 ```
 
 默认 PID 为位置式 PID：
@@ -59,6 +63,8 @@ kd = 1.5
 integral_limit = 500.0
 output_limit = 60.0
 ```
+
+`LINE_TRACKING_ACTIVE_SENSOR_MASK` 用于选择参与巡线控制的灰度通道。当前值 `0xF7` 启用 0、1、2、4、5、6、7，只忽略逻辑通道 3。
 
 ## 接口
 
@@ -75,8 +81,10 @@ output_limit = 60.0
 完整巡线闭环入口：
 
 1. 调用 `LineFollow_Update()` 更新灰度状态。
-2. 调用 `LineTracking_Compute()` 计算左右轮占空比。
+2. 调用 `LineTracking_Compute()` 计算左右轮占空比，只统计 `LINE_TRACKING_ACTIVE_SENSOR_MASK` 启用的通道。
 3. 若未丢线，则调用 `Chassis_SetDuty()` 输出到底盘。
+
+循迹输出会先限制 PID 转向修正量，使左右轮占空比差值不超过 `differential_limit`，再执行最终输出限幅。当前默认差值上限为 `10%`。该限制只影响 `LineTracking_Update()` 路径，不影响 `core/motion` 的直行、倒车或原地转向动作。
 
 如果当前未检测到线，函数返回 `BSP_STATUS_NOT_READY`，不主动输出底盘占空比。题目流程可根据自身策略决定刹车、继续搜索或切换状态。
 

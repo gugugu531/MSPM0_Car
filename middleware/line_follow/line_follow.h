@@ -15,10 +15,6 @@ extern "C" {
 
 #define LINE_FOLLOW_SENSOR_COUNT 8U
 
-#ifndef LINE_FOLLOW_BAD_CHANNEL_MASK
-#define LINE_FOLLOW_BAD_CHANNEL_MASK (1U << 3)
-#endif
-
 /**
  * @brief 巡线传感器状态快照。
  */

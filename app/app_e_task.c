@@ -22,16 +22,13 @@
 #define APP_E_RECT_SCAN_ANGLE_DEG 360.0f
 #define APP_E_LINE_LOST_GRACE_MS 300U
 #define APP_E_LINE_EDGE_MIN_DISTANCE_M 0.15f
-#define APP_E_CORNER_SPIN_DUTY_PERCENT 35.0f
-#define APP_E_CORNER_BRAKE_MS 60U
-#define APP_E_CORNER_MIN_SPIN_MS 120U
-#define APP_E_CORNER_TIMEOUT_MS 900U
+#define APP_E_CORNER_INNER_DUTY_PERCENT 6.0f
+#define APP_E_CORNER_OUTER_DUTY_PERCENT 30.0f
 #define APP_E_LOOP_DELAY_MS 10U
 
 typedef enum {
     APP_E_LINE_STATE_FOLLOW = 0,
-    APP_E_LINE_STATE_CORNER_BRAKE,
-    APP_E_LINE_STATE_CORNER_SPIN
+    APP_E_LINE_STATE_CORNER_ARC
 } APP_E_LINE_STATE;
 
 typedef enum {
@@ -39,6 +36,20 @@ typedef enum {
     APP_E_CORNER_LEFT,
     APP_E_CORNER_RIGHT
 } APP_E_CORNER_DIR;
+
+static BSP_STATUS AppE_ApplyCornerArc(APP_E_CORNER_DIR corner_dir){
+    if (corner_dir == APP_E_CORNER_LEFT){
+        return Chassis_SetDuty(APP_E_CORNER_INNER_DUTY_PERCENT,
+                               APP_E_CORNER_OUTER_DUTY_PERCENT);
+    }
+
+    if (corner_dir == APP_E_CORNER_RIGHT){
+        return Chassis_SetDuty(APP_E_CORNER_OUTER_DUTY_PERCENT,
+                               APP_E_CORNER_INNER_DUTY_PERCENT);
+    }
+
+    return BSP_STATUS_INVALID_ARG;
+}
 
 static uint32_t AppE_ElapsedMs(uint32_t start_ms){
     return BSP_Time_GetMs() - start_ms;
@@ -72,11 +83,15 @@ static bool AppE_IsLineActive(const LINE_FOLLOW_SENSOR_STATE *sensor,
         return false;
     }
 
+    if ((LINE_TRACKING_ACTIVE_SENSOR_MASK & (1U << index)) == 0U){
+        return false;
+    }
+
     return sensor->value[index] == 0U;
 }
 
-static bool AppE_IsLineCenterActive(const LINE_FOLLOW_SENSOR_STATE *sensor){
-    return AppE_IsLineActive(sensor, 3U) ||
+static bool AppE_IsLineInnerActive(const LINE_FOLLOW_SENSOR_STATE *sensor){
+    return AppE_IsLineActive(sensor, 2U) ||
            AppE_IsLineActive(sensor, 4U);
 }
 
@@ -94,20 +109,37 @@ static uint8_t AppE_CountLineActiveRange(const LINE_FOLLOW_SENSOR_STATE *sensor,
     return count;
 }
 
+static uint8_t AppE_CountRawLineActive(const LINE_FOLLOW_SENSOR_STATE *sensor){
+    uint8_t count = 0U;
+
+    if (sensor == NULL){
+        return 0U;
+    }
+
+    for (uint8_t i = 0U; i < LINE_FOLLOW_SENSOR_COUNT; i++){
+        if (sensor->value[i] == 0U){
+            count++;
+        }
+    }
+
+    return count;
+}
+
 static APP_E_CORNER_DIR AppE_DetectCorner(const LINE_FOLLOW_SENSOR_STATE *sensor){
     uint8_t left_count = AppE_CountLineActiveRange(sensor, 0U, 2U);
     uint8_t right_count = AppE_CountLineActiveRange(sensor, 5U, 7U);
-    bool center_active = AppE_IsLineCenterActive(sensor);
+    bool inner_active = AppE_IsLineInnerActive(sensor);
 
     /*
-     * 直角弯特征：中心两路丢线，线集中到某一侧外侧传感器。
-     * 至少要求同侧两路触发，避免单个边缘噪声导致原地转。
+     * 逻辑通道 3 已由有效通道掩码忽略，因此用 2/4 作为内侧参考。
+     * 当前优先保证能够进入转弯：只要某一侧外侧至少一路触发，
+     * 且该侧触发数量不小于另一侧，就判定为对应方向直角弯。
      */
-    if (!center_active && left_count >= 2U && right_count == 0U){
+    if (!inner_active && left_count >= 1U && left_count >= right_count){
         return APP_E_CORNER_LEFT;
     }
 
-    if (!center_active && right_count >= 2U && left_count == 0U){
+    if (!inner_active && right_count >= 1U && right_count > left_count){
         return APP_E_CORNER_RIGHT;
     }
 
@@ -124,15 +156,12 @@ void AppE_RunLineFollow(uint8_t lap_count){
     float last_edge_distance = 0.0f;
     uint32_t start_ms = BSP_Time_GetMs();
     uint32_t last_ms = start_ms;
-    uint32_t state_start_ms = start_ms;
     uint32_t line_lost_start_ms = start_ms;
+    uint32_t corner_count = 0U;
     bool line_lost_pending = false;
     APP_E_LINE_STATE line_state = APP_E_LINE_STATE_FOLLOW;
     APP_E_CORNER_DIR corner_dir = APP_E_CORNER_NONE;
     MOTION_COMMAND line_follow_command = Motion_CommandLineFollow();
-    MOTION_COMMAND brake_command = Motion_CommandBrake();
-    MOTION_COMMAND spin_left_command = Motion_CommandSpinLeft(APP_E_CORNER_SPIN_DUTY_PERCENT);
-    MOTION_COMMAND spin_right_command = Motion_CommandSpinRight(APP_E_CORNER_SPIN_DUTY_PERCENT);
 
     /*
      * E1 只使用底盘巡线，进入任务前停止可能残留的云台视觉跟踪。
@@ -162,7 +191,6 @@ void AppE_RunLineFollow(uint8_t lap_count){
         last_ms = now_ms;
 
         BSP_STATUS status = BSP_STATUS_OK;
-        bool corner_timeout = false;
         LINE_FOLLOW_SENSOR_STATE sensor = {0};
 
         if (LineFollow_GetSensor(&sensor) != BSP_STATUS_OK){
@@ -178,33 +206,20 @@ void AppE_RunLineFollow(uint8_t lap_count){
             APP_E_CORNER_DIR detected_corner = AppE_DetectCorner(&sensor);
             if (detected_corner != APP_E_CORNER_NONE){
                 corner_dir = detected_corner;
-                line_state = APP_E_LINE_STATE_CORNER_BRAKE;
-                state_start_ms = now_ms;
-                (void)Motion_Apply(&brake_command, dt_s);
-                status = BSP_STATUS_OK;
-            }
-        } else if (line_state == APP_E_LINE_STATE_CORNER_BRAKE){
-            status = Motion_Apply(&brake_command, dt_s);
-            if ((now_ms - state_start_ms) >= APP_E_CORNER_BRAKE_MS){
-                line_state = APP_E_LINE_STATE_CORNER_SPIN;
-                state_start_ms = now_ms;
+                line_state = APP_E_LINE_STATE_CORNER_ARC;
+                corner_count++;
+                status = AppE_ApplyCornerArc(corner_dir);
             }
         } else{
-            MOTION_COMMAND *spin_command =
-                (corner_dir == APP_E_CORNER_LEFT) ? &spin_left_command : &spin_right_command;
-
-            status = Motion_Apply(spin_command, dt_s);
+            status = AppE_ApplyCornerArc(corner_dir);
             (void)LineFollow_UpdateSensor();
             (void)LineFollow_GetSensor(&sensor);
 
-            if (((now_ms - state_start_ms) >= APP_E_CORNER_MIN_SPIN_MS) &&
-                AppE_IsLineCenterActive(&sensor)){
+            if (AppE_IsLineInnerActive(&sensor)){
                 line_state = APP_E_LINE_STATE_FOLLOW;
                 corner_dir = APP_E_CORNER_NONE;
                 line_lost_pending = false;
                 LineTracking_Reset();
-            } else if ((now_ms - state_start_ms) >= APP_E_CORNER_TIMEOUT_MS){
-                corner_timeout = true;
             }
         }
 
@@ -225,8 +240,9 @@ void AppE_RunLineFollow(uint8_t lap_count){
             half_latched = false;
         }
 
+        uint8_t raw_active_count = AppE_CountRawLineActive(&sensor);
         bool line_missing = (line_state == APP_E_LINE_STATE_FOLLOW) &&
-                            ((status == BSP_STATUS_NOT_READY) || LineFollow_IsEmpty());
+                            (raw_active_count < 2U);
 
         if (line_missing){
             if (!line_lost_pending){
@@ -237,12 +253,20 @@ void AppE_RunLineFollow(uint8_t lap_count){
             line_lost_pending = false;
         }
 
-        if (corner_timeout ||
-            (line_missing &&
-             ((now_ms - line_lost_start_ms) >= APP_E_LINE_LOST_GRACE_MS))){
+        if (line_missing &&
+            ((now_ms - line_lost_start_ms) >= APP_E_LINE_LOST_GRACE_MS)){
+            char turn_line[24];
+
             /* 丢线属于题目流程故障，在 app 层刹车并等待用户长按返回。 */
             (void)Motion_Stop();
-            Ui_RenderStatusPage("E1 Line", UI_STATUS_WARN, "Line lost", "Long:back");
+            snprintf(turn_line, sizeof(turn_line), "Turn:%lu", (unsigned long)corner_count);
+            Ui_RenderLines("E1 Line",
+                           "[WARN]",
+                           "Line lost",
+                           turn_line,
+                           "Long:back",
+                           NULL,
+                           NULL);
             AppE_WaitBack();
             return;
         }

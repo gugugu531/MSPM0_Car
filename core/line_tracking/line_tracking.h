@@ -19,7 +19,9 @@ extern "C" {
 #define LINE_TRACKING_DEFAULT_BASE_DUTY 35.0f
 #define LINE_TRACKING_DEFAULT_OUTPUT_LIMIT 100.0f
 #define LINE_TRACKING_DEFAULT_CORRECTION_LIMIT 60.0f
+#define LINE_TRACKING_DEFAULT_DIFFERENTIAL_LIMIT 10.0f
 #define LINE_TRACKING_DEFAULT_POSITION_SCALE 10.0f
+#define LINE_TRACKING_ACTIVE_SENSOR_MASK 0xF7U
 
 /**
  * @brief 巡线控制配置。
@@ -31,6 +33,8 @@ typedef struct {
     float sensor_position_scale;
     /** 左右轮最终输出绝对值限幅。 */
     float output_limit;
+    /** 左右轮占空比差值绝对值限幅；<= 0 时不启用。 */
+    float differential_limit;
     /** 巡线偏差 PID 配置。 */
     PID_CONFIG pid_config;
 } LINE_TRACKING_CONFIG;

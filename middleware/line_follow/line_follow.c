@@ -9,45 +9,6 @@
 
 static LINE_FOLLOW_STATE s_line_follow_state;
 
-static bool LineFollow_IsBadChannel(uint8_t index){
-    return ((LINE_FOLLOW_BAD_CHANNEL_MASK & (1U << index)) != 0U);
-}
-
-static uint8_t LineFollow_EstimateBadChannel(const uint8_t value[LINE_FOLLOW_SENSOR_COUNT],
-                                             uint8_t index){
-    bool left_active = false;
-    bool left_outer_active = false;
-    bool right_active = false;
-
-    if (index > 0U){
-        left_active = (value[index - 1U] == 0U);
-    }
-
-    if (index > 1U){
-        left_outer_active = (value[index - 2U] == 0U);
-    }
-
-    if ((index + 1U) < LINE_FOLLOW_SENSOR_COUNT){
-        right_active = (value[index + 1U] == 0U);
-    }
-
-    /*
-     * 当前巡线语义为 value == 0 表示检测到黑线。
-     * 逻辑通道 3（从左第 4 路）坏道常无效时，使用邻近通道做保守估计：
-     * - 右邻检测到线时，直接认为坏道也可能压线；
-     * - 左邻检测到线但左外侧也检测到线时，更像左侧线团，不补坏道。
-     */
-    return (right_active || (left_active && !left_outer_active)) ? 0U : 1U;
-}
-
-static void LineFollow_FilterBadChannels(uint8_t value[LINE_FOLLOW_SENSOR_COUNT]){
-    for (uint8_t i = 0U; i < LINE_FOLLOW_SENSOR_COUNT; i++){
-        if (LineFollow_IsBadChannel(i)){
-            value[i] = LineFollow_EstimateBadChannel(value, i);
-        }
-    }
-}
-
 static uint8_t LineFollow_BuildMask(const uint8_t value[LINE_FOLLOW_SENSOR_COUNT]){
     uint8_t mask = 0U;
 
@@ -83,8 +44,9 @@ BSP_STATUS LineFollow_UpdateSensor(void){
      * 这样 app/core 可以按自己的周期重复读取同一份快照。
      */
     GrayscaleSensor_Read(s_line_follow_state.sensor.value);
-    LineFollow_FilterBadChannels(s_line_follow_state.sensor.value);
-    s_line_follow_state.sensor.mask = LineFollow_BuildMask(s_line_follow_state.sensor.value);
+    s_line_follow_state.sensor.mask =
+        LineFollow_BuildMask(s_line_follow_state.sensor.value);
+
     return BSP_STATUS_OK;
 }
 
