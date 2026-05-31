@@ -22,22 +22,23 @@
 #define APP_E_RECT_SCAN_TIMEOUT_MS 8000U
 #define APP_E_LINE_LOST_GRACE_MS 1000U
 #define APP_E_LINE_EDGE_MIN_DISTANCE_M 0.15f
-#define APP_E_CORNER_TURN_LEFT_DUTY_PERCENT -18.0f
-#define APP_E_CORNER_TURN_RIGHT_DUTY_PERCENT 18.0f
-#define APP_E_CORNER_BRAKE_MS 120U
+#define APP_E_CORNER_TURN_LEFT_DUTY_PERCENT -11.0f
+#define APP_E_CORNER_TURN_RIGHT_DUTY_PERCENT 11.0f
+#define APP_E_CORNER_FORWARD_DISTANCE_M 0.09f
+#define APP_E_CORNER_FORWARD_DUTY_PERCENT 15.0f
 #define APP_E_CORNER_ENTER_CONFIRM_COUNT 2U
 #define APP_E_CORNER_EXIT_CONFIRM_COUNT 3U
 #define APP_E_LOOP_DELAY_MS 10U
 
 typedef enum {
     APP_E_LINE_STATE_FOLLOW = 0,
-    APP_E_LINE_STATE_CORNER_BRAKE,
+    APP_E_LINE_STATE_CORNER_FORWARD,
     APP_E_LINE_STATE_CORNER_ARC
 } APP_E_LINE_STATE;
 
 typedef enum {
     APP_E_CORNER_TEST_STATE_LINE_FOLLOW = 0,
-    APP_E_CORNER_TEST_STATE_BRAKE,
+    APP_E_CORNER_TEST_STATE_FORWARD,
     APP_E_CORNER_TEST_STATE_TURN_LEFT,
     APP_E_CORNER_TEST_STATE_DONE
 } APP_E_CORNER_TEST_STATE;
@@ -138,7 +139,7 @@ void AppE_RunLineFollow(uint8_t lap_count){
     uint32_t start_ms = BSP_Time_GetMs();
     uint32_t last_ms = start_ms;
     uint32_t line_lost_start_ms = start_ms;
-    uint32_t corner_brake_start_ms = start_ms;
+    float corner_forward_start_distance = 0.0f;
     uint32_t corner_count = 0U;
     bool line_lost_pending = false;
     APP_E_LINE_STATE line_state = APP_E_LINE_STATE_FOLLOW;
@@ -198,22 +199,24 @@ void AppE_RunLineFollow(uint8_t lap_count){
 
             if (corner_enter_count >= APP_E_CORNER_ENTER_CONFIRM_COUNT){
                 corner_dir = APP_E_CORNER_LEFT;
-                line_state = APP_E_LINE_STATE_CORNER_BRAKE;
-                corner_brake_start_ms = now_ms;
+                line_state = APP_E_LINE_STATE_CORNER_FORWARD;
+                corner_forward_start_distance = Chassis_GetDistance();
                 corner_enter_count = 0U;
                 corner_count++;
-                status = Chassis_Brake();
+                status = Chassis_SetDuty(APP_E_CORNER_FORWARD_DUTY_PERCENT, APP_E_CORNER_FORWARD_DUTY_PERCENT);
             }
-        } else if (line_state == APP_E_LINE_STATE_CORNER_BRAKE){
+        } else if (line_state == APP_E_LINE_STATE_CORNER_FORWARD){
             /*
-             * 转角确认后先主动刹车一小段时间，用来压低入弯前的惯性。
-             * 这里不使用阻塞延时，避免长按中止和 UI 更新被卡住。
+             * 转角确认后按设定占空比前行驶出一定距离，
+             * 直到编码器累加距离达到设定阈值后再开始差速转弯。
              */
-            status = Chassis_Brake();
+            status = Chassis_SetDuty(APP_E_CORNER_FORWARD_DUTY_PERCENT, APP_E_CORNER_FORWARD_DUTY_PERCENT);
             (void)LineFollow_UpdateSensor();
             (void)LineFollow_GetSensor(&sensor);
 
-            if ((now_ms - corner_brake_start_ms) >= APP_E_CORNER_BRAKE_MS){
+            float current_distance = Chassis_GetDistance();
+            float distance_diff = current_distance - corner_forward_start_distance;
+            if ((distance_diff >= APP_E_CORNER_FORWARD_DISTANCE_M) || (distance_diff <= -APP_E_CORNER_FORWARD_DISTANCE_M)){
                 line_state = APP_E_LINE_STATE_CORNER_ARC;
                 status = AppE_ApplyCornerTurn(corner_dir);
             }
@@ -298,13 +301,13 @@ void AppE_RunLineFollow(uint8_t lap_count){
 void AppE_RunCornerBrakeTest(void){
     uint32_t start_ms = BSP_Time_GetMs();
     uint32_t last_ms = start_ms;
-    uint32_t state_start_ms = start_ms;
+    float state_start_distance = 0.0f;
     uint8_t corner_enter_count = 0U;
     MOTION_COMMAND line_follow_command = Motion_CommandLineFollow();
     APP_E_CORNER_TEST_STATE test_state = APP_E_CORNER_TEST_STATE_LINE_FOLLOW;
 
     /*
-     * 该入口只用于验证“循线识别到拐角后刹车，再原地差速左转”的触发可靠性。
+     * 该入口用于验证“循线识别到拐角后继续前行段距离，再原地差速左转”的可靠性。
      * 转弯采用左轮反转、右轮正转的差速输出，并保留中心线检测作为停止条件。
      */
     (void)GimbalTracking_Stop();
@@ -347,27 +350,28 @@ void AppE_RunCornerBrakeTest(void){
             }
 
             if (corner_enter_count >= APP_E_CORNER_ENTER_CONFIRM_COUNT){
-                test_state = APP_E_CORNER_TEST_STATE_BRAKE;
-                state_start_ms = now_ms;
+                test_state = APP_E_CORNER_TEST_STATE_FORWARD;
+                state_start_distance = Chassis_GetDistance();
                 corner_enter_count = 0U;
-                (void)Chassis_Brake();
+                (void)Chassis_SetDuty(APP_E_CORNER_FORWARD_DUTY_PERCENT, APP_E_CORNER_FORWARD_DUTY_PERCENT);
                 Ui_RenderLines("Corner test",
                                "Detected",
-                               "Brake...",
+                               "Forward...",
                                "Then L 90",
                                "Long:stop",
                                NULL,
                                NULL);
             }
-        } else if (test_state == APP_E_CORNER_TEST_STATE_BRAKE){
+        } else if (test_state == APP_E_CORNER_TEST_STATE_FORWARD){
             /*
-             * 主动刹车保持一小段时间后再转向，避免车体带着前进惯性入弯。
+             * 继续前行一小段距离后再转向。
              */
-            (void)Chassis_Brake();
+            (void)Chassis_SetDuty(APP_E_CORNER_FORWARD_DUTY_PERCENT, APP_E_CORNER_FORWARD_DUTY_PERCENT);
 
-            if ((now_ms - state_start_ms) >= APP_E_CORNER_BRAKE_MS){
+            float current_distance = Chassis_GetDistance();
+            float distance_diff = current_distance - state_start_distance;
+            if ((distance_diff >= APP_E_CORNER_FORWARD_DISTANCE_M) || (distance_diff <= -APP_E_CORNER_FORWARD_DISTANCE_M)){
                 test_state = APP_E_CORNER_TEST_STATE_TURN_LEFT;
-                state_start_ms = now_ms;
                 Ui_RenderLines("Corner test",
                                "Turn left",
                                "L:-25 R:+25",
