@@ -22,8 +22,8 @@
 #define APP_E_RECT_FOUND_SETTLE_MS 200U
 #define APP_E_LINE_LOST_GRACE_MS 1000U
 #define APP_E_LINE_EDGE_MIN_DISTANCE_M 0.15f
-#define APP_E_CORNER_TURN_LEFT_DUTY_PERCENT -11.0f
-#define APP_E_CORNER_TURN_RIGHT_DUTY_PERCENT 11.0f
+#define APP_E_CORNER_TURN_LEFT_DUTY_PERCENT -12.0f
+#define APP_E_CORNER_TURN_RIGHT_DUTY_PERCENT 12.0f
 #define APP_E_CORNER_FORWARD_DISTANCE_M 0.09f
 #define APP_E_CORNER_FORWARD_DUTY_PERCENT 15.0f
 #define APP_E_CORNER_ENTER_CONFIRM_COUNT 2U
@@ -151,7 +151,6 @@ void AppE_RunLineFollow(uint8_t lap_count){
     APP_E_LINE_STATE line_state = APP_E_LINE_STATE_FOLLOW;
     APP_E_CORNER_DIR corner_dir = APP_E_CORNER_NONE;
     uint8_t corner_enter_count = 0U;
-    uint8_t corner_exit_count = 0U;
     MOTION_COMMAND line_follow_command = Motion_CommandLineFollow();
 
     /*
@@ -209,7 +208,6 @@ void AppE_RunLineFollow(uint8_t lap_count){
                 line_state = APP_E_LINE_STATE_CORNER_FORWARD;
                 corner_forward_start_distance = Chassis_GetDistance();
                 corner_enter_count = 0U;
-                corner_exit_count = 0U;
                 corner_count++;
                 status = Chassis_SetDuty(APP_E_CORNER_FORWARD_DUTY_PERCENT, APP_E_CORNER_FORWARD_DUTY_PERCENT);
             }
@@ -226,7 +224,6 @@ void AppE_RunLineFollow(uint8_t lap_count){
             float distance_diff = current_distance - corner_forward_start_distance;
             if ((distance_diff >= APP_E_CORNER_FORWARD_DISTANCE_M) || (distance_diff <= -APP_E_CORNER_FORWARD_DISTANCE_M)){
                 line_state = APP_E_LINE_STATE_CORNER_ARC;
-                corner_exit_count = 0U;
                 status = AppE_ApplyCornerTurn(corner_dir);
             }
         } else{
@@ -234,20 +231,11 @@ void AppE_RunLineFollow(uint8_t lap_count){
             (void)LineFollow_UpdateSensor();
             (void)LineFollow_GetSensor(&sensor);
 
-            /* 中心 3/4 连续确认后才结束转弯，避免刚扫到线边缘就提前刹车。 */
+            /* 只要 3/4 号传感器检测到黑线就结束转弯。 */
             if (AppE_IsLineInnerActive(&sensor)){
-                if (corner_exit_count < APP_E_CORNER_EXIT_CONFIRM_COUNT){
-                    corner_exit_count++;
-                }
-            } else{
-                corner_exit_count = 0U;
-            }
-
-            if (corner_exit_count >= APP_E_CORNER_EXIT_CONFIRM_COUNT){
                 (void)Chassis_Brake();
                 line_state = APP_E_LINE_STATE_FOLLOW;
                 corner_dir = APP_E_CORNER_NONE;
-                corner_exit_count = 0U;
                 line_lost_pending = false;
                 LineTracking_Reset();
                 LineFollow_IncrementEdge();
@@ -321,7 +309,6 @@ void AppE_RunCornerBrakeTest(void){
     uint32_t last_ms = start_ms;
     float state_start_distance = 0.0f;
     uint8_t corner_enter_count = 0U;
-    uint8_t center_confirm_count = 0U;
     MOTION_COMMAND line_follow_command = Motion_CommandLineFollow();
     APP_E_CORNER_TEST_STATE test_state = APP_E_CORNER_TEST_STATE_LINE_FOLLOW;
 
@@ -410,16 +397,8 @@ void AppE_RunCornerBrakeTest(void){
             (void)LineFollow_UpdateSensor();
             (void)LineFollow_GetSensor(&sensor);
 
-            /* 与 E1 一致：中心 3/4 连续确认后才结束转弯。 */
+            /* 与 E1 一致：只要 3/4 号传感器检测到黑线就结束转弯。 */
             if (AppE_IsLineInnerActive(&sensor)){
-                if (center_confirm_count < APP_E_CORNER_EXIT_CONFIRM_COUNT){
-                    center_confirm_count++;
-                }
-            } else{
-                center_confirm_count = 0U;
-            }
-
-            if (center_confirm_count >= APP_E_CORNER_EXIT_CONFIRM_COUNT){
                 test_state = APP_E_CORNER_TEST_STATE_DONE;
                 (void)Chassis_Brake();
                 Ui_RenderLines("Corner test",
