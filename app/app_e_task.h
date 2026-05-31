@@ -27,8 +27,13 @@ void AppE_RunCornerBrakeTest(void);
 void AppE_RunAimCenter2s(void);
 
 /**
- * @brief 执行 E3 矩形扫描和跟踪任务。
+ * @brief 执行 E3 Yaw+ 扫描和瞄准任务。
  */
-void AppE_RunAimCenter4s(void);
+void AppE_RunRectScanYawPositive(void);
+
+/**
+ * @brief 执行 E3 Yaw- 扫描和瞄准任务。
+ */
+void AppE_RunRectScanYawNegative(void);
 
 #endif /* APP_E_TASK_H */

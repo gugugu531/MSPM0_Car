@@ -10,8 +10,7 @@
       <TargetName>NUEDC2025_MSPM0G3507</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
-      <pArmCC>6210000::V6.21::ARMCLANG</pArmCC>
-      <pCCUsed>6210000::V6.21::ARMCLANG</pCCUsed>
+      <pCCUsed>6220000::V6.22::ARMCLANG</pCCUsed>
       <uAC6>1</uAC6>
       <TargetOption>
         <TargetCommonOption>
@@ -341,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\geometry;..\..\core\gimbal_tracking;..\..\core\kinematics;..\..\core\line_tracking;..\..\core\motion;..\..\core\pid;..\..\core\rotation;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\gimbal;..\..\middleware\line_follow;..\..\middleware\ui;..\..\bsp\canmv;..\..\bsp\common;..\..\bsp\grayscale_sensor;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\step_motor;..\..\bsp\time;..\..\board\sys_config;D:\TI\mspm0_sdk_2_05_00_05\source;D:\TI\mspm0_sdk_2_05_00_05\source\third_party\CMSIS\Core\Include</IncludePath>
+              <IncludePath>C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include;C:\ti\mspm0_sdk_2_10_00_04\source;..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\geometry;..\..\core\gimbal_tracking;..\..\core\kinematics;..\..\core\line_tracking;..\..\core\motion;..\..\core\pid;..\..\core\rotation;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\gimbal;..\..\middleware\line_follow;..\..\middleware\ui;..\..\bsp\canmv;..\..\bsp\common;..\..\bsp\grayscale_sensor;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\step_motor;..\..\bsp\time;..\..\board\sys_config</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -638,7 +637,7 @@
             <File>
               <FileName>driverlib.a</FileName>
               <FileType>4</FileType>
-              <FilePath>D:\TI\mspm0_sdk_2_05_00_05\source\ti\driverlib\lib\keil\m0p\mspm0g1x0x_g3x0x\driverlib.a</FilePath>
+              <FilePath>C:\ti\mspm0_sdk_2_10_00_04\source\ti\driverlib\lib\keil\m0p\mspm0g1x0x_g3x0x\driverlib.a</FilePath>
             </File>
           </Files>
         </Group>

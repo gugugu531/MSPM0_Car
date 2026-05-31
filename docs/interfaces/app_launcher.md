@@ -29,7 +29,8 @@
 - `E1 Line`
 - `Corner test`
 - `E2 Aim`
-- `E3 Rect`
+- `E3 Yaw+`
+- `E3 Yaw-`
 - `Device check`
 
 进入 `E1 Line` 后显示圈数子菜单：
@@ -43,3 +44,5 @@
 E1 子菜单中短按或双击切换圈数，长按确认并调用 `AppE_RunLineFollow(1..5)`；任务返回后回到顶层菜单。
 
 `Corner test` 直接调用 `AppE_RunCornerBrakeTest()`，用于测试循线识别到拐角后刹车，再以左轮负值、右轮正值的原地差速左转，并由中心 3/4 重新检测到轨道时刹车停止的触发时机和动作参数。
+
+`E3 Yaw+` 和 `E3 Yaw-` 分别调用 `AppE_RunRectScanYawPositive()` 与 `AppE_RunRectScanYawNegative()`。二者只改变任务 3 的扫描方向：识别到矩形后先停止约 `200ms`，再进入与 `E2 Aim` 相同的靶心瞄准控制链。

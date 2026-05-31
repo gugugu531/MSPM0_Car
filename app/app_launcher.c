@@ -15,7 +15,8 @@ typedef enum {
     APP_MENU_E1_LINE = 0,
     APP_MENU_CORNER_TEST,
     APP_MENU_E2_AIM_2S,
-    APP_MENU_E3_AIM_4S,
+    APP_MENU_E3_YAW_POS,
+    APP_MENU_E3_YAW_NEG,
     APP_MENU_DEVICE_CHECK,
     APP_MENU_COUNT
 } APP_MENU_ITEM;
@@ -33,7 +34,8 @@ static const char *const s_app_menu_items[APP_MENU_COUNT] = {
     "E1 Line",
     "Corner test",
     "E2 Aim",
-    "E3 Rect",
+    "E3 Yaw+",
+    "E3 Yaw-",
     "Device check",
 };
 
@@ -120,8 +122,13 @@ static void App_RunMenuItem(APP_MENU_ITEM selected){
         return;
     }
 
-    if (selected == APP_MENU_E3_AIM_4S){
-        AppE_RunAimCenter4s();
+    if (selected == APP_MENU_E3_YAW_POS){
+        AppE_RunRectScanYawPositive();
+        return;
+    }
+
+    if (selected == APP_MENU_E3_YAW_NEG){
+        AppE_RunRectScanYawNegative();
         return;
     }
 
