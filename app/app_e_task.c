@@ -142,6 +142,7 @@ void AppE_RunLineFollow(uint8_t lap_count){
     char line2[24];
     uint8_t target_laps = AppE_NormalizeLapCount(lap_count);
     int32_t target_edges = (int32_t)(target_laps * APP_E_EDGES_PER_LAP);
+    uint32_t task_timeout_ms = APP_E_LINE_TIMEOUT_MS * target_laps;
     uint32_t start_ms = BSP_Time_GetMs();
     uint32_t last_ms = start_ms;
     uint32_t line_lost_start_ms = start_ms;
@@ -170,7 +171,7 @@ void AppE_RunLineFollow(uint8_t lap_count){
                    "Long:stop",
                    NULL);
 
-    while (AppE_ElapsedMs(start_ms) < APP_E_LINE_TIMEOUT_MS){
+    while (AppE_ElapsedMs(start_ms) < task_timeout_ms){
         uint32_t now_ms = BSP_Time_GetMs();
         float dt_s = (float)(now_ms - last_ms) / 1000.0f;
 
