@@ -21,6 +21,9 @@ extern "C" {
 #define GIMBAL_TRACKING_DEFAULT_PAPER_WIDTH 315.0f
 #define GIMBAL_TRACKING_DEFAULT_PAPER_HEIGHT 212.0f
 #define GIMBAL_TRACKING_DEFAULT_CIRCLE_RADIUS 60.0f
+#define GIMBAL_TRACKING_DEFAULT_LINK_TIMEOUT_MS 1000U
+#define GIMBAL_TRACKING_DEFAULT_PID_KP 0.4f
+#define GIMBAL_TRACKING_DEFAULT_PID_OUTPUT_LIMIT 240.0f
 
 /**
  * @brief 视觉云台跟踪配置。
@@ -30,7 +33,7 @@ typedef struct {
     PID_CONFIG yaw_pid;
     /** pitch 轴 PID 配置。 */
     PID_CONFIG pitch_pid;
-    /** 图像高度，单位 px，用于坐标映射。 */
+    /** 图像高度，单位 px；当前协议下作为图像尺寸配置保留。 */
     float image_height;
     /** 题目纸面宽度，单位 mm。 */
     float paper_width;
@@ -42,6 +45,8 @@ typedef struct {
     float yaw_output_sign;
     /** pitch 输出方向系数，用于适配电机安装方向。 */
     float pitch_output_sign;
+    /** K230 有效目标数据超时时间，单位 ms；超时后停止云台输出。 */
+    uint32_t link_timeout_ms;
 } GIMBAL_TRACKING_CONFIG;
 
 /**
@@ -66,6 +71,8 @@ typedef struct {
     bool target_valid;
     /** 激光点是否有效。 */
     bool laser_valid;
+    /** K230 通信是否超时。 */
+    bool link_timeout;
 } GIMBAL_TRACKING_STATE;
 
 /**

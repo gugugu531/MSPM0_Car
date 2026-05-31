@@ -13,6 +13,7 @@
 
 typedef enum {
     APP_MENU_E1_LINE = 0,
+    APP_MENU_CORNER_TEST,
     APP_MENU_E2_AIM_2S,
     APP_MENU_E3_AIM_4S,
     APP_MENU_DEVICE_CHECK,
@@ -30,7 +31,8 @@ typedef enum {
 
 static const char *const s_app_menu_items[APP_MENU_COUNT] = {
     "E1 Line",
-    "E2 Aim 2s",
+    "Corner test",
+    "E2 Aim",
     "E3 Rect",
     "Device check",
 };
@@ -105,6 +107,11 @@ static void App_RunE1Menu(void){
 static void App_RunMenuItem(APP_MENU_ITEM selected){
     if (selected == APP_MENU_E1_LINE){
         App_RunE1Menu();
+        return;
+    }
+
+    if (selected == APP_MENU_CORNER_TEST){
+        AppE_RunCornerBrakeTest();
         return;
     }
 

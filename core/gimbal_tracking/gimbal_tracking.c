@@ -1,5 +1,6 @@
 #include "gimbal_tracking.h"
 
+#include "bsp_time.h"
 #include "geometry/geometry.h"
 #include "gimbal.h"
 
@@ -10,14 +11,15 @@ static GIMBAL_TRACKING_STATE s_gimbal_tracking_state;
 static PID_CONTROLLER s_yaw_pid;
 static PID_CONTROLLER s_pitch_pid;
 static bool s_gimbal_tracking_initialized;
+static uint32_t s_last_frame_ms;
 
 static GIMBAL_TRACKING_CONFIG GimbalTracking_DefaultConfig(void){
     PID_CONFIG pid_config = {
-        .kp = 0.2f,
+        .kp = GIMBAL_TRACKING_DEFAULT_PID_KP,
         .ki = 0.0f,
         .kd = 0.0f,
         .integral_limit = 1000.0f,
-        .output_limit = 0.0f,
+        .output_limit = GIMBAL_TRACKING_DEFAULT_PID_OUTPUT_LIMIT,
         .mode = PID_MODE_POSITION,
     };
     GIMBAL_TRACKING_CONFIG config = {
@@ -27,8 +29,9 @@ static GIMBAL_TRACKING_CONFIG GimbalTracking_DefaultConfig(void){
         .paper_width = GIMBAL_TRACKING_DEFAULT_PAPER_WIDTH,
         .paper_height = GIMBAL_TRACKING_DEFAULT_PAPER_HEIGHT,
         .circle_radius = GIMBAL_TRACKING_DEFAULT_CIRCLE_RADIUS,
-        .yaw_output_sign = -1.0f,
+        .yaw_output_sign = 1.0f,
         .pitch_output_sign = 1.0f,
+        .link_timeout_ms = GIMBAL_TRACKING_DEFAULT_LINK_TIMEOUT_MS,
     };
 
     return config;
@@ -41,13 +44,56 @@ static void GimbalTracking_EnsureInitialized(void){
 }
 
 static CORE_POINT2F GimbalTracking_ImagePoint(uint16_t x, uint16_t y){
-    /* CanMV 图像坐标原点在左上角，控制计算统一改为左下角坐标系。 */
+    /*
+     * 当前 K230 端已经在发送前处理摄像头倒装问题，并按 320x240 图像坐标
+     * 直接发送目标点和图像中心。MCU 侧不再额外翻转 y 轴，避免二次修正。
+     */
     CORE_POINT2F point = {
         .x = (float)x,
-        .y = s_gimbal_tracking_config.image_height - (float)y,
+        .y = (float)y,
     };
 
     return point;
+}
+
+static BSP_STATUS GimbalTracking_HandleTargetNotReady(void){
+    uint32_t now_ms = BSP_Time_GetMs();
+
+    if ((s_gimbal_tracking_config.link_timeout_ms == 0U) ||
+        ((now_ms - s_last_frame_ms) < s_gimbal_tracking_config.link_timeout_ms)){
+        s_gimbal_tracking_state.link_timeout = false;
+        return BSP_STATUS_NOT_READY;
+    }
+
+    bool was_timeout = s_gimbal_tracking_state.link_timeout;
+    s_gimbal_tracking_state.link_timeout = true;
+    s_gimbal_tracking_state.target_valid = false;
+    s_gimbal_tracking_state.laser_valid = false;
+    s_gimbal_tracking_state.yaw_speed = 0.0f;
+    s_gimbal_tracking_state.pitch_speed = 0.0f;
+    if (!was_timeout){
+        (void)Gimbal_Stop();
+    }
+
+    return BSP_STATUS_NOT_READY;
+}
+
+static void GimbalTracking_MarkTargetReady(void){
+    s_last_frame_ms = BSP_Time_GetMs();
+    s_gimbal_tracking_state.link_timeout = false;
+}
+
+static bool GimbalTracking_CheckLinkTimeout(void){
+    uint32_t now_ms = BSP_Time_GetMs();
+
+    if ((s_gimbal_tracking_config.link_timeout_ms == 0U) ||
+        ((now_ms - s_last_frame_ms) < s_gimbal_tracking_config.link_timeout_ms)){
+        s_gimbal_tracking_state.link_timeout = false;
+        return false;
+    }
+
+    (void)GimbalTracking_HandleTargetNotReady();
+    return s_gimbal_tracking_state.link_timeout;
 }
 
 static BSP_STATUS GimbalTracking_ReadLaser(CORE_POINT2F *target,
@@ -111,6 +157,7 @@ void GimbalTracking_Init(const GIMBAL_TRACKING_CONFIG *config){
 void GimbalTracking_Reset(void){
     PID_Reset(&s_yaw_pid);
     PID_Reset(&s_pitch_pid);
+    s_last_frame_ms = BSP_Time_GetMs();
 
     s_gimbal_tracking_state.target.x = 0.0f;
     s_gimbal_tracking_state.target.y = 0.0f;
@@ -124,19 +171,25 @@ void GimbalTracking_Reset(void){
     s_gimbal_tracking_state.rect_status = CANMV_STATUS_INIT;
     s_gimbal_tracking_state.target_valid = false;
     s_gimbal_tracking_state.laser_valid = false;
+    s_gimbal_tracking_state.link_timeout = false;
 }
 
 BSP_STATUS GimbalTracking_UpdateLaserCenter(float dt_s){
     GimbalTracking_EnsureInitialized();
+
+    if (GimbalTracking_CheckLinkTimeout()){
+        return BSP_STATUS_NOT_READY;
+    }
 
     CORE_POINT2F target;
     CORE_POINT2F laser;
     BSP_STATUS status = GimbalTracking_ReadLaser(&target, &laser);
 
     if (status != BSP_STATUS_OK){
-        return status;
+        return GimbalTracking_HandleTargetNotReady();
     }
 
+    GimbalTracking_MarkTargetReady();
     return GimbalTracking_TrackPoints(target, laser, dt_s);
 }
 
@@ -145,13 +198,17 @@ BSP_STATUS GimbalTracking_UpdateRectCircle(int32_t edge_index,
                                            float dt_s){
     GimbalTracking_EnsureInitialized();
 
+    if (GimbalTracking_CheckLinkTimeout()){
+        return BSP_STATUS_NOT_READY;
+    }
+
     CORE_POINT2F laser_target;
     CORE_POINT2F laser;
     BSP_STATUS status = GimbalTracking_ReadLaser(&laser_target, &laser);
     (void)laser_target;
 
     if (status != BSP_STATUS_OK){
-        return status;
+        return GimbalTracking_HandleTargetNotReady();
     }
 
     GEOMETRY_RECT2F rect;
@@ -159,7 +216,7 @@ BSP_STATUS GimbalTracking_UpdateRectCircle(int32_t edge_index,
 
     if (status != BSP_STATUS_OK){
         s_gimbal_tracking_state.target_valid = false;
-        return status;
+        return GimbalTracking_HandleTargetNotReady();
     }
 
     CORE_POINT2F paper_center = {
@@ -178,11 +235,16 @@ BSP_STATUS GimbalTracking_UpdateRectCircle(int32_t edge_index,
                                                     &rect);
 
     s_gimbal_tracking_state.target_valid = true;
+    GimbalTracking_MarkTargetReady();
     return GimbalTracking_TrackPoints(target, laser, dt_s);
 }
 
 BSP_STATUS GimbalTracking_UpdateRectCenter(float dt_s){
     GimbalTracking_EnsureInitialized();
+
+    if (GimbalTracking_CheckLinkTimeout()){
+        return BSP_STATUS_NOT_READY;
+    }
 
     CORE_POINT2F laser_target;
     CORE_POINT2F laser;
@@ -190,7 +252,7 @@ BSP_STATUS GimbalTracking_UpdateRectCenter(float dt_s){
     (void)laser_target;
 
     if (status != BSP_STATUS_OK){
-        return status;
+        return GimbalTracking_HandleTargetNotReady();
     }
 
     GEOMETRY_RECT2F rect;
@@ -198,7 +260,7 @@ BSP_STATUS GimbalTracking_UpdateRectCenter(float dt_s){
 
     if (status != BSP_STATUS_OK){
         s_gimbal_tracking_state.target_valid = false;
-        return status;
+        return GimbalTracking_HandleTargetNotReady();
     }
 
     CORE_POINT2F raw_center = Geometry_RectBilinearInterpolate(&rect, 0.5f, 0.5f);
@@ -206,6 +268,7 @@ BSP_STATUS GimbalTracking_UpdateRectCenter(float dt_s){
                                                     (uint16_t)raw_center.y);
 
     s_gimbal_tracking_state.target_valid = true;
+    GimbalTracking_MarkTargetReady();
     return GimbalTracking_TrackPoints(target, laser, dt_s);
 }
 

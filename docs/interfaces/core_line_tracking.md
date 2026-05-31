@@ -51,7 +51,7 @@ typedef struct {
 #define LINE_TRACKING_DEFAULT_CORRECTION_LIMIT 60.0f
 #define LINE_TRACKING_DEFAULT_DIFFERENTIAL_LIMIT 10.0f
 #define LINE_TRACKING_DEFAULT_POSITION_SCALE 10.0f
-#define LINE_TRACKING_ACTIVE_SENSOR_MASK 0xF7U
+#define LINE_TRACKING_ACTIVE_SENSOR_MASK 0xFFU
 ```
 
 默认 PID 为位置式 PID：
@@ -64,7 +64,7 @@ integral_limit = 500.0
 output_limit = 60.0
 ```
 
-`LINE_TRACKING_ACTIVE_SENSOR_MASK` 用于选择参与巡线控制的灰度通道。当前值 `0xF7` 启用 0、1、2、4、5、6、7，只忽略逻辑通道 3。
+`LINE_TRACKING_ACTIVE_SENSOR_MASK` 用于选择参与巡线控制的灰度通道。当前值 `0xFF` 启用 0 到 7 的全部 8 路灰度传感器。
 
 ## 接口
 

@@ -25,14 +25,16 @@ typedef struct {
     float circle_radius;
     float yaw_output_sign;
     float pitch_output_sign;
+    uint32_t link_timeout_ms;
 } GIMBAL_TRACKING_CONFIG;
 ```
 
-- `yaw_pid` / `pitch_pid`：yaw 和 pitch 两个方向的 PID 参数。
-- `image_height`：图像高度，用于将旧图像坐标转换为当前使用的 y 轴方向；默认值为 `240`，对齐当前 `k230/rect_07.py` 的 `320x240` 输出。
+- `yaw_pid` / `pitch_pid`：yaw 和 pitch 两个方向的 PID 参数。默认比例系数为 `0.4`，输出限幅为 `240 deg/s`，用于提高云台视觉跟踪速度。
+- `image_height`：图像高度，当前作为图像尺寸配置保留；K230 端已经在发送前完成摄像头倒装的中心对称修正，MCU 侧直接使用收到的图像坐标，不再额外翻转 y 轴。
 - `paper_width` / `paper_height`：纸面尺寸。
 - `circle_radius`：纸面圆路径半径。
 - `yaw_output_sign` / `pitch_output_sign`：输出方向系数，用于适配安装方向。
+- `link_timeout_ms`：K230 有效目标数据超时时间，默认 `1000ms`；在该时间内没有收到可用于跟踪的有效目标数据时，视觉跟踪会立即停止云台输出。
 
 ```c
 typedef struct {
@@ -45,6 +47,7 @@ typedef struct {
     CANMV_STATUS rect_status;
     bool target_valid;
     bool laser_valid;
+    bool link_timeout;
 } GIMBAL_TRACKING_STATE;
 ```
 
@@ -56,6 +59,8 @@ typedef struct {
 
 初始化云台跟踪控制器。传入 `NULL` 时使用默认配置。
 
+初始化会记录当前系统时间，作为后续有效目标数据超时判断的起点。
+
 ### `void GimbalTracking_Reset(void)`
 
 清空 PID 状态和最近一次跟踪状态。
@@ -63,6 +68,10 @@ typedef struct {
 ### `BSP_STATUS GimbalTracking_UpdateLaserCenter(float dt_s)`
 
 从 `CANMV_TARGET_LASER` 读取目标中心和激光点，并执行一次云台跟踪控制。
+
+当前 K230 侧 `rect_recognition.py` 发送的激光段为：修正后的目标中心 `target_x/target_y`，以及作为当前实际点位的图像中心 `laser_x/laser_y`。因此该接口直接跟踪目标中心到图像中心，不再在 MCU 侧重复处理摄像头倒装。
+
+若 K230 在 `link_timeout_ms` 内没有新的有效目标数据到达，该接口会停止云台输出并返回未就绪状态。短暂丢失目标时不会立刻停止，云台会保持上一速度继续调整，直到超时保护触发。
 
 该接口对应旧流程中的：
 
@@ -84,7 +93,7 @@ PID_SMotor_Cont()
 
 ### `bool GimbalTracking_IsRectValid(void)`
 
-检查当前是否已经收到有效矩形角点。该接口只用于任务流程判断，不输出云台速度。
+检查当前是否已经收到有效矩形角点。该接口只用于任务流程判断，不输出云台速度，也不触发视觉跟踪超时停机；扫描阶段可以安全地反复调用该接口等待矩形出现。
 
 ### `BSP_STATUS GimbalTracking_TrackPoints(CORE_POINT2F target, CORE_POINT2F laser, float dt_s)`
 
