@@ -16,10 +16,10 @@
 #define APP_E_MAX_LAPS 5U
 #define APP_E_EDGES_PER_LAP 4U
 #define APP_E_LINE_TIMEOUT_MS 20000U
-#define APP_E_AIM_4S_TIMEOUT_MS 4000U
 #define APP_E_RECT_SCAN_SPEED_DEG_S 60.0f
 #define APP_E_RECT_SCAN_ANGLE_DEG 360.0f
 #define APP_E_RECT_SCAN_TIMEOUT_MS 8000U
+#define APP_E_RECT_FOUND_SETTLE_MS 200U
 #define APP_E_LINE_LOST_GRACE_MS 1000U
 #define APP_E_LINE_EDGE_MIN_DISTANCE_M 0.15f
 #define APP_E_CORNER_TURN_LEFT_DUTY_PERCENT -18.0f
@@ -47,6 +47,12 @@ typedef enum {
     APP_E_CORNER_LEFT,
     APP_E_CORNER_RIGHT
 } APP_E_CORNER_DIR;
+
+typedef enum {
+    APP_E_RECT_SCAN_YAW_POSITIVE = 0,
+    APP_E_RECT_SCAN_YAW_NEGATIVE
+} APP_E_RECT_SCAN_DIR;
+
 static BSP_STATUS AppE_ApplyCornerTurn(APP_E_CORNER_DIR corner_dir){
     if (corner_dir == APP_E_CORNER_LEFT){
         return Chassis_SetDuty(APP_E_CORNER_TURN_LEFT_DUTY_PERCENT,
@@ -144,6 +150,7 @@ void AppE_RunLineFollow(uint8_t lap_count){
     APP_E_LINE_STATE line_state = APP_E_LINE_STATE_FOLLOW;
     APP_E_CORNER_DIR corner_dir = APP_E_CORNER_NONE;
     uint8_t corner_enter_count = 0U;
+    uint8_t corner_exit_count = 0U;
     MOTION_COMMAND line_follow_command = Motion_CommandLineFollow();
 
     /*
@@ -201,6 +208,7 @@ void AppE_RunLineFollow(uint8_t lap_count){
                 line_state = APP_E_LINE_STATE_CORNER_BRAKE;
                 corner_brake_start_ms = now_ms;
                 corner_enter_count = 0U;
+                corner_exit_count = 0U;
                 corner_count++;
                 status = Chassis_Brake();
             }
@@ -215,6 +223,7 @@ void AppE_RunLineFollow(uint8_t lap_count){
 
             if ((now_ms - corner_brake_start_ms) >= APP_E_CORNER_BRAKE_MS){
                 line_state = APP_E_LINE_STATE_CORNER_ARC;
+                corner_exit_count = 0U;
                 status = AppE_ApplyCornerTurn(corner_dir);
             }
         } else{
@@ -222,11 +231,20 @@ void AppE_RunLineFollow(uint8_t lap_count){
             (void)LineFollow_UpdateSensor();
             (void)LineFollow_GetSensor(&sensor);
 
-            /* 只要 3/4 号传感器检测到黑线就结束转弯。 */
+            /* 中心 3/4 连续确认后才结束转弯，避免刚扫到线边缘就提前刹车。 */
             if (AppE_IsLineInnerActive(&sensor)){
+                if (corner_exit_count < APP_E_CORNER_EXIT_CONFIRM_COUNT){
+                    corner_exit_count++;
+                }
+            } else{
+                corner_exit_count = 0U;
+            }
+
+            if (corner_exit_count >= APP_E_CORNER_EXIT_CONFIRM_COUNT){
                 (void)Chassis_Brake();
                 line_state = APP_E_LINE_STATE_FOLLOW;
                 corner_dir = APP_E_CORNER_NONE;
+                corner_exit_count = 0U;
                 line_lost_pending = false;
                 LineTracking_Reset();
                 LineFollow_IncrementEdge();
@@ -300,6 +318,7 @@ void AppE_RunCornerBrakeTest(void){
     uint32_t last_ms = start_ms;
     uint32_t state_start_ms = start_ms;
     uint8_t corner_enter_count = 0U;
+    uint8_t center_confirm_count = 0U;
     MOTION_COMMAND line_follow_command = Motion_CommandLineFollow();
     APP_E_CORNER_TEST_STATE test_state = APP_E_CORNER_TEST_STATE_LINE_FOLLOW;
 
@@ -350,6 +369,7 @@ void AppE_RunCornerBrakeTest(void){
                 test_state = APP_E_CORNER_TEST_STATE_BRAKE;
                 state_start_ms = now_ms;
                 corner_enter_count = 0U;
+                center_confirm_count = 0U;
                 (void)Chassis_Brake();
                 Ui_RenderLines("Corner test",
                                "Detected",
@@ -368,6 +388,7 @@ void AppE_RunCornerBrakeTest(void){
             if ((now_ms - state_start_ms) >= APP_E_CORNER_BRAKE_MS){
                 test_state = APP_E_CORNER_TEST_STATE_TURN_LEFT;
                 state_start_ms = now_ms;
+                center_confirm_count = 0U;
                 Ui_RenderLines("Corner test",
                                "Turn left",
                                "L:-25 R:+25",
@@ -387,8 +408,16 @@ void AppE_RunCornerBrakeTest(void){
             (void)LineFollow_UpdateSensor();
             (void)LineFollow_GetSensor(&sensor);
 
-            /* 只要 3/4 号传感器检测到黑线就结束转弯。 */
+            /* 与 E1 一致：中心 3/4 连续确认后才结束转弯。 */
             if (AppE_IsLineInnerActive(&sensor)){
+                if (center_confirm_count < APP_E_CORNER_EXIT_CONFIRM_COUNT){
+                    center_confirm_count++;
+                }
+            } else{
+                center_confirm_count = 0U;
+            }
+
+            if (center_confirm_count >= APP_E_CORNER_EXIT_CONFIRM_COUNT){
                 test_state = APP_E_CORNER_TEST_STATE_DONE;
                 (void)Chassis_Brake();
                 Ui_RenderLines("Corner test",
@@ -483,16 +512,43 @@ void AppE_RunAimCenter2s(void){
     AppE_RunAimCenter(0U, "E2 Aim");
 }
 
-static bool AppE_ScanForRect(void){
+static float AppE_GetRectScanSpeed(APP_E_RECT_SCAN_DIR scan_dir){
+    if (scan_dir == APP_E_RECT_SCAN_YAW_NEGATIVE){
+        return -APP_E_RECT_SCAN_SPEED_DEG_S;
+    }
+
+    return APP_E_RECT_SCAN_SPEED_DEG_S;
+}
+
+static const char *AppE_GetRectScanTitle(APP_E_RECT_SCAN_DIR scan_dir){
+    if (scan_dir == APP_E_RECT_SCAN_YAW_NEGATIVE){
+        return "E3 Yaw-";
+    }
+
+    return "E3 Yaw+";
+}
+
+static bool AppE_IsRectScanAngleReached(APP_E_RECT_SCAN_DIR scan_dir){
+    float yaw_deg = Gimbal_GetAngle().yaw_deg;
+
+    if (scan_dir == APP_E_RECT_SCAN_YAW_NEGATIVE){
+        return yaw_deg <= -APP_E_RECT_SCAN_ANGLE_DEG;
+    }
+
+    return yaw_deg >= APP_E_RECT_SCAN_ANGLE_DEG;
+}
+
+static bool AppE_ScanForRect(APP_E_RECT_SCAN_DIR scan_dir){
     char line0[24];
     char line1[24];
     uint32_t start_ms = BSP_Time_GetMs();
+    const char *title = AppE_GetRectScanTitle(scan_dir);
 
     AppE_PrepareTaskInput();
     GimbalTracking_Init(NULL);
     Gimbal_ResetAxisPosition(GIMBAL_AXIS_YAW);
-    (void)Gimbal_SetSpeed(APP_E_RECT_SCAN_SPEED_DEG_S, 0.0f);
-    Ui_RenderLines("E3 Rect",
+    (void)Gimbal_SetSpeed(AppE_GetRectScanSpeed(scan_dir), 0.0f);
+    Ui_RenderLines(title,
                    "Scanning...",
                    "Yaw:0",
                    "Rect:WAIT",
@@ -505,10 +561,18 @@ static bool AppE_ScanForRect(void){
 
         if (GimbalTracking_IsRectValid()){
             (void)Gimbal_Stop();
+            Ui_RenderLines(title,
+                           "Rect found",
+                           "Stop 200ms",
+                           "Then E2 aim",
+                           "Long:stop",
+                           NULL,
+                           NULL);
+            BSP_DelayMs(APP_E_RECT_FOUND_SETTLE_MS);
             return true;
         }
 
-        if (Gimbal_GetAngle().yaw_deg >= APP_E_RECT_SCAN_ANGLE_DEG){
+        if (AppE_IsRectScanAngleReached(scan_dir)){
             break;
         }
 
@@ -531,68 +595,28 @@ static bool AppE_ScanForRect(void){
     return false;
 }
 
-static void AppE_RunRectTrack(uint32_t timeout_ms){
-    char line0[24];
-    char line1[24];
-    char line2[24];
-    uint32_t start_ms = BSP_Time_GetMs();
-    uint32_t last_ms = start_ms;
+static void AppE_RunRectScanAim(APP_E_RECT_SCAN_DIR scan_dir){
+    const char *title = AppE_GetRectScanTitle(scan_dir);
 
-    GimbalTracking_Reset();
-    Ui_RenderLines("E3 Rect",
-                   "Tracking...",
-                   "Rect:OK",
-                   "Err:0,0",
-                   "Time:0.0",
-                   "Long:stop",
-                   NULL);
-
-    while (AppE_ElapsedMs(start_ms) < timeout_ms){
-        uint32_t now_ms = BSP_Time_GetMs();
-        float dt_s = (float)(now_ms - last_ms) / 1000.0f;
-
-        if (dt_s <= 0.0f){
-            dt_s = 0.001f;
-        }
-
-        last_ms = now_ms;
-        BSP_STATUS status = GimbalTracking_UpdateRectCenter(dt_s);
-        GIMBAL_TRACKING_STATE state = GimbalTracking_GetState();
-
-        if (state.link_timeout){
-            break;
-        }
-
-        snprintf(line0, sizeof(line0), "Rect:%s", status == BSP_STATUS_OK ? "OK" : "WAIT");
-        snprintf(line1, sizeof(line1), "Err:%0.0f,%0.0f", state.error.x, state.error.y);
-        snprintf(line2, sizeof(line2), "Time:%lu.%01lu",
-                 (unsigned long)(AppE_ElapsedMs(start_ms) / 1000U),
-                 (unsigned long)((AppE_ElapsedMs(start_ms) / 100U) % 10U));
-        Ui_UpdateContentLine(1U, line0);
-        Ui_UpdateContentLine(2U, line1);
-        Ui_UpdateContentLine(3U, line2);
-
-        if (Key_IsLongPress(KEY_ID_1)){
-            Key_ClearAllEvents();
-            break;
-        }
-
-        BSP_DelayMs(APP_E_LOOP_DELAY_MS);
-    }
-
-    (void)GimbalTracking_Stop();
-}
-
-void AppE_RunAimCenter4s(void){
     (void)Chassis_Brake();
 
-    if (!AppE_ScanForRect()){
-        Ui_RenderStatusPage("E3 Rect", UI_STATUS_WARN, "Rect not found", "Long:back");
+    if (!AppE_ScanForRect(scan_dir)){
+        Ui_RenderStatusPage(title, UI_STATUS_WARN, "Rect not found", "Long:back");
         AppE_WaitBack();
         return;
     }
 
-    AppE_RunRectTrack(APP_E_AIM_4S_TIMEOUT_MS);
-    Ui_RenderStatusPage("E3 Rect", UI_STATUS_OK, "Track finished", "Long:back");
-    AppE_WaitBack();
+    /*
+     * E3 只负责按指定方向扫描并确认矩形；确认后停 200ms，
+     * 随后的云台闭环直接复用 E2 的激光点瞄准逻辑。
+     */
+    AppE_RunAimCenter(0U, title);
+}
+
+void AppE_RunRectScanYawPositive(void){
+    AppE_RunRectScanAim(APP_E_RECT_SCAN_YAW_POSITIVE);
+}
+
+void AppE_RunRectScanYawNegative(void){
+    AppE_RunRectScanAim(APP_E_RECT_SCAN_YAW_NEGATIVE);
 }
