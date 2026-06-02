@@ -154,10 +154,6 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
     DL_GPIO_initPeripheralInputFunction(
         GPIO_K230_IOMUX_RX, GPIO_K230_IOMUX_RX_FUNC);
 
-    DL_GPIO_initDigitalOutputFeatures(LED_LED0_IOMUX,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
-		 DL_GPIO_DRIVE_STRENGTH_LOW, DL_GPIO_HIZ_DISABLE);
-
     DL_GPIO_initDigitalInputFeatures(Key_PIN_1_IOMUX,
 		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_UP,
 		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
@@ -230,6 +226,8 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
 		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
 
+    DL_GPIO_initDigitalOutput(Key_PIN_2_IOMUX);
+
     DL_GPIO_clearPins(GPIOA, Motor_IO_AIN1_PIN);
     DL_GPIO_enableOutput(GPIOA, Motor_IO_AIN1_PIN);
     DL_GPIO_setLowerPinsPolarity(GPIOA, DL_GPIO_PIN_2_EDGE_RISE);
@@ -240,22 +238,22 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 		Motor_IO_E2A_PIN);
     DL_GPIO_enableInterrupt(GPIOA, Motor_IO_E1A_PIN |
 		Motor_IO_E2A_PIN);
-    DL_GPIO_clearPins(GPIOB, LED_LED0_PIN |
-		SMotor_IO_DIR1_PIN |
+    DL_GPIO_clearPins(GPIOB, SMotor_IO_DIR1_PIN |
 		SMotor_IO_DIR2_PIN |
 		SMotor_IO_EN1_PIN |
 		SMotor_IO_EN2_PIN |
 		Motor_IO_AIN2_PIN |
 		Motor_IO_BIN1_PIN |
-		Motor_IO_BIN2_PIN);
-    DL_GPIO_enableOutput(GPIOB, LED_LED0_PIN |
-		SMotor_IO_DIR1_PIN |
+		Motor_IO_BIN2_PIN |
+		Key_PIN_2_PIN);
+    DL_GPIO_enableOutput(GPIOB, SMotor_IO_DIR1_PIN |
 		SMotor_IO_DIR2_PIN |
 		SMotor_IO_EN1_PIN |
 		SMotor_IO_EN2_PIN |
 		Motor_IO_AIN2_PIN |
 		Motor_IO_BIN1_PIN |
-		Motor_IO_BIN2_PIN);
+		Motor_IO_BIN2_PIN |
+		Key_PIN_2_PIN);
 
 }
 

@@ -182,12 +182,6 @@ extern "C" {
 
 
 
-/* Port definition for Pin Group LED */
-#define LED_PORT                                                         (GPIOB)
-
-/* Defines for LED0: GPIOB.22 with pinCMx 50 on package pin 21 */
-#define LED_LED0_PIN                                            (DL_GPIO_PIN_22)
-#define LED_LED0_IOMUX                                           (IOMUX_PINCM50)
 /* Port definition for Pin Group Key */
 #define Key_PORT                                                         (GPIOB)
 
@@ -270,7 +264,9 @@ extern "C" {
 #define Tracking_Tracking_8_PORT                                         (GPIOA)
 #define Tracking_Tracking_8_PIN                                 (DL_GPIO_PIN_13)
 #define Tracking_Tracking_8_IOMUX                                (IOMUX_PINCM35)
-
+/* Defines for PIN_2: GPIOB.22 with pinCMx 50 on package pin 21 */
+#define Key_PIN_2_PIN                                           (DL_GPIO_PIN_22)
+#define Key_PIN_2_IOMUX                                          (IOMUX_PINCM50)
 
 
 
