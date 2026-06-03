@@ -37,13 +37,6 @@ typedef enum {
 } APP_E_LINE_STATE;
 
 typedef enum {
-    APP_E_CORNER_TEST_STATE_LINE_FOLLOW = 0,
-    APP_E_CORNER_TEST_STATE_FORWARD,
-    APP_E_CORNER_TEST_STATE_TURN_LEFT,
-    APP_E_CORNER_TEST_STATE_DONE
-} APP_E_CORNER_TEST_STATE;
-
-typedef enum {
     APP_E_CORNER_NONE = 0,
     APP_E_CORNER_LEFT,
     APP_E_CORNER_RIGHT
@@ -305,121 +298,39 @@ void AppE_RunLineFollow(uint8_t lap_count){
     AppE_WaitBack();
 }
 
-void AppE_RunCornerBrakeTest(void){
-    uint32_t start_ms = BSP_Time_GetMs();
-    uint32_t last_ms = start_ms;
-    float state_start_distance = 0.0f;
-    uint8_t corner_enter_count = 0U;
-    MOTION_COMMAND line_follow_command = Motion_CommandLineFollow();
-    APP_E_CORNER_TEST_STATE test_state = APP_E_CORNER_TEST_STATE_LINE_FOLLOW;
+void AppE_RunYawSpeedTest(float yaw_deg_s){
+    char line0[24];
+    char line1[24];
 
     /*
-     * 该入口用于验证“循线识别到拐角后继续前行段距离，再原地差速左转”的可靠性。
-     * 转弯采用左轮反转、右轮正转的差速输出，并保留中心线检测作为停止条件。
+     * 此测试用于使用给定的速度参数旋转二维云台 Yaw 轴，
+     * 以帮助找到电机的最小驱动边界值。
      */
-    (void)GimbalTracking_Stop();
-    LineFollow_Reset();
-    LineTracking_Init(NULL);
-    Motion_Init();
-    Chassis_ResetDistance();
-    Ui_RenderLines("Corner test",
-                   "Line follow",
-                   "Wait corner",
-                   "Long:stop",
+    (void)Chassis_Brake();
+    GimbalTracking_Stop();
+    Gimbal_Init();
+    Gimbal_ResetAxisPosition(GIMBAL_AXIS_YAW);
+    
+    /* 先下发驱动速度给电机底层（立刻生效开始发PWM），
+     * 避免因为 OLED 刷屏较慢带来的肉眼可见的延迟感。
+     */
+    (void)Gimbal_SetSpeed(yaw_deg_s, 0.0f);
+
+    Ui_RenderLines("Yaw spd test",
+                   "Starting...",
                    NULL,
+                   NULL,
+                   "Long:stop",
                    NULL,
                    NULL);
 
-    while (AppE_ElapsedMs(start_ms) < APP_E_LINE_TIMEOUT_MS){
-        uint32_t now_ms = BSP_Time_GetMs();
-        float dt_s = (float)(now_ms - last_ms) / 1000.0f;
+    while (1){
+        (void)Gimbal_Update();
 
-        if (dt_s <= 0.0f){
-            dt_s = 0.001f;
-        }
-
-        last_ms = now_ms;
-
-        if (test_state == APP_E_CORNER_TEST_STATE_LINE_FOLLOW){
-            (void)Motion_Apply(&line_follow_command, dt_s);
-
-            LINE_FOLLOW_SENSOR_STATE sensor = {0};
-            (void)LineFollow_GetSensor(&sensor);
-
-            /*
-             * 测试入口与 E1 一致：8 路灰度全部未检测到轨道时触发。
-             * 连续确认用于过滤单帧跳变或短暂抖动。
-             */
-            if (AppE_HasEnabledLineActive(&sensor)){
-                corner_enter_count = 0U;
-            } else if (corner_enter_count < APP_E_CORNER_ENTER_CONFIRM_COUNT){
-                corner_enter_count++;
-            }
-
-            if (corner_enter_count >= APP_E_CORNER_ENTER_CONFIRM_COUNT){
-                test_state = APP_E_CORNER_TEST_STATE_FORWARD;
-                state_start_distance = Chassis_GetDistance();
-                corner_enter_count = 0U;
-                (void)Chassis_SetDuty(APP_E_CORNER_FORWARD_DUTY_PERCENT, APP_E_CORNER_FORWARD_DUTY_PERCENT);
-                Ui_RenderLines("Corner test",
-                               "Detected",
-                               "Forward...",
-                               "Then L 90",
-                               "Long:stop",
-                               NULL,
-                               NULL);
-            }
-        } else if (test_state == APP_E_CORNER_TEST_STATE_FORWARD){
-            /*
-             * 继续前行一小段距离后再转向。
-             */
-            (void)Chassis_SetDuty(APP_E_CORNER_FORWARD_DUTY_PERCENT, APP_E_CORNER_FORWARD_DUTY_PERCENT);
-
-            float current_distance = Chassis_GetDistance();
-            float distance_diff = current_distance - state_start_distance;
-            if ((distance_diff >= APP_E_CORNER_FORWARD_DISTANCE_M) || (distance_diff <= -APP_E_CORNER_FORWARD_DISTANCE_M)){
-                test_state = APP_E_CORNER_TEST_STATE_TURN_LEFT;
-                Ui_RenderLines("Corner test",
-                               "Turn left",
-                               "L:-25 R:+25",
-                               "Center stop",
-                               "Long:stop",
-                               NULL,
-                               NULL);
-            }
-        } else if (test_state == APP_E_CORNER_TEST_STATE_TURN_LEFT){
-            /*
-             * 回到最直接的差速方案：左轮给负值、右轮给正值。
-             * 与 E1 使用同一套转弯输出，保证测试入口和正式任务行为一致。
-             */
-            (void)AppE_ApplyCornerTurn(APP_E_CORNER_LEFT);
-
-            LINE_FOLLOW_SENSOR_STATE sensor = {0};
-            (void)LineFollow_UpdateSensor();
-            (void)LineFollow_GetSensor(&sensor);
-
-            /* 与 E1 一致：只要 3/4 号传感器检测到黑线就结束转弯。 */
-            if (AppE_IsLineInnerActive(&sensor)){
-                test_state = APP_E_CORNER_TEST_STATE_DONE;
-                (void)Chassis_Brake();
-                Ui_RenderLines("Corner test",
-                               "Turn done",
-                               "Brake done",
-                               "Long:back",
-                               NULL,
-                               NULL,
-                               NULL);
-            }
-        } else{
-            (void)Chassis_Brake();
-        }
-
-        if (test_state == APP_E_CORNER_TEST_STATE_DONE){
-            /*
-             * 进入完成态后保持刹车，等待长按返回。
-             */
-            (void)Chassis_Brake();
-        }
+        snprintf(line0, sizeof(line0), "Spd:%0.1f", yaw_deg_s);
+        snprintf(line1, sizeof(line1), "Yaw:%0.1f", Gimbal_GetAngle().yaw_deg);
+        Ui_UpdateContentLine(0U, line0);
+        Ui_UpdateContentLine(1U, line1);
 
         if (Key_IsLongPress(KEY_ID_1)){
             Key_ClearAllEvents();
@@ -429,8 +340,8 @@ void AppE_RunCornerBrakeTest(void){
         BSP_DelayMs(APP_E_LOOP_DELAY_MS);
     }
 
-    (void)Motion_Stop();
-    Ui_RenderStatusPage("Corner test", UI_STATUS_WARN, "Stopped/timeout", "Long:back");
+    (void)Gimbal_Stop();
+    Ui_RenderStatusPage("Yaw spd test", UI_STATUS_OK, "Wait return", "Long:back");
     AppE_WaitBack();
 }
 

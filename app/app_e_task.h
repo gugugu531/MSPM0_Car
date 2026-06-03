@@ -14,12 +14,10 @@
 void AppE_RunLineFollow(uint8_t lap_count);
 
 /**
- * @brief 执行拐角识别刹车测试。
- *
- * 进入后先循线运行，检测并确认到空线拐角后先主动刹车，
- * 再以左轮负值、右轮正值的原地差速固定左转，用于单独调试直角弯动作参数。
+ * @brief 执行云台 Yaw 轴指定速度旋转测试，用于寻找最小启动阈值。
+ * @param yaw_deg_s 目标速度 (deg/s)。
  */
-void AppE_RunCornerBrakeTest(void);
+void AppE_RunYawSpeedTest(float yaw_deg_s);
 
 /**
  * @brief 执行 2 秒靶心瞄准任务。

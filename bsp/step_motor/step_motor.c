@@ -194,8 +194,11 @@ static BSP_STATUS StepMotor_ApplySpeed(STEP_MOTOR_CHANNEL channel, float speed_d
         arr = STEP_MOTOR_MAX_ARR;
     }
 
+    DL_TimerG_stopCounter(hw->pwm_timer);
     DL_TimerG_setLoadValue(hw->pwm_timer, arr);
     DL_TimerG_setCaptureCompareValue(hw->pwm_timer, arr / 2U, hw->pwm_channel);
+    DL_TimerG_setTimerCount(hw->pwm_timer, 0U);
+    DL_TimerG_startCounter(hw->pwm_timer);
     return BSP_STATUS_OK;
 }
 
