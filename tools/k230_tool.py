@@ -10,6 +10,7 @@ USB serial port is available as a COM port.
 from __future__ import annotations
 
 import argparse
+import base64
 import sys
 import time
 from pathlib import Path
@@ -46,7 +47,7 @@ def read_until(ser: serial.Serial, expected: bytes, timeout_s: float) -> bytes:
     data = bytearray()
 
     while time.monotonic() < deadline:
-        chunk = ser.read(1)
+        chunk = ser.read(max(1, min(4096, ser.in_waiting)))
         if chunk:
             data += chunk
             if expected in data:
@@ -59,14 +60,25 @@ def read_until(ser: serial.Serial, expected: bytes, timeout_s: float) -> bytes:
 
 def enter_raw_repl(ser: serial.Serial) -> None:
     ser.reset_input_buffer()
-    ser.write(CTRL_C)
-    ser.write(CTRL_C)
-    time.sleep(0.15)
-    ser.reset_input_buffer()
+    stopped = False
+    for _ in range(6):
+        ser.write(CTRL_C)
+        try:
+            read_until(ser, b">>>", 1.5)
+            stopped = True
+            break
+        except K230ReplError:
+            continue
+
+    # Some media loops stop on Ctrl-C but do not emit a visible friendly-REPL
+    # prompt. Trying Ctrl-A is still safe and matches the proven camera probe.
+    if not stopped:
+        ser.reset_input_buffer()
     ser.write(CTRL_A)
-    read_until(ser, b"raw REPL; CTRL-B to exit", 2.0)
-    ser.write(CTRL_D)
-    read_until(ser, b"raw REPL; CTRL-B to exit", 2.0)
+    marker = b"raw REPL; CTRL-B to exit"
+    banner = read_until(ser, marker, 2.0)
+    if b">" not in banner.split(marker, 1)[1]:
+        read_until(ser, b">", 2.0)
 
 
 def exit_raw_repl(ser: serial.Serial) -> None:
@@ -92,7 +104,16 @@ def raw_exec(ser: serial.Serial, code: str, timeout_s: float = 10.0) -> bytes:
 
 
 def connect(port: str, baudrate: int, timeout_s: float) -> serial.Serial:
-    return serial.Serial(port=port, baudrate=baudrate, timeout=timeout_s, write_timeout=timeout_s)
+    ser = serial.Serial()
+    ser.port = port
+    ser.baudrate = baudrate
+    ser.timeout = timeout_s
+    ser.write_timeout = timeout_s
+    ser.dtr = True
+    ser.rts = False
+    ser.open()
+    ser.dtr = True
+    return ser
 
 
 def run_script(port: str, baudrate: int, script: Path) -> int:
@@ -110,16 +131,25 @@ def run_script(port: str, baudrate: int, script: Path) -> int:
 
 def write_file(port: str, baudrate: int, local: Path, remote: str) -> int:
     content = local.read_bytes()
-    code = (
-        "data = " + repr(content) + "\n"
-        f"with open({remote!r}, 'wb') as f:\n"
-        "    f.write(data)\n"
-        f"print('wrote {remote}', len(data))\n"
-    )
     with connect(port, baudrate, 0.2) as ser:
         enter_raw_repl(ser)
         try:
-            output = raw_exec(ser, code, timeout_s=15.0)
+            raw_exec(
+                ser,
+                "try:\n    f.close()\nexcept:\n    pass\n"
+                f"import binascii\nf = open({remote!r}, 'wb')",
+                timeout_s=5.0,
+            )
+            for offset in range(0, len(content), 1024):
+                chunk = content[offset:offset + 1024]
+                encoded = base64.b64encode(chunk)
+                code = f"f.write(binascii.a2b_base64({encoded!r}))"
+                raw_exec(ser, code, timeout_s=10.0)
+            output = raw_exec(
+                ser,
+                f"f.close()\nimport os\nprint('wrote {remote}', os.stat({remote!r})[6])",
+                timeout_s=5.0,
+            )
             if output:
                 sys.stdout.buffer.write(output)
         finally:

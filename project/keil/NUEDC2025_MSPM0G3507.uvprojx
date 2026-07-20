@@ -10,6 +10,7 @@
       <TargetName>NUEDC2025_MSPM0G3507</TargetName>
       <ToolsetNumber>0x4</ToolsetNumber>
       <ToolsetName>ARM-ADS</ToolsetName>
+      <pArmCC>6220000::V6.22::ARMCLANG</pArmCC>
       <pCCUsed>6220000::V6.22::ARMCLANG</pCCUsed>
       <uAC6>1</uAC6>
       <TargetOption>
@@ -190,7 +191,7 @@
             <hadIRAM2>1</hadIRAM2>
             <hadIROM2>1</hadIROM2>
             <StupSel>0</StupSel>
-            <useUlib>0</useUlib>
+            <useUlib>1</useUlib>
             <EndSel>0</EndSel>
             <uLtcg>0</uLtcg>
             <nSecure>0</nSecure>
@@ -340,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include;C:\ti\mspm0_sdk_2_10_00_04\source;..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\geometry;..\..\core\gimbal_tracking;..\..\core\kinematics;..\..\core\line_tracking;..\..\core\motion;..\..\core\pid;..\..\core\rotation;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\gimbal;..\..\middleware\line_follow;..\..\middleware\ui;..\..\bsp\canmv;..\..\bsp\common;..\..\bsp\grayscale_sensor;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\step_motor;..\..\bsp\time;..\..\board\sys_config</IncludePath>
+              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\aim_fusion;..\..\core\aim_solver;..\..\core\common;..\..\core\geometry;..\..\core\kinematics;..\..\core\localization;..\..\core\pid;..\..\core\rotation;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\gimbal;..\..\middleware\gimbal_tracking;..\..\middleware\line_follow;..\..\middleware\line_tracking;..\..\middleware\motion;..\..\middleware\ui;..\..\bsp\canmv;..\..\bsp\common;..\..\bsp\debug_uart;..\..\bsp\grayscale_sensor;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\bsp\bldc;..\..\board\sys_config;C:\ti\mspm0_sdk_2_10_00_04\source;C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -382,12 +383,27 @@
       </TargetOption>
       <Groups>
         <Group>
-          <GroupName>app</GroupName>
+          <GroupName>App</GroupName>
           <Files>
+            <File>
+              <FileName>app_e_calibration.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_e_calibration.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_e_calibration_test.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_e_calibration_test.c</FilePath>
+            </File>
             <File>
               <FileName>app_device_check.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\app\app_device_check.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_debug_cmd.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_debug_cmd.c</FilePath>
             </File>
             <File>
               <FileName>app_e_task.c</FileName>
@@ -407,68 +423,48 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>core/geometry</GroupName>
+          <GroupName>driverlib</GroupName>
           <Files>
+            <File>
+              <FileName>driverlib.a</FileName>
+              <FileType>4</FileType>
+              <FilePath>C:\ti\mspm0_sdk_2_10_00_04\source\ti\driverlib\lib\keil\m0p\mspm0g1x0x_g3x0x\driverlib.a</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Core</GroupName>
+          <Files>
+            <File>
+              <FileName>aim_fusion.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\core\aim_fusion\aim_fusion.c</FilePath>
+            </File>
+            <File>
+              <FileName>aim_solver.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\core\aim_solver\aim_solver.c</FilePath>
+            </File>
             <File>
               <FileName>geometry.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\core\geometry\geometry.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>core/gimbal_tracking</GroupName>
-          <Files>
-            <File>
-              <FileName>gimbal_tracking.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\core\gimbal_tracking\gimbal_tracking.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>core/kinematics</GroupName>
-          <Files>
             <File>
               <FileName>kinematics.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\core\kinematics\kinematics.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>core/line_tracking</GroupName>
-          <Files>
             <File>
-              <FileName>line_tracking.c</FileName>
+              <FileName>localization.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\core\line_tracking\line_tracking.c</FilePath>
+              <FilePath>..\..\core\localization\localization.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>core/motion</GroupName>
-          <Files>
-            <File>
-              <FileName>motion.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\core\motion\motion.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>core/pid</GroupName>
-          <Files>
             <File>
               <FileName>pid.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\core\pid\pid.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>core/rotation</GroupName>
-          <Files>
             <File>
               <FileName>rotation.c</FileName>
               <FileType>1</FileType>
@@ -477,48 +473,48 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>middleware/chassis</GroupName>
+          <GroupName>MiddleWare</GroupName>
           <Files>
+            <File>
+              <FileName>auto_aim.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\middleware\auto_aim\auto_aim.c</FilePath>
+            </File>
             <File>
               <FileName>chassis.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\middleware\chassis\chassis.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>middleware/fault</GroupName>
-          <Files>
             <File>
               <FileName>system_fault.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\middleware\fault\system_fault.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>middleware/gimbal</GroupName>
-          <Files>
             <File>
               <FileName>gimbal.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\middleware\gimbal\gimbal.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>middleware/line_follow</GroupName>
-          <Files>
+            <File>
+              <FileName>gimbal_tracking.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\middleware\gimbal_tracking\gimbal_tracking.c</FilePath>
+            </File>
             <File>
               <FileName>line_follow.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\middleware\line_follow\line_follow.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>middleware/ui</GroupName>
-          <Files>
+            <File>
+              <FileName>line_tracking.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\middleware\line_tracking\line_tracking.c</FilePath>
+            </File>
+            <File>
+              <FileName>motion.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\middleware\motion\motion.c</FilePath>
+            </File>
             <File>
               <FileName>ui.c</FileName>
               <FileType>1</FileType>
@@ -527,48 +523,53 @@
           </Files>
         </Group>
         <Group>
-          <GroupName>bsp/canmv</GroupName>
+          <GroupName>Board</GroupName>
+          <Files>
+            <File>
+              <FileName>startup_mspm0g350x_uvision.s</FileName>
+              <FileType>2</FileType>
+              <FilePath>..\..\board\startup\startup_mspm0g350x_uvision.s</FilePath>
+            </File>
+            <File>
+              <FileName>ti_msp_dl_config.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\board\sys_config\ti_msp_dl_config.c</FilePath>
+            </File>
+            <File>
+              <FileName>G3507.syscfg</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\board\sys_config\G3507.syscfg</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>BSP</GroupName>
           <Files>
             <File>
               <FileName>canmv_uart.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\canmv\canmv_uart.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>bsp/grayscale_sensor</GroupName>
-          <Files>
+            <File>
+              <FileName>debug_uart.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\debug_uart\debug_uart.c</FilePath>
+            </File>
             <File>
               <FileName>grayscale_sensor.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\grayscale_sensor\grayscale_sensor.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>bsp/imu</GroupName>
-          <Files>
             <File>
               <FileName>wit_sdk.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\imu\wit_sdk.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>bsp/key</GroupName>
-          <Files>
             <File>
               <FileName>key.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\key\key.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>bsp/motor</GroupName>
-          <Files>
             <File>
               <FileName>hall_encoder.c</FileName>
               <FileType>1</FileType>
@@ -579,65 +580,20 @@
               <FileType>1</FileType>
               <FilePath>..\..\bsp\motor\tb6612fng.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>bsp/oled</GroupName>
-          <Files>
             <File>
               <FileName>oled.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\oled\oled.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>bsp/step_motor</GroupName>
-          <Files>
-            <File>
-              <FileName>step_motor.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\step_motor\step_motor.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>bsp/time</GroupName>
-          <Files>
             <File>
               <FileName>bsp_time.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\time\bsp_time.c</FilePath>
             </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>board/sys_config</GroupName>
-          <Files>
             <File>
-              <FileName>ti_msp_dl_config.c</FileName>
+              <FileName>f32c_bldc.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\..\board\sys_config\ti_msp_dl_config.c</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>board/startup</GroupName>
-          <Files>
-            <File>
-              <FileName>startup_mspm0g350x_uvision.s</FileName>
-              <FileType>2</FileType>
-              <FilePath>..\..\board\startup\startup_mspm0g350x_uvision.s</FilePath>
-            </File>
-          </Files>
-        </Group>
-        <Group>
-          <GroupName>driverlib</GroupName>
-          <Files>
-            <File>
-              <FileName>driverlib.a</FileName>
-              <FileType>4</FileType>
-              <FilePath>C:\ti\mspm0_sdk_2_10_00_04\source\ti\driverlib\lib\keil\m0p\mspm0g1x0x_g3x0x\driverlib.a</FilePath>
+              <FilePath>..\..\bsp\bldc\f32c_bldc.c</FilePath>
             </File>
           </Files>
         </Group>

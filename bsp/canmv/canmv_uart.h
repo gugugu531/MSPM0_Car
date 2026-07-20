@@ -35,6 +35,13 @@ extern "C" {
 
 #define CANMV_FRAME_START 0x12U
 #define CANMV_FRAME_END   0x5BU
+#define CANMV_ANGLE_FRAME_START0 0xA5U
+#define CANMV_ANGLE_FRAME_START1 0x5AU
+#define CANMV_ANGLE_FRAME_LEN    9U
+#define CANMV_ANGLE_SCALE        100.0f /* int16 单位为 0.01 deg */
+#define CANMV_ANGLE_STATUS_VALID     0U
+#define CANMV_ANGLE_STATUS_NOT_FOUND 1U
+#define CANMV_ANGLE_STATUS_LOST      2U
 
 #define CANMV_LASER_BEGIN      2U
 #define CANMV_LASER_BYTE_COUNT 8U
@@ -46,6 +53,7 @@ extern "C" {
 
 extern volatile uint32_t g_canmv_uart_rx_byte_count;
 extern volatile uint32_t g_canmv_uart_valid_frame_count;
+extern volatile uint32_t g_canmv_uart_angle_frame_count;
 extern volatile uint32_t g_canmv_uart_drop_count;
 extern volatile uint8_t g_canmv_uart_last_byte;
 
@@ -55,6 +63,8 @@ extern volatile uint8_t g_canmv_uart_last_byte;
 typedef enum {
     CANMV_TARGET_LASER = 0,
     CANMV_TARGET_RECT,
+    /** 两个有符号 int16：yaw/pitch 角度误差，单位 0.01 deg。 */
+    CANMV_TARGET_ANGLE,
     CANMV_TARGET_MAX
 } CANMV_TARGET;
 

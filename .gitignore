@@ -8,6 +8,7 @@ build/
 .clangd
 .vscode/
 /NUEDC2025_MSPM0G3507_nortos_ticlang/
+# 保留 .uvprojx (工程结构文件, 需随仓库分发); 仅忽略构建产物与用户私有状态
 Project/Keil/Objects/
 Project/Keil/*.map
 Project/Keil/*.axf
@@ -26,11 +27,15 @@ project/keil/*.dep
 project/keil/*.log
 project/keil/*.uvoptx
 project/keil/*.uvguix.*
+project/keil/build_log.txt
 keil/
 !Project/
 !Project/Keil/
-!Project/Keil/*.uvprojx
 **/*.map
 **/*.obj
 **/*.o
 **/*.out
+/ai/toolchain/
+/ai/nncase_dump/
+/ai/.ultralytics/
+__pycache__/

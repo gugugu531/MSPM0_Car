@@ -6,61 +6,47 @@ import time
 from machine import FPIOA
 from machine import UART
 
-K230_UART_TX_PIN = 11
-K230_UART_RX_PIN = 12
+K230_UART_TX_PIN = 3
+K230_UART_RX_PIN = 4
 K230_UART_BAUDRATE = 115200
 
-FRAME_START = 0x12
-FRAME_END = 0x5B
-
-IMAGE_CENTER_X = 160
-IMAGE_CENTER_Y = 120
+ANGLE_FRAME_START0 = 0xA5
+ANGLE_FRAME_START1 = 0x5A
+ANGLE_SCALE = 100
 
 
 def uart1_init():
     fpioa = FPIOA()
-    fpioa.set_function(K230_UART_TX_PIN, fpioa.UART2_TXD)
-    fpioa.set_function(K230_UART_RX_PIN, fpioa.UART2_RXD)
+    fpioa.set_function(K230_UART_TX_PIN, fpioa.UART1_TXD)
+    fpioa.set_function(K230_UART_RX_PIN, fpioa.UART1_RXD)
 
-    return UART(UART.UART2,
+    return UART(UART.UART1,
                 baudrate=K230_UART_BAUDRATE,
                 bits=UART.EIGHTBITS,
                 parity=UART.PARITY_NONE,
                 stop=UART.STOPBITS_ONE)
 
 
-def append_u16_be(frame, value):
-    value = max(0, min(65535, int(value)))
+def append_i16_be(frame, value):
+    value = max(-32768, min(32767, int(value))) & 0xFFFF
     frame.append((value >> 8) & 0xFF)
     frame.append(value & 0xFF)
 
 
-def build_test_frame(counter):
-    target_x = 100 + (counter % 80)
-    target_y = 60 + ((counter * 3) % 80)
-    rect_corners = (
-        (20, 220),
-        (300, 220),
-        (300, 20),
-        (20, 20),
-    )
-
+def build_angle_test_frame(counter):
+    # 伪随机、有符号角度误差：便于验证字节序、符号解析和 OLED 刷新。
+    # 本脚本只应用于 Device Check 的 K230 页面；不要在瞄准任务中运行。
+    seed = (counter * 1103515245 + 12345) & 0xFFFFFFFF
+    yaw_error_deg = ((seed % 3001) - 1500) / 100.0       # -15.00 ~ +15.00 deg
+    pitch_error_deg = (((seed >> 16) % 2001) - 1000) / 100.0  # -10.00 ~ +10.00 deg
     frame = bytearray()
-    frame.append(FRAME_START)
-    frame.append(counter & 0xFF)
-
-    # Laser segment: target_x, target_y, laser_x, laser_y.
-    append_u16_be(frame, target_x)
-    append_u16_be(frame, target_y)
-    append_u16_be(frame, IMAGE_CENTER_X)
-    append_u16_be(frame, IMAGE_CENTER_Y)
-
-    for x, y in rect_corners:
-        append_u16_be(frame, x)
-        append_u16_be(frame, y)
-
-    frame.append(FRAME_END)
-    return frame, target_x, target_y
+    # K230 MicroPython 的 bytearray.extend() 不接受元组，逐字节追加。
+    frame.append(ANGLE_FRAME_START0)
+    frame.append(ANGLE_FRAME_START1)
+    append_i16_be(frame, round(yaw_error_deg * ANGLE_SCALE))
+    append_i16_be(frame, round(pitch_error_deg * ANGLE_SCALE))
+    frame.append(sum(frame) & 0xFF)
+    return frame, yaw_error_deg, pitch_error_deg
 
 
 def main():
@@ -69,9 +55,10 @@ def main():
     print("K230 UART1 communication test started: GPIO3 TX, GPIO4 RX, 115200 8N1")
 
     while True:
-        frame, target_x, target_y = build_test_frame(counter)
+        frame, yaw_error_deg, pitch_error_deg = build_angle_test_frame(counter)
         uart.write(frame)
-        print("tx frame=%d target=(%d,%d)" % (counter, target_x, target_y))
+        print("tx angle frame=%d yaw=%.2f pit=%.2f" %
+              (counter, yaw_error_deg, pitch_error_deg))
         counter = (counter + 1) & 0xFF
         time.sleep_ms(100)
 

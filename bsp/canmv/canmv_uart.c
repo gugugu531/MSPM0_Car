@@ -27,11 +27,14 @@ static uint8_t s_canmv_rx_buffer[CANMV_RX_BUFFER_LEN];
 static uint8_t s_canmv_frame[CANMV_RX_BUFFER_LEN];
 static uint8_t s_canmv_rx_count;
 static bool s_canmv_receiving;
+static uint8_t s_canmv_expected_len;
+static bool s_canmv_receiving_angle;
 static bool s_canmv_target_seen[CANMV_TARGET_MAX];
 static CANMV_TARGET_DATA s_canmv_target_data[CANMV_TARGET_MAX];
 
 volatile uint32_t g_canmv_uart_rx_byte_count;
 volatile uint32_t g_canmv_uart_valid_frame_count;
+volatile uint32_t g_canmv_uart_angle_frame_count;
 volatile uint32_t g_canmv_uart_drop_count;
 volatile uint8_t g_canmv_uart_last_byte;
 
@@ -98,6 +101,46 @@ static void CanMvUart_ResetRxState(void){
     memset(s_canmv_rx_buffer, 0, sizeof(s_canmv_rx_buffer));
     s_canmv_rx_count = 0U;
     s_canmv_receiving = false;
+    s_canmv_expected_len = 0U;
+    s_canmv_receiving_angle = false;
+}
+
+static void CanMvUart_ParseAngleFrame(void){
+    CANMV_TARGET_DATA *data = &s_canmv_target_data[CANMV_TARGET_ANGLE];
+    uint8_t checksum = 0U;
+    uint8_t vision_status;
+
+    for (uint8_t i = 0U; i < (CANMV_ANGLE_FRAME_LEN - 1U); i++){
+        checksum = (uint8_t)(checksum + s_canmv_rx_buffer[i]);
+    }
+    if (checksum != s_canmv_rx_buffer[CANMV_ANGLE_FRAME_LEN - 1U]){
+        data->status = CANMV_STATUS_FRAME_DROP;
+        g_canmv_uart_drop_count++;
+        return;
+    }
+
+    vision_status = s_canmv_rx_buffer[2];
+    if (vision_status > CANMV_ANGLE_STATUS_LOST){
+        data->status = CANMV_STATUS_FRAME_DROP;
+        g_canmv_uart_drop_count++;
+        return;
+    }
+
+    data->value[0] = (uint16_t)(((uint16_t)s_canmv_rx_buffer[4] << 8) |
+                                s_canmv_rx_buffer[5]);
+    data->value[1] = (uint16_t)(((uint16_t)s_canmv_rx_buffer[6] << 8) |
+                                s_canmv_rx_buffer[7]);
+    data->count = 2U;
+    if (vision_status == CANMV_ANGLE_STATUS_VALID){
+        data->status = CANMV_STATUS_OK;
+        s_canmv_target_seen[CANMV_TARGET_ANGLE] = true;
+    } else if ((vision_status == CANMV_ANGLE_STATUS_LOST) ||
+               s_canmv_target_seen[CANMV_TARGET_ANGLE]){
+        data->status = CANMV_STATUS_LOST;
+    } else{
+        data->status = CANMV_STATUS_NOT_FOUND;
+    }
+    g_canmv_uart_angle_frame_count++;
 }
 
 static void CanMvUart_UpdateTargetStatus(CANMV_TARGET target){
@@ -141,7 +184,8 @@ static bool CanMvUart_ParseTarget(CANMV_TARGET target){
 }
 
 static void CanMvUart_ParseFrame(void){
-    for (uint8_t i = 0U; i < (uint8_t)CANMV_TARGET_MAX; i++){
+    /* 27 字节坐标帧只携带 laser/rect；角度帧由专用解析器处理。 */
+    for (uint8_t i = 0U; i < (uint8_t)CANMV_TARGET_ANGLE; i++){
         if (!CanMvUart_ParseTarget((CANMV_TARGET)i)){
             CanMvUart_SetAllStatus(CANMV_STATUS_FRAME_DROP);
             return;
@@ -155,6 +199,7 @@ BSP_STATUS CanMvUart_Init(void){
     CanMvUart_ClearTargetData();
     g_canmv_uart_rx_byte_count = 0U;
     g_canmv_uart_valid_frame_count = 0U;
+    g_canmv_uart_angle_frame_count = 0U;
     g_canmv_uart_drop_count = 0U;
     g_canmv_uart_last_byte = 0U;
 
@@ -172,43 +217,65 @@ void CanMvUart_ProcessByte(uint8_t byte){
     g_canmv_uart_rx_byte_count++;
     g_canmv_uart_last_byte = byte;
 
-    if (byte == CANMV_FRAME_START){
-        /* 新帧头到来时立即重新同步，丢弃此前可能残缺的帧内容。 */
-        CanMvUart_ResetRxState();
-        s_canmv_receiving = true;
-    }
-
+    /*
+     * 支持两种定长帧：坐标帧 0x12...0x5B（27 字节）和角度帧
+     * 0xA5 0x5A status seq yaw_i16 pitch_i16 checksum（9 字节）。
+     * 关键点 —— 进入接收态后按长度采集, **中途不再把载荷里的 0x12/0x5B 当作帧
+     * 边界**。旧实现见到任意 0x12 就重同步, 只要坐标/角点字节里出现 0x12/0x5B
+     * 就会把整帧打散, 导致含这些字节的目标(尤其静止靶重复发同一帧)永远收不到。
+     * 对齐后每帧「满 27 字节->校验帧尾 0x5B->复位」自然衔接下一帧, 保持对齐。
+     */
     if (!s_canmv_receiving){
-        /* 未见帧头前收到的字节不参与解析，标记为丢帧便于上层诊断。 */
-        CanMvUart_SetAllStatus(CANMV_STATUS_FRAME_DROP);
+        /* 空闲态: 识别两种帧头；其余为帧间噪声。 */
+        if (byte == CANMV_FRAME_START){
+            s_canmv_rx_count = 0U;
+            s_canmv_rx_buffer[s_canmv_rx_count++] = byte;
+            s_canmv_receiving = true;
+            s_canmv_expected_len = CANMV_MIN_FRAME_LEN;
+        } else if (byte == CANMV_ANGLE_FRAME_START0){
+            s_canmv_rx_count = 0U;
+            s_canmv_rx_buffer[s_canmv_rx_count++] = byte;
+            s_canmv_receiving = true;
+            s_canmv_receiving_angle = true;
+        }
         return;
     }
 
-    if (s_canmv_rx_count >= CANMV_RX_BUFFER_LEN){
-        /* 缓冲区满仍未等到帧尾，说明协议已经失步。 */
+    if (s_canmv_receiving_angle && (s_canmv_rx_count == 1U)){
+        if (byte == CANMV_ANGLE_FRAME_START1){
+            s_canmv_rx_buffer[s_canmv_rx_count++] = byte;
+            s_canmv_expected_len = CANMV_ANGLE_FRAME_LEN;
+            return;
+        }
         CanMvUart_ResetRxState();
-        CanMvUart_SetAllStatus(CANMV_STATUS_FRAME_DROP);
+        if (byte == CANMV_FRAME_START){
+            CanMvUart_ProcessByte(byte);
+        }
         return;
     }
 
+    /* 接收态: 载荷字节(含 0x12/0x5B)一律按数据存入。 */
     s_canmv_rx_buffer[s_canmv_rx_count++] = byte;
 
-    if (byte != CANMV_FRAME_END){
-        return;
+    if (s_canmv_rx_count < s_canmv_expected_len){
+        return;   /* 帧未满, 继续接收 */
     }
 
-    if (s_canmv_rx_count != CANMV_MIN_FRAME_LEN){
-        /* 固定帧必须长度精确匹配，避免把随机字节中的 0x12/0x5B 误判成有效帧。 */
+    if (s_canmv_receiving_angle){
+        CanMvUart_ParseAngleFrame();
+        CanMvUart_ResetRxState();
+        g_canmv_uart_valid_frame_count++;
+    } else if (s_canmv_rx_buffer[CANMV_MIN_FRAME_LEN - 1U] == CANMV_FRAME_END){
+        /* 长度到位且帧尾正确 => 有效帧。复位后下一字节即下一帧帧头, 天然对齐。 */
+        memcpy(s_canmv_frame, s_canmv_rx_buffer, sizeof(s_canmv_frame));
+        CanMvUart_ResetRxState();
+        g_canmv_uart_valid_frame_count++;
+        CanMvUart_ParseFrame();
+    } else{
+        /* 满长仍非帧尾 => 已失步(多半丢过字节)。丢弃回空闲, 等下一个对齐帧头。 */
         CanMvUart_ResetRxState();
         CanMvUart_SetAllStatus(CANMV_STATUS_FRAME_DROP);
-        return;
     }
-
-    /* 解析前复制完整帧，随后复位接收状态，保证下一帧可以马上开始接收。 */
-    memcpy(s_canmv_frame, s_canmv_rx_buffer, sizeof(s_canmv_frame));
-    CanMvUart_ResetRxState();
-    g_canmv_uart_valid_frame_count++;
-    CanMvUart_ParseFrame();
 }
 
 void CanMvUart_ProcessRx(void){
@@ -218,9 +285,21 @@ void CanMvUart_ProcessRx(void){
     }
 }
 
+#ifndef CANMV_UART_TX_TIMEOUT
+#define CANMV_UART_TX_TIMEOUT 100000U
+#endif
+
 BSP_STATUS CanMvUart_SendByte(uint8_t byte){
-    while (DL_UART_isBusy(CANMV_UART_INST)){
-        ;
+    /*
+     * 只等 TX FIFO 有空位, 不能等 DL_UART_isBusy: BUSY 位在 K230 持续串流(UART2 RX
+     * 活动)时长期为忙, 会使本函数无限阻塞 —— 标定各页入口发 "LASER=x" 指令时全部卡死。
+     * 加超时兜底, 防止 TX 异常时挂死。
+     */
+    uint32_t timeout = CANMV_UART_TX_TIMEOUT;
+    while (DL_UART_isTXFIFOFull(CANMV_UART_INST)){
+        if (timeout-- == 0U){
+            return BSP_STATUS_TIMEOUT;
+        }
     }
 
     DL_UART_Main_transmitData(CANMV_UART_INST, byte);

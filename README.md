@@ -1,85 +1,31 @@
-# MSPM0 Car Project
+# NUEDC 2025E 简易自行瞄准装置 — MSPM0 固件
 
-基于 `TI MSPM0G3507` 的嵌入式小车工程，当前采用四层源码结构：
+基于 `TI MSPM0G3507` 的「自动寻迹小车 + 二维激光瞄准云台」固件，面向 2025 年全国大学生电子设计竞赛 E 题。
 
-`app -> core -> middleware -> bsp`
+## 硬件构成
 
-工程仍同时维护：
+| 子系统 | 器件 | 接口 |
+|--------|------|------|
+| 主控 | MSPM0G3507 (LQFP-64) | — |
+| 底盘轮 | 直流电机 ×2 (TB6612FNG) + 霍尔编码器 | PWM / GPIO |
+| 二维云台 | F32C 无刷电机 ×2 (yaw=地址1, pitch=地址2) | UART3 |
+| 姿态 | JY61P 六轴 (WIT 协议) | I2C0 |
+| 视觉 | K230 (CanMV) | UART2 |
+| 循迹 | 8 路灰度传感器 | GPIO |
+| 人机 | OLED + 独立按键 | I2C / GPIO |
+| 瞄准 | 蓝紫激光笔 (405nm, ≤10mW) | 云台承载 |
 
-- `CCS + ticlang`
-- `Keil MDK + ArmClang`
+## 任务流程（`app/app_e_task.c`）
 
-两套 IDE 工程共享同一套源码，但启动文件、链接配置、工程元数据和构建输出目录彼此独立。
+- **E1 循迹**：底盘沿 100cm×100cm 黑色轨迹逆时针自动寻迹，圈数 1~5 可设。
+- **E2 任意位姿瞄准**：保留纯视觉速度闭环，连续锁定后打点并带超时兜底。
+- **E3 规定位置瞄准**：已知位姿几何前馈一步到位，K230 只做慢速残差校正。
+- **F1/F2 连续瞄准**：里程与 IMU 定位、角点重锚、几何前馈，视觉丢失仍连续指向。
+- **F3 画圆**：用圈内里程进度驱动靶面 6cm 圆周相位。
 
-## 当前入口
+## 说明
 
-系统主入口位于 `app/main.c`：
-
-- 调用 `SYSCFG_DL_init()` 并使能中断
-- 初始化 `Ui`、按键、底盘、云台、巡线状态、CanMV UART 和故障状态
-- 使能编码器采样定时器、UART0 IMU 接收中断和 UART2 CanMV 接收中断
-- 进入 `app/app_launcher.c` 的 `App_Launch()`
-
-## 分层目录
-
-- `app/`
-  - 主入口、中断分发、E 题前三项任务入口和设备自检页面
-- `core/`
-  - PID、运动学、几何、旋转、巡线控制和视觉云台控制等算法逻辑
-- `middleware/`
-  - 底盘、云台、巡线状态、轻量 UI 和故障处理等组合能力
-- `bsp/`
-  - `common/`、`canmv/`、`grayscale_sensor/`、`imu/`、`key/`、`motor/`、`oled/`、`step_motor/`、`time/`
-- `board/`
-  - `sys_config/`：SysConfig 输入和生成代码
-  - `startup/`：启动和链接相关资源
-- `project/`
-  - `ccs/`：CCS projectspec 和目标配置
-  - `keil/`：Keil 工程文件
-- `docs/`
-  - 架构、接口、构建、结构、changelog、todo 文档
-- `tools/`
-  - J-Link 调试和烧录脚本
-
-## 依赖规则
-
-源码层级只能自顶向下调用：
-
-- `app` 可以调用 `core`、`middleware`、`bsp`
-- `core` 可以调用 `middleware`、`bsp`
-- `middleware` 可以调用 `bsp`
-- `bsp` 不能调用任何上层模块
-
-当前已把 BSP 中原本依赖上层的时间、延时和共享状态访问改为明确的下层接口或由对应模块自己导出状态。
-
-## 任务与调试入口
-
-固件启动后进入启动页，当前顶层菜单提供：
-
-- `E1 Line 1 lap` 到 `E1 Line 5 laps`
-- `E2 Aim 2s`
-- `E3 Aim 4s`
-- `Device check`
-
-设备自检页包含底盘、云台、IMU、CanMV 视觉和 8 路灰度传感器检查。
-
-## 构建入口
-
-- CCS 导入规格：`project/ccs/NUEDC2025_MSPM0G3507_ticlang.projectspec`
-- Keil 工程文件：`project/keil/NUEDC2025_MSPM0G3507.uvprojx`
-
-修改源码布局后需要同步维护两套工程文件。当前工程文件已指向新的分层目录。
-
-最近一次验证：
-
-- CCS/ticlang 直接交叉编译通过，使用 `C:\ti\ti_cgt_arm_llvm_4.0.2.LTS\bin\tiarmclang.exe`
-- Keil/ArmClang rebuild 通过，使用 `D:\Keil_v5\UV4\UV4.exe`
-
-## 文档
-
-- `docs/architecture.md`
-- `docs/interfaces.md`
-- `docs/build-guide.md`
-- `docs/project-structure.md`
-- `docs/changelog.md`
-- `docs/todo.md`
+- I2C 驱动 JY61P；不可同时使用无线调试器的虚拟串口和 Ex Uart。
+- 云台两轴为 F32C 无刷驱动；纯视觉调试使用速度接口，几何前馈任务使用绝对位置接口。
+- MCU 实机参数统一在 `AppE_GetCalibrationConfig()` 中修改，详见 `docs/calibration.md`。
+- 详见 `docs/architecture.md` 与 `docs/interfaces/`。

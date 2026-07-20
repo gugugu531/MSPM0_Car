@@ -69,13 +69,14 @@ static uint32_t TB6612FNG_DutyToCompare(float duty_percent){
 
 static void TB6612FNG_SetOutputPins(const TB6612FNG_HW_CONFIG *hw, TB6612FNG_OUTPUT output){
     switch (output){
+        /* IN1/IN2 极性: 与接线相反, 前进/后退对调, 使左右两轮实际转向修正 */
         case TB6612FNG_OUTPUT_FORWARD:
-            DL_GPIO_setPins(hw->in1_port, hw->in1_pin);
-            DL_GPIO_clearPins(hw->in2_port, hw->in2_pin);
-            break;
-        case TB6612FNG_OUTPUT_BACKWARD:
             DL_GPIO_clearPins(hw->in1_port, hw->in1_pin);
             DL_GPIO_setPins(hw->in2_port, hw->in2_pin);
+            break;
+        case TB6612FNG_OUTPUT_BACKWARD:
+            DL_GPIO_setPins(hw->in1_port, hw->in1_pin);
+            DL_GPIO_clearPins(hw->in2_port, hw->in2_pin);
             break;
         case TB6612FNG_OUTPUT_BRAKE:
             DL_GPIO_setPins(hw->in1_port, hw->in1_pin);

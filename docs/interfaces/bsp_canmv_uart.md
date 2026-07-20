@@ -13,6 +13,16 @@
 #define CANMV_FRAME_END   0x5BU
 ```
 
+除原坐标帧外，UART2 同时接受 K230 角度误差帧：
+
+```text
+A5 5A yaw_i16_be pitch_i16_be checksum
+```
+
+总长 9 字节：`A5 5A status seq yaw_i16_be pitch_i16_be checksum`。`yaw/pitch` 为有符号大端整数，单位 `0.01 deg`；`status` 为 `0=VALID`、`1=NOT_FOUND`、`2=LOST`，`seq` 为滚动帧序号，校验和为前 8 个字节的低 8 位。角度帧的数据通过 `CANMV_TARGET_ANGLE` 读取。原 `0x12...0x5B` 坐标帧保持不变。
+
+每个相机周期都发送角度状态帧。未识别到目标时显式发送 `NOT_FOUND/LOST`，MCU 因而不会继续使用上一帧的陈旧角度误差。
+
 已知数据段：
 
 - 激光点数据：从 `CANMV_LASER_BEGIN` 开始，共 `CANMV_LASER_BYTE_COUNT` 字节，解析为 4 个 `uint16_t`
@@ -66,6 +76,7 @@ top_left_x/y,
 typedef enum {
     CANMV_TARGET_LASER = 0,
     CANMV_TARGET_RECT,
+    CANMV_TARGET_ANGLE,
     CANMV_TARGET_MAX
 } CANMV_TARGET;
 ```
