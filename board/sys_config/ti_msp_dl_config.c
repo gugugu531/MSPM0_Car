@@ -561,6 +561,14 @@ SYSCONFIG_WEAK void SYSCFG_DL_MPU6050_JY61P_Tracking_init(void) {
     DL_I2C_setControllerRXFIFOThreshold(MPU6050_JY61P_Tracking_INST, DL_I2C_RX_FIFO_LEVEL_BYTES_1);
     DL_I2C_enableControllerClockStretching(MPU6050_JY61P_Tracking_INST);
 
+    /* Configure Interrupts */
+    DL_I2C_enableInterrupt(MPU6050_JY61P_Tracking_INST,
+                           DL_I2C_INTERRUPT_CONTROLLER_ARBITRATION_LOST |
+                           DL_I2C_INTERRUPT_CONTROLLER_NACK |
+                           DL_I2C_INTERRUPT_CONTROLLER_RXFIFO_TRIGGER |
+                           DL_I2C_INTERRUPT_CONTROLLER_RX_DONE |
+                           DL_I2C_INTERRUPT_CONTROLLER_TX_DONE);
+
 
     /* Enable module */
     DL_I2C_enableController(MPU6050_JY61P_Tracking_INST);

@@ -656,126 +656,75 @@ int32_t WitGetData(WIT_IMU_DATA *out)
 #include "bsp_time.h"
 
 #define JY61P_I2C_INST          MPU6050_JY61P_Tracking_INST
-#define JY61P_I2C_TIMEOUT       100000U
+#define JY61P_I2C_IRQN          MPU6050_JY61P_Tracking_INST_INT_IRQN
+/* 单次读寄存器字节数 (angle/gyro 各 6 字节) */
+#define JY61P_I2C_READ_LEN      6U
+/* 事务看门狗超时(ms): 中断状态机卡住超过此值则复位, 防止 IMU 数据永久冻结。
+ * 正常一轮"读angle→读gyro"< 1ms 完成; 看门狗由 5ms 一次的 Poll 检查。 */
+#define JY61P_I2C_XFER_TIMEOUT_MS 3U
 
 static volatile uint32_t s_jy61p_i2c_poll_count;
 static volatile uint32_t s_jy61p_i2c_error_count;
 static volatile uint32_t s_jy61p_i2c_nack_count;
 
-/* ═══════════════════ 硬件 I2C 底层 (MSPM0 SDK FIFO 轮询模式) ═══════════════ */
+/*
+ * 中断驱动异步读状态机: Poll 只 kick 一次"读angle→读gyro"链并立即返回,
+ * 实际传输由 I2C0 中断逐阶段推进, 不在任何 ISR 里忙等。
+ */
+typedef enum {
+    JY61P_I2C_IDLE = 0,
+    JY61P_I2C_ANGLE_TX,   /* 已发 angle 寄存器地址(TX, 不发 STOP), 等 TX_DONE */
+    JY61P_I2C_ANGLE_RX,   /* 重复起始读 6 字节, 等 RX_DONE */
+    JY61P_I2C_GYRO_TX,    /* 已发 gyro 寄存器地址, 等 TX_DONE */
+    JY61P_I2C_GYRO_RX,    /* 读 6 字节, 等 RX_DONE */
+} JY61P_I2C_STATE;
 
-static bool JY61P_I2C_WaitIdle(void)
-{
-    uint32_t timeout = JY61P_I2C_TIMEOUT;
-    while ((DL_I2C_getControllerStatus(JY61P_I2C_INST)
-            & DL_I2C_CONTROLLER_STATUS_IDLE) == 0U){
-        if (timeout-- == 0U){
-            /* 超时: 总线可能被损坏设备拉死, 强制复位控制器并发送 STOP */
-            DL_I2C_resetControllerTransfer(JY61P_I2C_INST);
-            return false;
-        }
-    }
-    return true;
-}
+static volatile JY61P_I2C_STATE s_jy61p_state;
+static volatile uint32_t s_jy61p_state_ms;   /* 进入当前非 IDLE 态的时间戳 (看门狗用) */
+static uint8_t s_jy61p_rx[JY61P_I2C_READ_LEN];
+static volatile uint8_t s_jy61p_rx_count;
+
+/* ═══════════════════ 中断驱动异步 I2C 底层 (非阻塞) ═══════════════════════ */
 
 /*
- * I2C 写: START + DEVADDR(W) + REG + DATA[0..N] + STOP
+ * 启动一次寄存器读的 TX 阶段: 预载寄存器地址, 发 START 但抑制 STOP (STOP_DISABLE),
+ * 使随后的 RX 阶段自动产生 REPEATED START。TX 完成由 TX_DONE 中断续接 RX。
  */
-static bool JY61P_I2C_WriteRegs(uint8_t reg, const uint8_t *data, uint8_t len)
+static void JY61P_I2C_StartRegRead(uint8_t reg, JY61P_I2C_STATE tx_state)
 {
-    uint8_t i;
-    uint32_t timeout;
-
-    if (!JY61P_I2C_WaitIdle()){ return false; }
-
-    DL_I2C_flushControllerTXFIFO(JY61P_I2C_INST);
-    DL_I2C_transmitControllerData(JY61P_I2C_INST, reg);
-    for (i = 0U; i < len; i++){
-        uint32_t tx_timeout = JY61P_I2C_TIMEOUT;
-        while (DL_I2C_isControllerTXFIFOFull(JY61P_I2C_INST)){
-            if (tx_timeout-- == 0U){ return false; }
-        }
-        DL_I2C_transmitControllerData(JY61P_I2C_INST, data[i]);
-    }
-
-    DL_I2C_startControllerTransfer(JY61P_I2C_INST, JY61P_I2C_ADDR_7BIT,
-        DL_I2C_CONTROLLER_DIRECTION_TX, (uint32_t)(len + 1U));
-    delay_cycles(10U);
-
-    timeout = JY61P_I2C_TIMEOUT;
-    while ((DL_I2C_getControllerStatus(JY61P_I2C_INST)
-            & DL_I2C_CONTROLLER_STATUS_BUSY) != 0U){
-        if (timeout-- == 0U){ return false; }
-    }
-
-    if ((DL_I2C_getControllerStatus(JY61P_I2C_INST)
-         & DL_I2C_CONTROLLER_STATUS_ERROR) != 0U){
-        DL_I2C_resetControllerTransfer(JY61P_I2C_INST);
-        return false;
-    }
-
-    return JY61P_I2C_WaitIdle();
-}
-
-/*
- * I2C 读 (REPEATED START):
- *   Phase 1: TX reg addr (STOP_DISABLE) → Phase 2: RX data (auto REPEATED START)
- *
- *   参考: TI E2E 论坛 "LP-MSPM0G3507: Repeated Start Condition Settings"
- *   https://e2e.ti.com/support/microcontrollers/arm-based-microcontrollers-group/
- *   arm-based-microcontrollers/f/arm-based-microcontrollers-forum/1416788/
- *
- *   协议序列 (与软件 I2C 完全一致):
- *   START + DEVADDR(W) + REG + REPEATED_START + DEVADDR(R) + DATA[0..N] + STOP
- */
-static bool JY61P_I2C_ReadRegs(uint8_t reg, uint8_t *data, uint8_t len)
-{
-    uint8_t i;
-    uint32_t timeout;
-
-    if (data == NULL || len == 0U){ return true; }
-
-    /* Phase 1: TX register address, STOP_DISABLE 抑制 STOP */
     DL_I2C_flushControllerRXFIFO(JY61P_I2C_INST);
     DL_I2C_flushControllerTXFIFO(JY61P_I2C_INST);
-
-    if (!JY61P_I2C_WaitIdle()){ return false; }
+    s_jy61p_rx_count = 0U;
+    s_jy61p_state = tx_state;
+    s_jy61p_state_ms = BSP_Time_GetMs();
 
     DL_I2C_transmitControllerData(JY61P_I2C_INST, reg);
     DL_I2C_startControllerTransferAdvanced(JY61P_I2C_INST, JY61P_I2C_ADDR_7BIT,
         DL_I2C_CONTROLLER_DIRECTION_TX, 1U,
         DL_I2C_CONTROLLER_START_ENABLE,
-        DL_I2C_CONTROLLER_STOP_DISABLE,   /* <-- 关键: 不发 STOP */
+        DL_I2C_CONTROLLER_STOP_DISABLE,   /* 不发 STOP -> RX 阶段自动 REPEATED START */
         DL_I2C_CONTROLLER_ACK_DISABLE);
-    delay_cycles(10U);
+}
 
-    timeout = JY61P_I2C_TIMEOUT;
-    while ((DL_I2C_getControllerStatus(JY61P_I2C_INST)
-            & DL_I2C_CONTROLLER_STATUS_BUSY) != 0U){
-        if (timeout-- == 0U){ s_jy61p_i2c_nack_count++; return false; }
-    }
-
-    if ((DL_I2C_getControllerStatus(JY61P_I2C_INST)
-         & DL_I2C_CONTROLLER_STATUS_ERROR) != 0U){
-        s_jy61p_i2c_nack_count++;
-        DL_I2C_resetControllerTransfer(JY61P_I2C_INST);
-        return false;
-    }
-
-    /* Phase 2: RX, 硬件自动产生 REPEATED START (前一阶段未发 STOP) */
+/* TX(寄存器地址)完成后由中断调用: 启动 RX 阶段读取 READ_LEN 字节 (自动 REPEATED START)。 */
+static void JY61P_I2C_StartRx(JY61P_I2C_STATE rx_state)
+{
+    s_jy61p_rx_count = 0U;
+    s_jy61p_state = rx_state;
+    s_jy61p_state_ms = BSP_Time_GetMs();
     DL_I2C_startControllerTransfer(JY61P_I2C_INST, JY61P_I2C_ADDR_7BIT,
-        DL_I2C_CONTROLLER_DIRECTION_RX, len);
-    delay_cycles(10U);
+        DL_I2C_CONTROLLER_DIRECTION_RX, JY61P_I2C_READ_LEN);
+}
 
-    for (i = 0U; i < len; i++){
-        timeout = JY61P_I2C_TIMEOUT;
-        while (DL_I2C_isControllerRXFIFOEmpty(JY61P_I2C_INST)){
-            if (timeout-- == 0U){ s_jy61p_i2c_nack_count++; return false; }
+/* 从 RX FIFO 排空可用字节到接收缓冲 (RXFIFO_TRIGGER 与 RX_DONE 都调用, 幂等)。 */
+static void JY61P_I2C_DrainRxFifo(void)
+{
+    while (!DL_I2C_isControllerRXFIFOEmpty(JY61P_I2C_INST)){
+        uint8_t b = DL_I2C_receiveControllerData(JY61P_I2C_INST);
+        if (s_jy61p_rx_count < JY61P_I2C_READ_LEN){
+            s_jy61p_rx[s_jy61p_rx_count++] = b;
         }
-        data[i] = DL_I2C_receiveControllerData(JY61P_I2C_INST);
     }
-
-    return JY61P_I2C_WaitIdle();
 }
 /* ═══════════════════ 应用层接口 ═══════════════════════════════════════════ */
 
@@ -792,35 +741,111 @@ static float JY61P_I2C_ParseAngle(int16_t raw)
     return angle;
 }
 
+/* 把接收缓冲的 6 字节 angle 帧解码并发布到 GyroscopeChannelData[6..8]。 */
+static void JY61P_I2C_PublishAngle(const uint8_t *buf)
+{
+    GyroscopeChannelData[6] = (double)JY61P_I2C_ParseAngle(JY61P_I2C_ParseI16(&buf[0]));
+    GyroscopeChannelData[7] = (double)JY61P_I2C_ParseAngle(JY61P_I2C_ParseI16(&buf[2]));
+    GyroscopeChannelData[8] = (double)JY61P_I2C_ParseAngle(JY61P_I2C_ParseI16(&buf[4]));
+}
+
+/* 把接收缓冲的 6 字节 gyro 帧解码并发布到 GyroscopeChannelData[3..5] (deg/s)。 */
+static void JY61P_I2C_PublishGyro(const uint8_t *buf)
+{
+    GyroscopeChannelData[3] = (double)JY61P_I2C_ParseI16(&buf[0]) / 32768.0 * 2000.0;
+    GyroscopeChannelData[4] = (double)JY61P_I2C_ParseI16(&buf[2]) / 32768.0 * 2000.0;
+    GyroscopeChannelData[5] = (double)JY61P_I2C_ParseI16(&buf[4]) / 32768.0 * 2000.0;
+}
+
 void JY61P_I2C_Init(void)
 {
     s_jy61p_i2c_poll_count  = 0U;
     s_jy61p_i2c_error_count = 0U;
     s_jy61p_i2c_nack_count  = 0U;
+    s_jy61p_state           = JY61P_I2C_IDLE;
     /* 校准已固化在 JY61P flash 中, 上电无需重复执行 */
+
+    /* I2C 事件中断由 SysConfig 生成的 init 使能 (intController);
+     * 此处只开 NVIC。优先级 2: 低于 UART/视觉的 1, 且 ISR 很短(仅排空 6 字节)。 */
+    NVIC_SetPriority(JY61P_I2C_IRQN, 2U);
+    NVIC_ClearPendingIRQ(JY61P_I2C_IRQN);
+    NVIC_EnableIRQ(JY61P_I2C_IRQN);
 }
 
+/*
+ * 非阻塞 kick + 看门狗 (由 SysTick ISR 每 5ms 调用一次):
+ *   - 上一轮事务仍在进行且未超时 -> 本拍不动 (让中断继续推进);
+ *   - 事务卡死超过看门狗阈值 -> 复位控制器回 IDLE, 防 IMU 数据永久冻结;
+ *   - 空闲则启动新一轮 "读angle -> 读gyro" 链, 立即返回。
+ * 实际传输全部在 I2C0 中断里推进, 本函数不忙等。
+ */
 void JY61P_I2C_Poll(void)
 {
-    uint8_t buf[6];
-    int16_t raw[3];
+    uint32_t now_ms = BSP_Time_GetMs();
+
+    if (s_jy61p_state != JY61P_I2C_IDLE){
+        if ((uint32_t)(now_ms - s_jy61p_state_ms) >= JY61P_I2C_XFER_TIMEOUT_MS){
+            DL_I2C_resetControllerTransfer(JY61P_I2C_INST);
+            s_jy61p_state = JY61P_I2C_IDLE;
+            s_jy61p_i2c_error_count++;
+        } else{
+            return;
+        }
+    }
+
+    /* 总线未彻底释放则等下一拍再启动。 */
+    if ((DL_I2C_getControllerStatus(JY61P_I2C_INST)
+         & DL_I2C_CONTROLLER_STATUS_IDLE) == 0U){
+        return;
+    }
 
     s_jy61p_i2c_poll_count++;
+    JY61P_I2C_StartRegRead(JY61P_I2C_REG_ANGLE, JY61P_I2C_ANGLE_TX);
+}
 
-    if (JY61P_I2C_ReadRegs(JY61P_I2C_REG_ANGLE, buf, 6U)){
-        GyroscopeChannelData[6] = (double)JY61P_I2C_ParseAngle(JY61P_I2C_ParseI16(&buf[0]));
-        GyroscopeChannelData[7] = (double)JY61P_I2C_ParseAngle(JY61P_I2C_ParseI16(&buf[2]));
-        GyroscopeChannelData[8] = (double)JY61P_I2C_ParseAngle(JY61P_I2C_ParseI16(&buf[4]));
-    } else{ s_jy61p_i2c_error_count++; }
+/*
+ * I2C0 中断: 异步读状态机推进 (全程无忙等)。
+ *   TX_DONE       : 寄存器地址发完 -> 启动该寄存器的 RX 阶段 (自动 REPEATED START);
+ *   RXFIFO_TRIGGER: RX FIFO 有数据 -> 排空到接收缓冲;
+ *   RX_DONE       : 读完 -> 发布数据; angle 读完则链到 gyro, gyro 读完回 IDLE;
+ *   NACK/仲裁丢失 : 复位控制器回 IDLE, 计数。
+ */
+void I2C0_IRQHandler(void)
+{
+    switch (DL_I2C_getPendingInterrupt(JY61P_I2C_INST)){
+    case DL_I2C_IIDX_CONTROLLER_RXFIFO_TRIGGER:
+        JY61P_I2C_DrainRxFifo();
+        break;
 
-    if (JY61P_I2C_ReadRegs(JY61P_I2C_REG_GYRO, buf, 6U)){
-        raw[0] = JY61P_I2C_ParseI16(&buf[0]);
-        raw[1] = JY61P_I2C_ParseI16(&buf[2]);
-        raw[2] = JY61P_I2C_ParseI16(&buf[4]);
-        GyroscopeChannelData[3] = (double)raw[0] / 32768.0 * 2000.0;
-        GyroscopeChannelData[4] = (double)raw[1] / 32768.0 * 2000.0;
-        GyroscopeChannelData[5] = (double)raw[2] / 32768.0 * 2000.0;
-    } else{ s_jy61p_i2c_error_count++; }
+    case DL_I2C_IIDX_CONTROLLER_TX_DONE:
+        if (s_jy61p_state == JY61P_I2C_ANGLE_TX){
+            JY61P_I2C_StartRx(JY61P_I2C_ANGLE_RX);
+        } else if (s_jy61p_state == JY61P_I2C_GYRO_TX){
+            JY61P_I2C_StartRx(JY61P_I2C_GYRO_RX);
+        }
+        break;
+
+    case DL_I2C_IIDX_CONTROLLER_RX_DONE:
+        JY61P_I2C_DrainRxFifo();
+        if (s_jy61p_state == JY61P_I2C_ANGLE_RX){
+            JY61P_I2C_PublishAngle(s_jy61p_rx);
+            JY61P_I2C_StartRegRead(JY61P_I2C_REG_GYRO, JY61P_I2C_GYRO_TX);
+        } else if (s_jy61p_state == JY61P_I2C_GYRO_RX){
+            JY61P_I2C_PublishGyro(s_jy61p_rx);
+            s_jy61p_state = JY61P_I2C_IDLE;
+        }
+        break;
+
+    case DL_I2C_IIDX_CONTROLLER_NACK:
+    case DL_I2C_IIDX_CONTROLLER_ARBITRATION_LOST:
+        DL_I2C_resetControllerTransfer(JY61P_I2C_INST);
+        s_jy61p_state = JY61P_I2C_IDLE;
+        s_jy61p_i2c_nack_count++;
+        break;
+
+    default:
+        break;
+    }
 }
 
 uint32_t JY61P_I2C_GetPollCount(void)    { return s_jy61p_i2c_poll_count; }

@@ -189,6 +189,7 @@ I2C1.sclPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric2";
 I2C2.$name                             = "MPU6050_JY61P_Tracking";
 I2C2.basicEnableController             = true;
 I2C2.basicControllerStandardBusSpeed   = "Fast";
+I2C2.intController                     = ["ARBITRATION_LOST","NACK","RXFIFO_TRIGGER","RX_DONE","TX_DONE"];
 I2C2.peripheral.$assign                = "I2C0";
 I2C2.peripheral.sdaPin.$assign         = "PA0";
 I2C2.peripheral.sclPin.$assign         = "PA1";
