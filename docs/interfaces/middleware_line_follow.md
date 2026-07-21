@@ -76,10 +76,6 @@ typedef struct {
 
 该接口不会屏蔽、估计或消抖任意通道。Device Check 的 Line Sensor 页面显示同一份最新状态。
 
-### `BSP_STATUS LineFollow_GetState(LINE_FOLLOW_STATE *out)`
-
-复制完整巡线状态。`out == NULL` 时返回 `BSP_STATUS_NULL`。
-
 ### `BSP_STATUS LineFollow_GetSensor(LINE_FOLLOW_SENSOR_STATE *out)`
 
 复制传感器状态。`out == NULL` 时返回 `BSP_STATUS_NULL`。
@@ -88,69 +84,28 @@ typedef struct {
 
 返回当前传感器 bit mask。
 
-### `uint8_t LineFollow_GetSensorValue(uint8_t index)`
-
-返回指定通道传感器值。`index >= LINE_FOLLOW_SENSOR_COUNT` 时返回 `0`。
-
 ### `uint8_t LineFollow_GetActiveCount(void)`
 
 返回当前检测到黑线的通道数量。当前灰度传感器语义为 `0` 表示检测到线。
-
-### `bool LineFollow_IsActiveCountInRange(uint8_t min_count, uint8_t max_count)`
-
-判断当前检测到线的通道数量是否位于指定范围。
-
-### `bool LineFollow_IsEmpty(void)`
-
-判断当前是否没有任何通道检测到线。
-
-### `bool LineFollow_IsHalfDetected(void)`
-
-判断当前是否满足半线/边线粗略判定。当前实现为检测到线的通道数量在 `3..6` 之间。
-
-### `bool LineFollow_IsCrossDetected(void)`
-
-判断当前是否满足十字线粗略判定。当前实现为检测到线的通道数量在 `7..8` 之间。
-
-### `bool LineFollow_IsCenterActive(void)`
-
-判断中间通道是否检测到线。当前实现使用第 `3`、`4` 两路通道中的任意一路。
 
 ### `int32_t LineFollow_GetEdgeCount(void)`
 
 返回当前边线计数。
 
-### `void LineFollow_SetEdgeCount(int32_t edge_count)`
-
-设置边线计数。
-
 ### `void LineFollow_IncrementEdge(void)`
 
 边线计数加一。
-
-### `void LineFollow_ResetEdge(void)`
-
-清零边线计数。
-
-### `bool LineFollow_IsTurning(void)`
-
-返回当前是否处于转弯状态。
-
-### `void LineFollow_SetTurning(bool turning)`
-
-设置转弯状态。
 
 ## 迁移说明
 
 旧变量和接口的迁移关系：
 
 ```text
-Digital[i]      -> LineFollow_GetSensorValue(i)
 Digital[]       -> LineFollow_GetSensor()
 edge            -> LineFollow_GetEdgeCount()
 edge++          -> LineFollow_IncrementEdge()
-turning         -> LineFollow_IsTurning()
-turning = true  -> LineFollow_SetTurning(true)
 ```
 
 旧 `sInedge` 和 `UpdateSInedge()` 不迁入本模块。后续在具体使用场景中重新设计阶段距离逻辑。
+
+> 半线/十字/中心等语义判定与阶段计数增删接口在实际任务中未被采用（app 层自持巡线判定），已随死代码清理移除。

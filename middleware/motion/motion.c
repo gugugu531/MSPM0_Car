@@ -89,32 +89,8 @@ BSP_STATUS Motion_Stop(void){
     return status;
 }
 
-MOTION_STATE Motion_GetState(void){
-    return s_motion_state;
-}
-
 MOTION_COMMAND Motion_CommandBrake(void){
     return Motion_MakeCommand(MOTION_MODE_BRAKE, 0.0f);
-}
-
-MOTION_COMMAND Motion_CommandCoast(void){
-    return Motion_MakeCommand(MOTION_MODE_COAST, 0.0f);
-}
-
-MOTION_COMMAND Motion_CommandStraight(float duty_percent){
-    return Motion_MakeCommand(MOTION_MODE_STRAIGHT, duty_percent);
-}
-
-MOTION_COMMAND Motion_CommandBackward(float duty_percent){
-    return Motion_MakeCommand(MOTION_MODE_BACKWARD, duty_percent);
-}
-
-MOTION_COMMAND Motion_CommandSpinLeft(float duty_percent){
-    return Motion_MakeCommand(MOTION_MODE_SPIN_LEFT, duty_percent);
-}
-
-MOTION_COMMAND Motion_CommandSpinRight(float duty_percent){
-    return Motion_MakeCommand(MOTION_MODE_SPIN_RIGHT, duty_percent);
 }
 
 MOTION_COMMAND Motion_CommandLineFollow(void){

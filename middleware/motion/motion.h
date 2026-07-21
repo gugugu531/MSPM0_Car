@@ -80,39 +80,9 @@ BSP_STATUS Motion_Apply(const MOTION_COMMAND *command, float dt_s);
 BSP_STATUS Motion_Stop(void);
 
 /**
- * @brief 获取最近一次运动状态。
- */
-MOTION_STATE Motion_GetState(void);
-
-/**
  * @brief 构造主动刹车命令。
  */
 MOTION_COMMAND Motion_CommandBrake(void);
-
-/**
- * @brief 构造滑行命令。
- */
-MOTION_COMMAND Motion_CommandCoast(void);
-
-/**
- * @brief 构造直行命令。
- */
-MOTION_COMMAND Motion_CommandStraight(float duty_percent);
-
-/**
- * @brief 构造倒车命令。
- */
-MOTION_COMMAND Motion_CommandBackward(float duty_percent);
-
-/**
- * @brief 构造原地左转命令。
- */
-MOTION_COMMAND Motion_CommandSpinLeft(float duty_percent);
-
-/**
- * @brief 构造原地右转命令。
- */
-MOTION_COMMAND Motion_CommandSpinRight(float duty_percent);
 
 /**
  * @brief 构造巡线命令。

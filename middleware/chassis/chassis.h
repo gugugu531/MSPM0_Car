@@ -35,24 +35,6 @@ typedef struct {
 } CHASSIS_DUTY;
 
 /**
- * @brief 底盘组合状态快照。
- */
-typedef struct {
-    /** 最近设置的左右轮占空比。 */
-    CHASSIS_DUTY duty;
-    /** 编码器估算速度，单位 m/s。 */
-    float speed_mps;
-    /** 编码器累计距离，单位 m。 */
-    float distance_m;
-    /** 编码器方向。 */
-    HALL_ENCODER_DIR encoder_dir;
-    /** 左电机驱动输出状态。 */
-    TB6612FNG_OUTPUT left_output;
-    /** 右电机驱动输出状态。 */
-    TB6612FNG_OUTPUT right_output;
-} CHASSIS_STATUS;
-
-/**
  * @brief 初始化底盘相关 BSP 外设。
  */
 BSP_STATUS Chassis_Init(void);
@@ -80,26 +62,6 @@ BSP_STATUS Chassis_Brake(void);
 BSP_STATUS Chassis_Coast(void);
 
 /**
- * @brief 更新底盘运行状态。
- */
-BSP_STATUS Chassis_Update(void);
-
-/**
- * @brief 转发 GPIO 编码器中断状态到底盘服务。
- */
-void Chassis_HandleEncoderIrq(uint32_t gpio_status);
-
-/**
- * @brief 转发编码器采样定时器中断到底盘服务。
- */
-void Chassis_HandleEncoderTimerIrq(void);
-
-/**
- * @brief 获取底盘状态快照。
- */
-BSP_STATUS Chassis_GetStatus(CHASSIS_STATUS *out);
-
-/**
  * @brief 获取最近设置的左右轮占空比。
  */
 CHASSIS_DUTY Chassis_GetDuty(void);
@@ -113,11 +75,6 @@ float Chassis_GetSpeed(void);
  * @brief 获取编码器累计距离，单位 m。
  */
 float Chassis_GetDistance(void);
-
-/**
- * @brief 获取最近编码器方向。
- */
-HALL_ENCODER_DIR Chassis_GetEncoderDir(void);
 
 /**
  * @brief 清零编码器累计距离。

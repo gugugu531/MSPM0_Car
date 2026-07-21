@@ -97,20 +97,13 @@ typedef struct {
 
 主动刹车并将最近模式记录为 `IDLE`。
 
-### `MOTION_STATE Motion_GetState(void)`
-
-返回最近一次运动状态快照。
-
 ## 命令构造函数
 
 ```c
 MOTION_COMMAND Motion_CommandBrake(void);
-MOTION_COMMAND Motion_CommandCoast(void);
-MOTION_COMMAND Motion_CommandStraight(float duty_percent);
-MOTION_COMMAND Motion_CommandBackward(float duty_percent);
-MOTION_COMMAND Motion_CommandSpinLeft(float duty_percent);
-MOTION_COMMAND Motion_CommandSpinRight(float duty_percent);
 MOTION_COMMAND Motion_CommandLineFollow(void);
 ```
 
 这些函数只构造命令，不执行动作。调用方仍需要周期调用 `Motion_Apply()`。
+
+> `MOTION_MODE` 仍保留 `STRAIGHT/BACKWARD/SPIN_LEFT/SPIN_RIGHT/COAST` 分发分支，但对应的命令构造器与 `Motion_GetState()` 未被使用，已随死代码清理移除；如需这些运动原语可直接构造 `MOTION_COMMAND` 或改由 `Chassis_SetDuty()` 驱动。

@@ -67,33 +67,6 @@ BSP_STATUS Chassis_Coast(void){
     return Chassis_Stop(CHASSIS_STOP_MODE_COAST);
 }
 
-BSP_STATUS Chassis_Update(void){
-    HallEncoder_UpdateSample();
-    return BSP_STATUS_OK;
-}
-
-void Chassis_HandleEncoderIrq(uint32_t gpio_status){
-    HallEncoder_HandleGpioIrq(gpio_status);
-}
-
-void Chassis_HandleEncoderTimerIrq(void){
-    HallEncoder_UpdateSample();
-}
-
-BSP_STATUS Chassis_GetStatus(CHASSIS_STATUS *out){
-    if (out == NULL){
-        return BSP_STATUS_NULL;
-    }
-
-    out->duty = Chassis_GetDuty();
-    out->speed_mps = HallEncoder_GetSpeed();
-    out->distance_m = HallEncoder_GetDistance();
-    out->encoder_dir = HallEncoder_GetDir();
-    out->left_output = TB6612FNG_GetOutputStatus(TB6612FNG_CHANNEL_LEFT);
-    out->right_output = TB6612FNG_GetOutputStatus(TB6612FNG_CHANNEL_RIGHT);
-    return BSP_STATUS_OK;
-}
-
 CHASSIS_DUTY Chassis_GetDuty(void){
     return s_chassis_duty;
 }
@@ -104,10 +77,6 @@ float Chassis_GetSpeed(void){
 
 float Chassis_GetDistance(void){
     return HallEncoder_GetDistance();
-}
-
-HALL_ENCODER_DIR Chassis_GetEncoderDir(void){
-    return HallEncoder_GetDir();
 }
 
 void Chassis_ResetDistance(void){

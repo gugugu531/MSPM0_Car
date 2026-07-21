@@ -33,8 +33,6 @@ typedef struct {
     LINE_FOLLOW_SENSOR_STATE sensor;
     /** 边线或阶段计数，由上层任务按规则维护；middleware 只保存数值。 */
     int32_t edge_count;
-    /** 当前是否处于转弯状态。 */
-    bool turning;
 } LINE_FOLLOW_STATE;
 
 /**
@@ -58,11 +56,6 @@ BSP_STATUS LineFollow_Update(void);
 BSP_STATUS LineFollow_UpdateSensor(void);
 
 /**
- * @brief 获取巡线状态快照。
- */
-BSP_STATUS LineFollow_GetState(LINE_FOLLOW_STATE *out);
-
-/**
  * @brief 获取最近一次传感器状态。
  */
 BSP_STATUS LineFollow_GetSensor(LINE_FOLLOW_SENSOR_STATE *out);
@@ -73,39 +66,9 @@ BSP_STATUS LineFollow_GetSensor(LINE_FOLLOW_SENSOR_STATE *out);
 uint8_t LineFollow_GetSensorMask(void);
 
 /**
- * @brief 获取指定通道传感器值。
- */
-uint8_t LineFollow_GetSensorValue(uint8_t index);
-
-/**
  * @brief 获取当前有效传感器数量。
  */
 uint8_t LineFollow_GetActiveCount(void);
-
-/**
- * @brief 判断有效传感器数量是否落在指定闭区间。
- */
-bool LineFollow_IsActiveCountInRange(uint8_t min_count, uint8_t max_count);
-
-/**
- * @brief 判断是否未检测到线。
- */
-bool LineFollow_IsEmpty(void);
-
-/**
- * @brief 判断是否满足半线检测条件。
- */
-bool LineFollow_IsHalfDetected(void);
-
-/**
- * @brief 判断是否满足十字检测条件。
- */
-bool LineFollow_IsCrossDetected(void);
-
-/**
- * @brief 判断中间传感器是否检测到线。
- */
-bool LineFollow_IsCenterActive(void);
 
 /**
  * @brief 获取边线或阶段计数。
@@ -113,29 +76,9 @@ bool LineFollow_IsCenterActive(void);
 int32_t LineFollow_GetEdgeCount(void);
 
 /**
- * @brief 设置边线或阶段计数。
- */
-void LineFollow_SetEdgeCount(int32_t edge_count);
-
-/**
  * @brief 将边线或阶段计数加一。
  */
 void LineFollow_IncrementEdge(void);
-
-/**
- * @brief 清零边线或阶段计数。
- */
-void LineFollow_ResetEdge(void);
-
-/**
- * @brief 获取转弯状态。
- */
-bool LineFollow_IsTurning(void);
-
-/**
- * @brief 设置转弯状态。
- */
-void LineFollow_SetTurning(bool turning);
 
 #ifdef __cplusplus
 }

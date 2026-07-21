@@ -96,22 +96,6 @@ Chassis_SetDuty(-30.0f, 30.0f);
 
 滑行停止，等价于 `Chassis_Stop(CHASSIS_STOP_MODE_COAST)`。
 
-### `BSP_STATUS Chassis_Update(void)`
-
-更新底盘状态。当前内部调用 `HallEncoder_UpdateSample()`。
-
-### `void Chassis_HandleEncoderIrq(uint32_t gpio_status)`
-
-编码器 GPIO 中断分发入口，内部调用 `HallEncoder_HandleGpioIrq()`。
-
-### `void Chassis_HandleEncoderTimerIrq(void)`
-
-编码器采样定时器中断分发入口，内部调用 `HallEncoder_UpdateSample()`。
-
-### `BSP_STATUS Chassis_GetStatus(CHASSIS_STATUS *out)`
-
-读取底盘状态快照。`out == NULL` 时返回 `BSP_STATUS_NULL`。
-
 ### `CHASSIS_DUTY Chassis_GetDuty(void)`
 
 返回当前软件记录的左右轮占空比。
@@ -124,9 +108,7 @@ Chassis_SetDuty(-30.0f, 30.0f);
 
 返回编码器估计距离，单位 m。
 
-### `HALL_ENCODER_DIR Chassis_GetEncoderDir(void)`
-
-返回编码器方向。
+> 编码器采样与 GPIO/定时器中断由 `bsp/motor/hall_encoder.c` 内的 `GROUP1_IRQHandler()` / `TIMER_0_INST_IRQHandler()` 直接处理，middleware 不再转发。
 
 ### `void Chassis_ResetDistance(void)`
 
