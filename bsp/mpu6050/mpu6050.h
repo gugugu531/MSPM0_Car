@@ -52,4 +52,17 @@ bool MPU6050_TestConnection(void);
  */
 BSP_STATUS MPU6050_GetMotion6(MPU6050_MOTION6 *out);
 
+/**
+ * @brief 加载并初始化 DMP (MotionApps v2.0): 复位→写固件/配置→采样率/量程→
+ *        FIFO/DMP 使能序列。完成后 DMP 处于关闭态, 由 MPU6050_SetDMPEnabled(true) 启动。
+ * @return 0 成功; 1 固件写校验失败; 2 配置写校验失败; 3 等待 FIFO 超时。
+ * @note 阻塞 (~秒级), 仅开机调用一次; 与 JY61P 共用 I2C0, 集成时须二选一。
+ */
+uint8_t MPU6050_DmpInitialize(void);
+
+/**
+ * @brief 使能/关闭 DMP (USER_CTRL.DMP_EN)。DMP 初始化后调 true 开始出 FIFO 姿态包。
+ */
+void MPU6050_SetDMPEnabled(bool enable);
+
 #endif /* MPU6050_H */

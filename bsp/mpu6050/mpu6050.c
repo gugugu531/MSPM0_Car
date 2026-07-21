@@ -7,9 +7,12 @@
  *   - 底层 I2C 事务用 MSPM0 DriverLib 阻塞 FIFO 模式 (与旧 JY61P 阻塞驱动同构)。
  */
 #include "mpu6050.h"
+#include "mpu6050_dmp_fw.h"
 #include "ti_msp_dl_config.h"
+#include "bsp_time.h"
 
 #include <stddef.h>
+#include <string.h>
 
 /* I2C 外设实例 (I2C0, 与 JY61P 共用) 与自旋超时。 */
 #define MPU6050_I2C_INST     MPU6050_JY61P_Tracking_INST
@@ -55,26 +58,32 @@ static bool MPU6050_WaitIdle(void)
     return true;
 }
 
-/* 写: START + ADDR(W) + REG + DATA[0..len-1] + STOP。 */
+/* 写: START + ADDR(W) + REG + DATA[0..len-1] + STOP。
+ * 关键: 先把 REG + 尽量多的数据填入 TX FIFO(8深), 再启动传输, 之后边发边补;
+ * 若"先全填再启动", len>7 时 FIFO 会满且不排空(传输未启动)导致死等超时。 */
 static bool MPU6050_WriteRegs(uint8_t reg, const uint8_t *data, uint8_t len)
 {
-    uint8_t i;
     uint32_t timeout;
+    uint8_t sent = 0U;
 
     if (!MPU6050_WaitIdle()){ return false; }
 
     DL_I2C_flushControllerTXFIFO(MPU6050_I2C_INST);
     DL_I2C_transmitControllerData(MPU6050_I2C_INST, reg);
-    for (i = 0U; i < len; i++){
-        uint32_t tx_timeout = MPU6050_I2C_TIMEOUT;
-        while (DL_I2C_isControllerTXFIFOFull(MPU6050_I2C_INST)){
-            if (tx_timeout-- == 0U){ return false; }
-        }
-        DL_I2C_transmitControllerData(MPU6050_I2C_INST, data[i]);
+    while ((sent < len) && !DL_I2C_isControllerTXFIFOFull(MPU6050_I2C_INST)){
+        DL_I2C_transmitControllerData(MPU6050_I2C_INST, data[sent++]);
     }
 
     DL_I2C_startControllerTransfer(MPU6050_I2C_INST, MPU6050_I2C_ADDR_7BIT,
         DL_I2C_CONTROLLER_DIRECTION_TX, (uint32_t)(len + 1U));
+
+    while (sent < len){
+        timeout = MPU6050_I2C_TIMEOUT;
+        while (DL_I2C_isControllerTXFIFOFull(MPU6050_I2C_INST)){
+            if (timeout-- == 0U){ return false; }
+        }
+        DL_I2C_transmitControllerData(MPU6050_I2C_INST, data[sent++]);
+    }
 
     timeout = MPU6050_I2C_TIMEOUT;
     while ((DL_I2C_getControllerStatus(MPU6050_I2C_INST)
@@ -229,4 +238,313 @@ BSP_STATUS MPU6050_GetMotion6(MPU6050_MOTION6 *out)
     out->gy = (int16_t)(((uint16_t)buf[10] << 8) | buf[11]);
     out->gz = (int16_t)(((uint16_t)buf[12] << 8) | buf[13]);
     return BSP_STATUS_OK;
+}
+
+/* ═══════════════════ DMP (MotionApps v2.0) 初始化 ═══════════════════════════
+ * 移植自 Arduino i2cdevlib MPU6050_6Axis_MotionApps20.h 的 dmpInitialize(),
+ * 用上面的位域/块读写 helper 内联各寄存器操作 (不逐一造 setter)。仅开机调用。
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+/* DMP 相关寄存器 */
+#define MPU6050_RA_XG_OFFS_TC     0x00U   /* [7]PWR_MODE [6:1]XG_OFFS_TC [0]OTP_BNK_VLD */
+#define MPU6050_RA_YG_OFFS_TC     0x01U
+#define MPU6050_RA_ZG_OFFS_TC     0x02U
+#define MPU6050_RA_MOT_THR        0x1FU
+#define MPU6050_RA_MOT_DUR        0x20U
+#define MPU6050_RA_ZRMOT_THR      0x21U
+#define MPU6050_RA_ZRMOT_DUR      0x22U
+#define MPU6050_RA_I2C_SLV0_ADDR  0x25U
+#define MPU6050_RA_INT_ENABLE     0x38U
+#define MPU6050_RA_INT_STATUS     0x3AU
+#define MPU6050_RA_USER_CTRL      0x6AU
+#define MPU6050_RA_BANK_SEL       0x6DU
+#define MPU6050_RA_MEM_START_ADDR 0x6EU
+#define MPU6050_RA_MEM_R_W        0x6FU
+#define MPU6050_RA_DMP_CFG_1      0x70U
+#define MPU6050_RA_DMP_CFG_2      0x71U
+#define MPU6050_RA_FIFO_COUNTH    0x72U
+#define MPU6050_RA_FIFO_R_W       0x74U
+
+/* 位定义 */
+#define MPU6050_PWR1_DEVICE_RESET_BIT 7U
+#define MPU6050_TC_GYRO_OFFSET_BIT    6U
+#define MPU6050_TC_GYRO_OFFSET_LEN    6U
+#define MPU6050_TC_OTP_BNK_VLD_BIT    0U
+#define MPU6050_CFG_EXT_SYNC_BIT      5U
+#define MPU6050_CFG_EXT_SYNC_LEN      3U
+#define MPU6050_CFG_DLPF_BIT          2U
+#define MPU6050_CFG_DLPF_LEN          3U
+#define MPU6050_EXT_SYNC_TEMP_OUT_L   0x01U
+#define MPU6050_DLPF_BW_42            0x03U
+#define MPU6050_GYRO_FS_2000          0x03U
+#define MPU6050_CLOCK_PLL_ZGYRO       0x03U
+#define MPU6050_UC_DMP_EN_BIT         7U
+#define MPU6050_UC_FIFO_EN_BIT        6U
+#define MPU6050_UC_I2C_MST_EN_BIT     5U
+#define MPU6050_UC_DMP_RESET_BIT      3U
+#define MPU6050_UC_FIFO_RESET_BIT     2U
+#define MPU6050_UC_I2C_MST_RESET_BIT  1U
+#define MPU6050_DMP_CHUNK             16U
+#define MPU6050_DMP_FIFO_WAIT_MS      100U   /* 等 FIFO 出数的超时(防 init 失败时死等) */
+
+/* ── 内存 bank 原语 ── */
+static void MPU6050_SetMemoryBank(uint8_t bank, bool prefetch, bool userBank)
+{
+    bank = (uint8_t)(bank & 0x1FU);
+    if (userBank){ bank = (uint8_t)(bank | 0x20U); }
+    if (prefetch){ bank = (uint8_t)(bank | 0x40U); }
+    (void)MPU6050_WriteByte(MPU6050_RA_BANK_SEL, bank);
+}
+
+static void MPU6050_SetMemoryStartAddr(uint8_t addr)
+{
+    (void)MPU6050_WriteByte(MPU6050_RA_MEM_START_ADDR, addr);
+}
+
+static uint8_t MPU6050_ReadMemoryByte(void)
+{
+    uint8_t v = 0U;
+    (void)MPU6050_ReadByte(MPU6050_RA_MEM_R_W, &v);
+    return v;
+}
+
+/* 写内存块 (16B chunk, 跨 256B bank 边界处理, verify 回读校验)。data 位于 flash。 */
+static bool MPU6050_WriteMemoryBlock(const uint8_t *data, uint16_t size,
+                                     uint8_t bank, uint8_t addr, bool verify)
+{
+    uint8_t vbuf[MPU6050_DMP_CHUNK];
+    uint16_t i = 0U;
+
+    MPU6050_SetMemoryBank(bank, false, false);
+    MPU6050_SetMemoryStartAddr(addr);
+    while (i < size){
+        uint16_t chunk = MPU6050_DMP_CHUNK;
+        if ((uint16_t)(i + chunk) > size){ chunk = (uint16_t)(size - i); }
+        if (chunk > (uint16_t)(256U - addr)){ chunk = (uint16_t)(256U - addr); }
+        if (!MPU6050_WriteRegs(MPU6050_RA_MEM_R_W, data + i, (uint8_t)chunk)){ return false; }
+        if (verify){
+            MPU6050_SetMemoryBank(bank, false, false);
+            MPU6050_SetMemoryStartAddr(addr);
+            if (!MPU6050_ReadRegs(MPU6050_RA_MEM_R_W, vbuf, (uint8_t)chunk)){ return false; }
+            if (memcmp(data + i, vbuf, chunk) != 0){ return false; }
+        }
+        i = (uint16_t)(i + chunk);
+        addr = (uint8_t)(addr + chunk);        /* uint8_t 在 256 处回绕到 0 */
+        if (i < size){
+            if (addr == 0U){ bank++; }
+            MPU6050_SetMemoryBank(bank, false, false);
+            MPU6050_SetMemoryStartAddr(addr);
+        }
+    }
+    return true;
+}
+
+/* 读内存块 (dmpUpdates 第 6 段用)。 */
+static bool MPU6050_ReadMemoryBlock(uint8_t *data, uint16_t size, uint8_t bank, uint8_t addr)
+{
+    uint16_t i = 0U;
+
+    MPU6050_SetMemoryBank(bank, false, false);
+    MPU6050_SetMemoryStartAddr(addr);
+    while (i < size){
+        uint16_t chunk = MPU6050_DMP_CHUNK;
+        if ((uint16_t)(i + chunk) > size){ chunk = (uint16_t)(size - i); }
+        if (chunk > (uint16_t)(256U - addr)){ chunk = (uint16_t)(256U - addr); }
+        if (!MPU6050_ReadRegs(MPU6050_RA_MEM_R_W, data + i, (uint8_t)chunk)){ return false; }
+        i = (uint16_t)(i + chunk);
+        addr = (uint8_t)(addr + chunk);
+        if (i < size){
+            if (addr == 0U){ bank++; }
+            MPU6050_SetMemoryBank(bank, false, false);
+            MPU6050_SetMemoryStartAddr(addr);
+        }
+    }
+    return true;
+}
+
+/* 写 DMP 配置集: [bank][offset][length][data...] 序列; length==0 为特殊指令。 */
+static bool MPU6050_WriteDMPConfig(const uint8_t *data, uint16_t size)
+{
+    uint16_t i = 0U;
+
+    while (i < size){
+        uint8_t bank = data[i++];
+        uint8_t offset = data[i++];
+        uint8_t length = data[i++];
+
+        if (length > 0U){
+            if (!MPU6050_WriteMemoryBlock(data + i, length, bank, offset, true)){ return false; }
+            i = (uint16_t)(i + length);
+        } else {
+            uint8_t special = data[i++];
+            if (special == 0x01U){
+                if (!MPU6050_WriteByte(MPU6050_RA_INT_ENABLE, 0x32U)){ return false; }
+            } else {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+/* ── FIFO / 状态 helper ── */
+static void MPU6050_ResetFIFO(void)
+{
+    (void)MPU6050_WriteBit(MPU6050_RA_USER_CTRL, MPU6050_UC_FIFO_RESET_BIT, true);
+}
+
+static uint16_t MPU6050_GetFIFOCount(void)
+{
+    uint8_t b[2] = {0U, 0U};
+    (void)MPU6050_ReadRegs(MPU6050_RA_FIFO_COUNTH, b, 2U);
+    return (uint16_t)(((uint16_t)b[0] << 8) | b[1]);
+}
+
+static bool MPU6050_GetFIFOBytes(uint8_t *data, uint16_t len)
+{
+    if (len == 0U){ return true; }
+    return MPU6050_ReadRegs(MPU6050_RA_FIFO_R_W, data, (uint8_t)len);
+}
+
+static uint8_t MPU6050_GetIntStatus(void)
+{
+    uint8_t v = 0U;
+    (void)MPU6050_ReadByte(MPU6050_RA_INT_STATUS, &v);
+    return v;
+}
+
+/* 等 FIFO 达到 min 字节, 带超时 (参考代码为无超时死等, 此处防 init 失败挂死)。 */
+static bool MPU6050_WaitFIFO(uint16_t min_bytes)
+{
+    uint32_t start = BSP_Time_GetMs();
+    while (MPU6050_GetFIFOCount() < min_bytes){
+        if ((uint32_t)(BSP_Time_GetMs() - start) >= MPU6050_DMP_FIFO_WAIT_MS){
+            return false;
+        }
+    }
+    return true;
+}
+
+/* 读一段 dmpUpdates: 3 字节头(bank/offset/length) + length 字节数据 到 upd[]。 */
+static uint16_t MPU6050_LoadDmpUpdate(uint8_t *upd, uint16_t pos)
+{
+    uint8_t j;
+    for (j = 0U; (j < 4U) || (j < (uint8_t)(upd[2] + 3U)); j++, pos++){
+        upd[j] = mpu6050_dmp_updates[pos];
+    }
+    return pos;
+}
+
+uint8_t MPU6050_DmpInitialize(void)
+{
+    uint8_t fifo[128];
+    uint8_t upd[16];
+    uint8_t tc = 0U;
+    int8_t xgTC, ygTC, zgTC;
+    uint16_t pos;
+    uint16_t count;
+    uint8_t u;
+
+    /* 复位 → 退睡眠 */
+    (void)MPU6050_WriteBit(MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_DEVICE_RESET_BIT, true);
+    BSP_DelayMs(30U);
+    (void)MPU6050_WriteBit(MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_SLEEP_BIT, false);
+
+    /* 读硬件版本 (仅按参考流程走内存 bank 选择, 结果不使用) */
+    MPU6050_SetMemoryBank(0x10U, true, true);
+    MPU6050_SetMemoryStartAddr(0x06U);
+    (void)MPU6050_ReadMemoryByte();
+    MPU6050_SetMemoryBank(0U, false, false);
+
+    /* 保存 X/Y/Z gyro offset TC (后面写回) */
+    (void)MPU6050_ReadBits(MPU6050_RA_XG_OFFS_TC, MPU6050_TC_GYRO_OFFSET_BIT, MPU6050_TC_GYRO_OFFSET_LEN, &tc); xgTC = (int8_t)tc;
+    (void)MPU6050_ReadBits(MPU6050_RA_YG_OFFS_TC, MPU6050_TC_GYRO_OFFSET_BIT, MPU6050_TC_GYRO_OFFSET_LEN, &tc); ygTC = (int8_t)tc;
+    (void)MPU6050_ReadBits(MPU6050_RA_ZG_OFFS_TC, MPU6050_TC_GYRO_OFFSET_BIT, MPU6050_TC_GYRO_OFFSET_LEN, &tc); zgTC = (int8_t)tc;
+
+    /* slave / I2C master 复位序列 */
+    (void)MPU6050_WriteByte(MPU6050_RA_I2C_SLV0_ADDR, 0x7FU);
+    (void)MPU6050_WriteBit(MPU6050_RA_USER_CTRL, MPU6050_UC_I2C_MST_EN_BIT, false);
+    (void)MPU6050_WriteByte(MPU6050_RA_I2C_SLV0_ADDR, 0x68U);
+    (void)MPU6050_WriteBit(MPU6050_RA_USER_CTRL, MPU6050_UC_I2C_MST_RESET_BIT, true);
+    BSP_DelayMs(20U);
+
+    /* 写 DMP 固件与配置 */
+    if (!MPU6050_WriteMemoryBlock(mpu6050_dmp_memory, MPU6050_DMP_CODE_SIZE, 0U, 0U, true)){
+        return 1U;
+    }
+    if (!MPU6050_WriteDMPConfig(mpu6050_dmp_config, MPU6050_DMP_CONFIG_SIZE)){
+        return 2U;
+    }
+
+    /* 时钟=Z陀螺 / 中断使能 / 200Hz / 外同步 / DLPF42 / 陀螺±2000 / DMP cfg */
+    (void)MPU6050_WriteBits(MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_CLKSEL_BIT, MPU6050_PWR1_CLKSEL_LENGTH, MPU6050_CLOCK_PLL_ZGYRO);
+    (void)MPU6050_WriteByte(MPU6050_RA_INT_ENABLE, 0x12U);
+    (void)MPU6050_WriteByte(MPU6050_RA_SMPLRT_DIV, 4U);
+    (void)MPU6050_WriteBits(MPU6050_RA_CONFIG, MPU6050_CFG_EXT_SYNC_BIT, MPU6050_CFG_EXT_SYNC_LEN, MPU6050_EXT_SYNC_TEMP_OUT_L);
+    (void)MPU6050_WriteBits(MPU6050_RA_CONFIG, MPU6050_CFG_DLPF_BIT, MPU6050_CFG_DLPF_LEN, MPU6050_DLPF_BW_42);
+    (void)MPU6050_WriteBits(MPU6050_RA_GYRO_CONFIG, MPU6050_GCONFIG_FS_SEL_BIT, MPU6050_GCONFIG_FS_SEL_LEN, MPU6050_GYRO_FS_2000);
+    (void)MPU6050_WriteByte(MPU6050_RA_DMP_CFG_1, 0x03U);
+    (void)MPU6050_WriteByte(MPU6050_RA_DMP_CFG_2, 0x00U);
+
+    /* 清 OTP bank valid, 写回 gyro offset TC */
+    (void)MPU6050_WriteBit(MPU6050_RA_XG_OFFS_TC, MPU6050_TC_OTP_BNK_VLD_BIT, false);
+    (void)MPU6050_WriteBits(MPU6050_RA_XG_OFFS_TC, MPU6050_TC_GYRO_OFFSET_BIT, MPU6050_TC_GYRO_OFFSET_LEN, (uint8_t)xgTC);
+    (void)MPU6050_WriteBits(MPU6050_RA_YG_OFFS_TC, MPU6050_TC_GYRO_OFFSET_BIT, MPU6050_TC_GYRO_OFFSET_LEN, (uint8_t)ygTC);
+    (void)MPU6050_WriteBits(MPU6050_RA_ZG_OFFS_TC, MPU6050_TC_GYRO_OFFSET_BIT, MPU6050_TC_GYRO_OFFSET_LEN, (uint8_t)zgTC);
+
+    /* dmpUpdates: 依次 7 段 */
+    pos = 0U;
+    pos = MPU6050_LoadDmpUpdate(upd, pos);   /* 1 */
+    (void)MPU6050_WriteMemoryBlock(upd + 3, upd[2], upd[0], upd[1], true);
+    pos = MPU6050_LoadDmpUpdate(upd, pos);   /* 2 */
+    (void)MPU6050_WriteMemoryBlock(upd + 3, upd[2], upd[0], upd[1], true);
+
+    MPU6050_ResetFIFO();
+    count = MPU6050_GetFIFOCount();
+    if (count > sizeof(fifo)){ count = sizeof(fifo); }
+    (void)MPU6050_GetFIFOBytes(fifo, count);
+
+    (void)MPU6050_WriteByte(MPU6050_RA_MOT_THR, 2U);
+    (void)MPU6050_WriteByte(MPU6050_RA_ZRMOT_THR, 156U);
+    (void)MPU6050_WriteByte(MPU6050_RA_MOT_DUR, 80U);
+    (void)MPU6050_WriteByte(MPU6050_RA_ZRMOT_DUR, 0U);
+
+    MPU6050_ResetFIFO();
+    (void)MPU6050_WriteBit(MPU6050_RA_USER_CTRL, MPU6050_UC_FIFO_EN_BIT, true);
+    (void)MPU6050_WriteBit(MPU6050_RA_USER_CTRL, MPU6050_UC_DMP_EN_BIT, true);
+    (void)MPU6050_WriteBit(MPU6050_RA_USER_CTRL, MPU6050_UC_DMP_RESET_BIT, true);
+
+    for (u = 0U; u < 3U; u++){   /* 3,4,5 */
+        pos = MPU6050_LoadDmpUpdate(upd, pos);
+        (void)MPU6050_WriteMemoryBlock(upd + 3, upd[2], upd[0], upd[1], true);
+    }
+
+    if (!MPU6050_WaitFIFO(3U)){ return 3U; }
+    count = MPU6050_GetFIFOCount();
+    if (count > sizeof(fifo)){ count = sizeof(fifo); }
+    (void)MPU6050_GetFIFOBytes(fifo, count);
+    (void)MPU6050_GetIntStatus();
+
+    pos = MPU6050_LoadDmpUpdate(upd, pos);   /* 6 (读) */
+    (void)MPU6050_ReadMemoryBlock(upd + 3, upd[2], upd[0], upd[1]);
+
+    if (!MPU6050_WaitFIFO(3U)){ return 3U; }
+    count = MPU6050_GetFIFOCount();
+    if (count > sizeof(fifo)){ count = sizeof(fifo); }
+    (void)MPU6050_GetFIFOBytes(fifo, count);
+    (void)MPU6050_GetIntStatus();
+
+    pos = MPU6050_LoadDmpUpdate(upd, pos);   /* 7 (写) */
+    (void)MPU6050_WriteMemoryBlock(upd + 3, upd[2], upd[0], upd[1], true);
+
+    /* 关 DMP (运行时再开), 清 FIFO/中断 */
+    (void)MPU6050_WriteBit(MPU6050_RA_USER_CTRL, MPU6050_UC_DMP_EN_BIT, false);
+    MPU6050_ResetFIFO();
+    (void)MPU6050_GetIntStatus();
+    return 0U;
+}
+
+void MPU6050_SetDMPEnabled(bool enable)
+{
+    (void)MPU6050_WriteBit(MPU6050_RA_USER_CTRL, MPU6050_UC_DMP_EN_BIT, enable);
 }
