@@ -107,24 +107,6 @@ extern "C" {
 #define GPIO_Motor_C3_IOMUX_FUNC                     IOMUX_PINCM39_PF_TIMA0_CCP3
 #define GPIO_Motor_C3_IDX                                    DL_TIMER_CC_3_INDEX
 
-/* Defines for SMotor_1 */
-#define SMotor_1_INST                                                      TIMG6
-#define SMotor_1_INST_IRQHandler                                TIMG6_IRQHandler
-#define SMotor_1_INST_INT_IRQN                                  (TIMG6_INT_IRQn)
-#define SMotor_1_INST_CLK_FREQ                                             62500
-/* GPIO defines for channel 0 */
-#define GPIO_SMotor_1_C0_PORT                                              GPIOA
-#define GPIO_SMotor_1_C0_PIN                                      DL_GPIO_PIN_29
-#define GPIO_SMotor_1_C0_IOMUX                                    (IOMUX_PINCM4)
-#define GPIO_SMotor_1_C0_IOMUX_FUNC                   IOMUX_PINCM4_PF_TIMG6_CCP0
-#define GPIO_SMotor_1_C0_IDX                                 DL_TIMER_CC_0_INDEX
-/* GPIO defines for channel 1 */
-#define GPIO_SMotor_1_C1_PORT                                              GPIOA
-#define GPIO_SMotor_1_C1_PIN                                      DL_GPIO_PIN_30
-#define GPIO_SMotor_1_C1_IOMUX                                    (IOMUX_PINCM5)
-#define GPIO_SMotor_1_C1_IOMUX_FUNC                   IOMUX_PINCM5_PF_TIMG6_CCP1
-#define GPIO_SMotor_1_C1_IDX                                 DL_TIMER_CC_1_INDEX
-
 
 
 /* Defines for TIMER_0 */
@@ -197,22 +179,6 @@ extern "C" {
 #define K230_BAUD_RATE                                                  (115200)
 #define K230_IBRD_32_MHZ_115200_BAUD                                        (17)
 #define K230_FBRD_32_MHZ_115200_BAUD                                        (23)
-/* Defines for BLDC */
-#define BLDC_INST                                                          UART3
-#define BLDC_INST_FREQUENCY                                             32000000
-#define BLDC_INST_IRQHandler                                    UART3_IRQHandler
-#define BLDC_INST_INT_IRQN                                        UART3_INT_IRQn
-#define GPIO_BLDC_RX_PORT                                                  GPIOB
-#define GPIO_BLDC_TX_PORT                                                  GPIOB
-#define GPIO_BLDC_RX_PIN                                           DL_GPIO_PIN_3
-#define GPIO_BLDC_TX_PIN                                          DL_GPIO_PIN_12
-#define GPIO_BLDC_IOMUX_RX                                       (IOMUX_PINCM16)
-#define GPIO_BLDC_IOMUX_TX                                       (IOMUX_PINCM29)
-#define GPIO_BLDC_IOMUX_RX_FUNC                        IOMUX_PINCM16_PF_UART3_RX
-#define GPIO_BLDC_IOMUX_TX_FUNC                        IOMUX_PINCM29_PF_UART3_TX
-#define BLDC_BAUD_RATE                                                  (115200)
-#define BLDC_IBRD_32_MHZ_115200_BAUD                                        (17)
-#define BLDC_FBRD_32_MHZ_115200_BAUD                                        (23)
 /* Defines for Debug_Ex */
 #define Debug_Ex_INST                                                      UART1
 #define Debug_Ex_INST_FREQUENCY                                         32000000
@@ -252,22 +218,6 @@ extern "C" {
 /* Defines for State_PIN: GPIOB.10 with pinCMx 27 on package pin 62 */
 #define BlueTooth_State_State_PIN_PIN                           (DL_GPIO_PIN_10)
 #define BlueTooth_State_State_PIN_IOMUX                          (IOMUX_PINCM27)
-/* Defines for DIR1: GPIOB.14 with pinCMx 31 on package pin 2 */
-#define SMotor_IO_DIR1_PORT                                              (GPIOB)
-#define SMotor_IO_DIR1_PIN                                      (DL_GPIO_PIN_14)
-#define SMotor_IO_DIR1_IOMUX                                     (IOMUX_PINCM31)
-/* Defines for DIR2: GPIOA.15 with pinCMx 37 on package pin 8 */
-#define SMotor_IO_DIR2_PORT                                              (GPIOA)
-#define SMotor_IO_DIR2_PIN                                      (DL_GPIO_PIN_15)
-#define SMotor_IO_DIR2_IOMUX                                     (IOMUX_PINCM37)
-/* Defines for EN1: GPIOB.11 with pinCMx 28 on package pin 63 */
-#define SMotor_IO_EN1_PORT                                               (GPIOB)
-#define SMotor_IO_EN1_PIN                                       (DL_GPIO_PIN_11)
-#define SMotor_IO_EN1_IOMUX                                      (IOMUX_PINCM28)
-/* Defines for EN2: GPIOB.20 with pinCMx 48 on package pin 19 */
-#define SMotor_IO_EN2_PORT                                               (GPIOB)
-#define SMotor_IO_EN2_PIN                                       (DL_GPIO_PIN_20)
-#define SMotor_IO_EN2_IOMUX                                      (IOMUX_PINCM48)
 /* Defines for AIN1: GPIOA.16 with pinCMx 38 on package pin 9 */
 #define Motor_IO_AIN1_PORT                                               (GPIOA)
 #define Motor_IO_AIN1_PIN                                       (DL_GPIO_PIN_16)
@@ -388,13 +338,11 @@ void SYSCFG_DL_initPower(void);
 void SYSCFG_DL_GPIO_init(void);
 void SYSCFG_DL_SYSCTL_init(void);
 void SYSCFG_DL_Motor_init(void);
-void SYSCFG_DL_SMotor_1_init(void);
 void SYSCFG_DL_TIMER_0_init(void);
 void SYSCFG_DL_OLED_init(void);
 void SYSCFG_DL_MPU6050_JY61P_Tracking_init(void);
 void SYSCFG_DL_BlueTooth_init(void);
 void SYSCFG_DL_K230_init(void);
-void SYSCFG_DL_BLDC_init(void);
 void SYSCFG_DL_Debug_Ex_init(void);
 
 void SYSCFG_DL_SYSTICK_init(void);
