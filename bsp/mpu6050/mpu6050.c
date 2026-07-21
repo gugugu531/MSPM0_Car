@@ -11,6 +11,7 @@
 #include "ti_msp_dl_config.h"
 #include "bsp_time.h"
 
+#include <math.h>
 #include <stddef.h>
 #include <string.h>
 
@@ -547,4 +548,70 @@ uint8_t MPU6050_DmpInitialize(void)
 void MPU6050_SetDMPEnabled(bool enable)
 {
     (void)MPU6050_WriteBit(MPU6050_RA_USER_CTRL, MPU6050_UC_DMP_EN_BIT, enable);
+}
+
+/* ═══════════════════ DMP 运行期姿态 (四元数 → yaw/pitch/roll) ═══════════════ */
+
+#define MPU6050_DMP_PACKET_SIZE 42U
+#define MPU6050_RAD_TO_DEG      57.29577951f
+#define MPU6050_GYRO_LSB_2000   16.4f   /* ±2000°/s 量程下 LSB → deg/s */
+
+/* 从 42B DMP 包的偏移解出带符号 int16 (大端)。 */
+static int16_t MPU6050_PacketI16(const uint8_t *pkt, uint8_t hi)
+{
+    return (int16_t)(((uint16_t)pkt[hi] << 8) | pkt[hi + 1U]);
+}
+
+BSP_STATUS MPU6050_DmpGetAttitude(MPU6050_ATTITUDE *out)
+{
+    uint8_t pkt[MPU6050_DMP_PACKET_SIZE];
+    uint8_t int_status;
+    uint16_t count;
+    float qw, qx, qy, qz;
+    float grav_x, grav_y, grav_z;
+
+    if (out == NULL){ return BSP_STATUS_NULL; }
+
+    int_status = MPU6050_GetIntStatus();
+    count = MPU6050_GetFIFOCount();
+
+    /* FIFO 溢出: 复位, 本次无有效帧。 */
+    if (((int_status & 0x10U) != 0U) || (count == 1024U)){
+        MPU6050_ResetFIFO();
+        return BSP_STATUS_NOT_READY;
+    }
+    if (count < MPU6050_DMP_PACKET_SIZE){
+        return BSP_STATUS_NOT_READY;   /* 尚无完整包 */
+    }
+
+    /* 追新: 丢弃陈旧包, 只保留最新一包。 */
+    while (count >= (uint16_t)(2U * MPU6050_DMP_PACKET_SIZE)){
+        if (!MPU6050_GetFIFOBytes(pkt, MPU6050_DMP_PACKET_SIZE)){ return BSP_STATUS_ERROR; }
+        count = (uint16_t)(count - MPU6050_DMP_PACKET_SIZE);
+    }
+    if (!MPU6050_GetFIFOBytes(pkt, MPU6050_DMP_PACKET_SIZE)){ return BSP_STATUS_ERROR; }
+
+    /* 四元数 (int16/16384)。 */
+    qw = (float)MPU6050_PacketI16(pkt, 0U)  / 16384.0f;
+    qx = (float)MPU6050_PacketI16(pkt, 4U)  / 16384.0f;
+    qy = (float)MPU6050_PacketI16(pkt, 8U)  / 16384.0f;
+    qz = (float)MPU6050_PacketI16(pkt, 12U) / 16384.0f;
+
+    /* 重力向量。 */
+    grav_x = 2.0f * (qx * qz - qw * qy);
+    grav_y = 2.0f * (qw * qx + qy * qz);
+    grav_z = qw * qw - qx * qx - qy * qy + qz * qz;
+
+    /* yaw/pitch/roll (rad → deg)。 */
+    out->yaw_deg = atan2f(2.0f * qx * qy - 2.0f * qw * qz,
+                          2.0f * qw * qw + 2.0f * qx * qx - 1.0f) * MPU6050_RAD_TO_DEG;
+    out->pitch_deg = atanf(grav_x / sqrtf(grav_y * grav_y + grav_z * grav_z)) * MPU6050_RAD_TO_DEG;
+    out->roll_deg = atanf(grav_y / sqrtf(grav_x * grav_x + grav_z * grav_z)) * MPU6050_RAD_TO_DEG;
+
+    /* 陀螺原始 (int16, ±2000°/s) → deg/s。 */
+    out->gyro_x_deg_s = (float)MPU6050_PacketI16(pkt, 16U) / MPU6050_GYRO_LSB_2000;
+    out->gyro_y_deg_s = (float)MPU6050_PacketI16(pkt, 20U) / MPU6050_GYRO_LSB_2000;
+    out->gyro_z_deg_s = (float)MPU6050_PacketI16(pkt, 24U) / MPU6050_GYRO_LSB_2000;
+
+    return BSP_STATUS_OK;
 }

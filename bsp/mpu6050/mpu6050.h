@@ -35,6 +35,18 @@ typedef struct {
 } MPU6050_MOTION6;
 
 /**
+ * @brief DMP 融合姿态 (yaw/pitch/roll 单位 deg) + 陀螺 (deg/s)。
+ */
+typedef struct {
+    float yaw_deg;
+    float pitch_deg;
+    float roll_deg;
+    float gyro_x_deg_s;
+    float gyro_y_deg_s;
+    float gyro_z_deg_s;
+} MPU6050_ATTITUDE;
+
+/**
  * @brief 基础初始化: 时钟源=X 陀螺 PLL, 陀螺 ±250°/s, 加速度 ±2g, 退出睡眠。
  * @note 阻塞, 开机调用一次。
  */
@@ -64,5 +76,14 @@ uint8_t MPU6050_DmpInitialize(void);
  * @brief 使能/关闭 DMP (USER_CTRL.DMP_EN)。DMP 初始化后调 true 开始出 FIFO 姿态包。
  */
 void MPU6050_SetDMPEnabled(bool enable);
+
+/**
+ * @brief 从 DMP FIFO 取最新一帧姿态 (四元数解算 yaw/pitch/roll + 陀螺 deg/s)。
+ * @return BSP_STATUS_OK 取到新帧; BSP_STATUS_NOT_READY 无满包或 FIFO 溢出已复位;
+ *         BSP_STATUS_NULL/ERROR 参数/总线错误。
+ * @note 阻塞(~1ms), 仅可在线程上下文调用; 无新包时保持上一次姿态由调用方处理。
+ *       会自动丢弃陈旧包只保留最新, 并处理 FIFO 溢出(复位)。
+ */
+BSP_STATUS MPU6050_DmpGetAttitude(MPU6050_ATTITUDE *out);
 
 #endif /* MPU6050_H */

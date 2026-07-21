@@ -590,6 +590,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\bsp\mpu6050\mpu6050_dmp_fw.c</FilePath>
             </File>
+            <File>
+              <FileName>mpu6050_test.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\mpu6050\mpu6050_test.c</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>
