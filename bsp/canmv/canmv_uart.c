@@ -358,3 +358,59 @@ const CANMV_TARGET_DATA *CanMvUart_GetTargetData(CANMV_TARGET target){
 
     return &s_canmv_target_data[target];
 }
+
+/* ===== 干净 API: 解码后的角度目标 + 判新原语 + 诊断访问函数 ===== */
+
+CANMV_ANGLE CanMvUart_GetAngle(void){
+    const CANMV_TARGET_DATA *data = &s_canmv_target_data[CANMV_TARGET_ANGLE];
+    CANMV_ANGLE angle;
+
+    angle.status = data->status;
+    angle.valid = (data->status == CANMV_STATUS_OK) && (data->count >= 2U);
+    angle.frame_id = g_canmv_uart_angle_frame_count;
+    if (data->count >= 2U){
+        /* int16(0.01deg) -> deg; 符号/量纲转换在此集中一次。 */
+        angle.yaw_deg = (float)(int16_t)data->value[0] / CANMV_ANGLE_SCALE;
+        angle.pitch_deg = (float)(int16_t)data->value[1] / CANMV_ANGLE_SCALE;
+    } else{
+        angle.yaw_deg = 0.0f;
+        angle.pitch_deg = 0.0f;
+    }
+    return angle;
+}
+
+bool CanMvUart_TakeNewAngle(uint32_t *token, CANMV_ANGLE *out){
+    uint32_t current = g_canmv_uart_angle_frame_count;
+
+    if (token == NULL){
+        return false;
+    }
+    if (current == *token){
+        return false;   /* 无新帧 */
+    }
+    *token = current;
+    if (out != NULL){
+        *out = CanMvUart_GetAngle();
+    }
+    return true;
+}
+
+uint32_t CanMvUart_GetAngleFrameCount(void){
+    return g_canmv_uart_angle_frame_count;
+}
+
+uint32_t CanMvUart_GetRxByteCount(void){
+    return g_canmv_uart_rx_byte_count;
+}
+
+uint32_t CanMvUart_GetValidFrameCount(void){
+    return g_canmv_uart_valid_frame_count;
+}
+
+uint32_t CanMvUart_GetDropCount(void){
+    return g_canmv_uart_drop_count;
+}
+
+uint8_t CanMvUart_GetLastByte(void){
+    return g_canmv_uart_last_byte;
+}
