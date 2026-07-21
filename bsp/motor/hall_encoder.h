@@ -13,57 +13,24 @@
 extern "C" {
 #endif
 
-#ifndef HALL_ENCODER_A_PORT
-#define HALL_ENCODER_A_PORT Motor_IO_E1A_PORT
-#endif
+/* 引脚/定时器/中断映射到 SysConfig 生成的板级名。
+ * 注: A/B 两相默认在同一 GPIO 端口 (B_PORT 复用 E1A_PORT), 仅引脚不同;
+ *     换板或 A/B 相分到不同端口时需同步修改 B_PORT 与 GROUP 中断入口。 */
+#define HALL_ENCODER_A_PORT             Motor_IO_E1A_PORT
+#define HALL_ENCODER_A_PIN              Motor_IO_E1A_PIN
+#define HALL_ENCODER_B_PORT             Motor_IO_E1A_PORT
+#define HALL_ENCODER_B_PIN              Motor_IO_E2A_PIN
+#define HALL_ENCODER_GPIO_IRQN          GPIOA_INT_IRQn
+#define HALL_ENCODER_SAMPLE_TIMER       TIMER_0_INST
+#define HALL_ENCODER_SAMPLE_TIMER_IRQN  TIMER_0_INST_INT_IRQN
 
-#ifndef HALL_ENCODER_A_PIN
-#define HALL_ENCODER_A_PIN Motor_IO_E1A_PIN
-#endif
-
-#ifndef HALL_ENCODER_B_PORT
-#define HALL_ENCODER_B_PORT Motor_IO_E1A_PORT
-#endif
-
-#ifndef HALL_ENCODER_B_PIN
-#define HALL_ENCODER_B_PIN Motor_IO_E2A_PIN
-#endif
-
-#ifndef HALL_ENCODER_GPIO_IRQN
-#define HALL_ENCODER_GPIO_IRQN GPIOA_INT_IRQn
-#endif
-
-#ifndef HALL_ENCODER_SAMPLE_TIMER
-#define HALL_ENCODER_SAMPLE_TIMER TIMER_0_INST
-#endif
-
-#ifndef HALL_ENCODER_SAMPLE_TIMER_IRQN
-#define HALL_ENCODER_SAMPLE_TIMER_IRQN TIMER_0_INST_INT_IRQN
-#endif
-
-#ifndef HALL_ENCODER_PI
-#define HALL_ENCODER_PI 3.1415926f
-#endif
-
-#ifndef HALL_ENCODER_PPR
-#define HALL_ENCODER_PPR 13.0f
-#endif
-
-#ifndef HALL_ENCODER_REDUCTION_RATIO
-#define HALL_ENCODER_REDUCTION_RATIO 28.0f
-#endif
-
-#ifndef HALL_ENCODER_WHEEL_DIAMETER_M
-#define HALL_ENCODER_WHEEL_DIAMETER_M 0.065f
-#endif
-
-#ifndef HALL_ENCODER_SAMPLE_PERIOD_S
-#define HALL_ENCODER_SAMPLE_PERIOD_S 0.01f
-#endif
-
-#ifndef HALL_ENCODER_DISTANCE_SCALE
-#define HALL_ENCODER_DISTANCE_SCALE 1.05f
-#endif
+/* 里程换算参数: 距离 = 计数 / (PPR·减速比) · π·轮径 · 标定系数。 */
+#define HALL_ENCODER_PI                 3.1415926f
+#define HALL_ENCODER_PPR                13.0f
+#define HALL_ENCODER_REDUCTION_RATIO    28.0f
+#define HALL_ENCODER_WHEEL_DIAMETER_M   0.065f
+#define HALL_ENCODER_SAMPLE_PERIOD_S    0.01f
+#define HALL_ENCODER_DISTANCE_SCALE     1.05f
 
 /**
  * @brief 霍尔编码器方向。
@@ -91,7 +58,9 @@ void HallEncoder_HandleGpioIrq(uint32_t gpio_status);
 void HallEncoder_UpdateSample(void);
 
 /**
- * @brief 获取累计编码器计数。
+ * @brief 获取最近一次采样窗口的编码器增量计数。
+ * @note 返回的是上一个采样周期内累加的脉冲增量, 不是自复位起的累计总数;
+ *       累计里程请用 HallEncoder_GetDistance()。
  */
 int32_t HallEncoder_GetCount(void);
 

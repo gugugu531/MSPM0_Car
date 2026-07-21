@@ -20,7 +20,7 @@ typedef struct {
     TB6612FNG_OUTPUT output;
 } TB6612FNG_STATE;
 
-static const TB6612FNG_HW_CONFIG s_tb6612fng_hw[TB6612FNG_CHANNEL_MAX] = {
+static const TB6612FNG_HW_CONFIG tb6612fng_hw[TB6612FNG_CHANNEL_MAX] = {
     [TB6612FNG_CHANNEL_LEFT] = {
         .in1_port = TB6612FNG_LEFT_IN1_PORT,
         .in1_pin = TB6612FNG_LEFT_IN1_PIN,
@@ -39,7 +39,7 @@ static const TB6612FNG_HW_CONFIG s_tb6612fng_hw[TB6612FNG_CHANNEL_MAX] = {
     },
 };
 
-static TB6612FNG_STATE s_tb6612fng_state[TB6612FNG_CHANNEL_MAX];
+static TB6612FNG_STATE tb6612fng_state[TB6612FNG_CHANNEL_MAX];
 
 static bool TB6612FNG_IsValidChannel(TB6612FNG_CHANNEL channel){
     return channel < TB6612FNG_CHANNEL_MAX;
@@ -97,7 +97,7 @@ static BSP_STATUS TB6612FNG_Apply(TB6612FNG_CHANNEL channel,
         return BSP_STATUS_INVALID_ARG;
     }
 
-    const TB6612FNG_HW_CONFIG *hw = &s_tb6612fng_hw[channel];
+    const TB6612FNG_HW_CONFIG *hw = &tb6612fng_hw[channel];
     float clamped_duty = TB6612FNG_ClampDuty(duty_percent);
 
     TB6612FNG_SetOutputPins(hw, output);
@@ -105,14 +105,14 @@ static BSP_STATUS TB6612FNG_Apply(TB6612FNG_CHANNEL channel,
                                      TB6612FNG_DutyToCompare(clamped_duty),
                                      hw->pwm_channel);
 
-    s_tb6612fng_state[channel].duty_percent = clamped_duty;
-    s_tb6612fng_state[channel].output = output;
+    tb6612fng_state[channel].duty_percent = clamped_duty;
+    tb6612fng_state[channel].output = output;
     return BSP_STATUS_OK;
 }
 
 BSP_STATUS TB6612FNG_Init(void){
     for (uint8_t i = 0U; i < (uint8_t)TB6612FNG_CHANNEL_MAX; i++){
-        const TB6612FNG_HW_CONFIG *hw = &s_tb6612fng_hw[i];
+        const TB6612FNG_HW_CONFIG *hw = &tb6612fng_hw[i];
 
         DL_TimerG_startCounter(hw->pwm_timer);
         (void)TB6612FNG_Coast((TB6612FNG_CHANNEL)i);
@@ -179,7 +179,7 @@ float TB6612FNG_GetDuty(TB6612FNG_CHANNEL channel){
         return 0.0f;
     }
 
-    return s_tb6612fng_state[channel].duty_percent;
+    return tb6612fng_state[channel].duty_percent;
 }
 
 TB6612FNG_OUTPUT TB6612FNG_GetOutputStatus(TB6612FNG_CHANNEL channel){
@@ -187,5 +187,5 @@ TB6612FNG_OUTPUT TB6612FNG_GetOutputStatus(TB6612FNG_CHANNEL channel){
         return TB6612FNG_OUTPUT_COAST;
     }
 
-    return s_tb6612fng_state[channel].output;
+    return tb6612fng_state[channel].output;
 }
