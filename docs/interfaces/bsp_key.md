@@ -5,7 +5,7 @@
 `bsp/key` 负责板级按键读取、消抖和事件生成。当前按天猛星 v3 拓展板实现 4 个低电平有效按键：
 
 - `KEY_ID_UP`：K1 Up，PA14
-- `KEY_ID_CALIB`：K2 校准，PB22
+- `KEY_ID_BACK`：K2 返回，PB22
 - `KEY_ID_ENTER`：K3 Enter，PB24
 - `KEY_ID_DOWN`：K4 Down，PB25
 
@@ -65,11 +65,10 @@
 ```c
 typedef enum {
     KEY_ID_UP = 0,
-    KEY_ID_CALIB,
+    KEY_ID_BACK,
     KEY_ID_ENTER,
     KEY_ID_DOWN,
-    KEY_ID_MAX,
-    KEY_ID_1 = KEY_ID_ENTER
+    KEY_ID_MAX
 } KEY_ID;
 ```
 

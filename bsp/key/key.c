@@ -39,13 +39,13 @@ typedef struct {
     bool short_release_consumed;
 } KEY_STATE_CONTEXT;
 
-static const KEY_HW_CONFIG s_key_hw[KEY_ID_MAX] = {
+static const KEY_HW_CONFIG key_hw[KEY_ID_MAX] = {
     [KEY_ID_UP] = {
         .port = KEY1_PORT,
         .pin = KEY1_PIN,
         .active_low = (KEY1_ACTIVE_LOW != 0U),
     },
-    [KEY_ID_CALIB] = {
+    [KEY_ID_BACK] = {
         .port = KEY2_PORT,
         .pin = KEY2_PIN,
         .active_low = (KEY2_ACTIVE_LOW != 0U),
@@ -62,14 +62,14 @@ static const KEY_HW_CONFIG s_key_hw[KEY_ID_MAX] = {
     },
 };
 
-static KEY_STATE_CONTEXT s_key_state[KEY_ID_MAX];
+static KEY_STATE_CONTEXT key_state[KEY_ID_MAX];
 
 static bool Key_IsValidId(KEY_ID key_id){
     return key_id < KEY_ID_MAX;
 }
 
 static KEY_LEVEL Key_ReadLevel(KEY_ID key_id){
-    const KEY_HW_CONFIG *hw = &s_key_hw[key_id];
+    const KEY_HW_CONFIG *hw = &key_hw[key_id];
     bool high_level = (DL_GPIO_readPins(hw->port, hw->pin) != 0U);
     bool pressed = hw->active_low ? !high_level : high_level;
 
@@ -78,7 +78,7 @@ static KEY_LEVEL Key_ReadLevel(KEY_ID key_id){
 
 static void Key_PushEvent(KEY_ID key_id, KEY_EVENT event){
     if (event != KEY_EVENT_NONE){
-        s_key_state[key_id].pending_event = event;
+        key_state[key_id].pending_event = event;
     }
 }
 
@@ -87,22 +87,22 @@ void Key_Init(void){
         KEY_ID key_id = (KEY_ID)i;
         KEY_LEVEL level = Key_ReadLevel(key_id);
 
-        s_key_state[i].state = (level == KEY_LEVEL_PRESSED) ? KEY_STATE_PRESSED : KEY_STATE_RELEASED;
-        s_key_state[i].stable_level = level;
-        s_key_state[i].candidate_level = level;
-        s_key_state[i].debounce_start_ms = BSP_Time_GetMs();
-        s_key_state[i].press_start_ms = BSP_Time_GetMs();
-        s_key_state[i].release_time_ms = BSP_Time_GetMs();
-        s_key_state[i].pending_event = KEY_EVENT_NONE;
-        s_key_state[i].long_reported = false;
-        s_key_state[i].suppress_release_event = false;
-        s_key_state[i].short_release_pending = false;
-        s_key_state[i].short_release_consumed = false;
+        key_state[i].state = (level == KEY_LEVEL_PRESSED) ? KEY_STATE_PRESSED : KEY_STATE_RELEASED;
+        key_state[i].stable_level = level;
+        key_state[i].candidate_level = level;
+        key_state[i].debounce_start_ms = BSP_Time_GetMs();
+        key_state[i].press_start_ms = BSP_Time_GetMs();
+        key_state[i].release_time_ms = BSP_Time_GetMs();
+        key_state[i].pending_event = KEY_EVENT_NONE;
+        key_state[i].long_reported = false;
+        key_state[i].suppress_release_event = false;
+        key_state[i].short_release_pending = false;
+        key_state[i].short_release_consumed = false;
     }
 }
 
 static void Key_UpdateReleased(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
-    KEY_STATE_CONTEXT *state = &s_key_state[key_id];
+    KEY_STATE_CONTEXT *state = &key_state[key_id];
 
     if (level == KEY_LEVEL_PRESSED){
         state->candidate_level = level;
@@ -112,7 +112,7 @@ static void Key_UpdateReleased(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
 }
 
 static void Key_UpdatePressDebounce(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
-    KEY_STATE_CONTEXT *state = &s_key_state[key_id];
+    KEY_STATE_CONTEXT *state = &key_state[key_id];
 
     if (level != state->candidate_level){
         state->state = KEY_STATE_RELEASED;
@@ -129,7 +129,7 @@ static void Key_UpdatePressDebounce(KEY_ID key_id, KEY_LEVEL level, uint32_t now
 }
 
 static void Key_UpdatePressed(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
-    KEY_STATE_CONTEXT *state = &s_key_state[key_id];
+    KEY_STATE_CONTEXT *state = &key_state[key_id];
 
     if (level == KEY_LEVEL_RELEASED){
         state->candidate_level = level;
@@ -145,7 +145,7 @@ static void Key_UpdatePressed(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
 }
 
 static void Key_UpdateReleaseDebounce(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
-    KEY_STATE_CONTEXT *state = &s_key_state[key_id];
+    KEY_STATE_CONTEXT *state = &key_state[key_id];
 
     if (level != state->candidate_level){
         state->state = KEY_STATE_PRESSED;
@@ -176,7 +176,7 @@ static void Key_UpdateReleaseDebounce(KEY_ID key_id, KEY_LEVEL level, uint32_t n
 }
 
 static void Key_UpdateWaitDouble(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
-    KEY_STATE_CONTEXT *state = &s_key_state[key_id];
+    KEY_STATE_CONTEXT *state = &key_state[key_id];
 
     /* 双击窗口超时后，才确认前一次释放对应的是短按。 */
     if (now_ms - state->release_time_ms >= KEY_DOUBLE_CLICK_MS){
@@ -197,7 +197,7 @@ static void Key_UpdateWaitDouble(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms
 }
 
 static void Key_UpdateDoubleDebounce(KEY_ID key_id, KEY_LEVEL level, uint32_t now_ms){
-    KEY_STATE_CONTEXT *state = &s_key_state[key_id];
+    KEY_STATE_CONTEXT *state = &key_state[key_id];
 
     if (level != state->candidate_level){
         state->state = KEY_STATE_WAIT_DOUBLE;
@@ -218,7 +218,7 @@ static void Key_UpdateDoubleDebounce(KEY_ID key_id, KEY_LEVEL level, uint32_t no
 }
 
 static void Key_Update(KEY_ID key_id){
-    KEY_STATE_CONTEXT *state = &s_key_state[key_id];
+    KEY_STATE_CONTEXT *state = &key_state[key_id];
     KEY_LEVEL level = Key_ReadLevel(key_id);
     uint32_t now_ms = BSP_Time_GetMs();
 
@@ -259,8 +259,8 @@ KEY_EVENT Key_GetEvent(KEY_ID key_id){
         return KEY_EVENT_NONE;
     }
 
-    KEY_EVENT event = s_key_state[key_id].pending_event;
-    s_key_state[key_id].pending_event = KEY_EVENT_NONE;
+    KEY_EVENT event = key_state[key_id].pending_event;
+    key_state[key_id].pending_event = KEY_EVENT_NONE;
     return event;
 }
 
@@ -269,7 +269,7 @@ bool Key_IsPressed(KEY_ID key_id){
         return false;
     }
 
-    return s_key_state[key_id].stable_level == KEY_LEVEL_PRESSED;
+    return key_state[key_id].stable_level == KEY_LEVEL_PRESSED;
 }
 
 static bool Key_ConsumeIf(KEY_ID key_id, KEY_EVENT expected_event){
@@ -277,11 +277,11 @@ static bool Key_ConsumeIf(KEY_ID key_id, KEY_EVENT expected_event){
         return false;
     }
 
-    if (s_key_state[key_id].pending_event != expected_event){
+    if (key_state[key_id].pending_event != expected_event){
         return false;
     }
 
-    s_key_state[key_id].pending_event = KEY_EVENT_NONE;
+    key_state[key_id].pending_event = KEY_EVENT_NONE;
     return true;
 }
 
@@ -294,12 +294,12 @@ bool Key_IsShortRelease(KEY_ID key_id){
         return false;
     }
 
-    if (!s_key_state[key_id].short_release_pending){
+    if (!key_state[key_id].short_release_pending){
         return false;
     }
 
-    s_key_state[key_id].short_release_pending = false;
-    s_key_state[key_id].short_release_consumed = true;
+    key_state[key_id].short_release_pending = false;
+    key_state[key_id].short_release_consumed = true;
     return true;
 }
 
@@ -313,16 +313,16 @@ bool Key_IsDoubleClick(KEY_ID key_id){
 
 void Key_ClearEvent(KEY_ID key_id){
     if (Key_IsValidId(key_id)){
-        s_key_state[key_id].pending_event = KEY_EVENT_NONE;
-        s_key_state[key_id].short_release_pending = false;
-        s_key_state[key_id].short_release_consumed = false;
+        key_state[key_id].pending_event = KEY_EVENT_NONE;
+        key_state[key_id].short_release_pending = false;
+        key_state[key_id].short_release_consumed = false;
     }
 }
 
 void Key_ClearAllEvents(void){
     for (uint8_t i = 0U; i < (uint8_t)KEY_ID_MAX; i++){
-        s_key_state[i].pending_event = KEY_EVENT_NONE;
-        s_key_state[i].short_release_pending = false;
-        s_key_state[i].short_release_consumed = false;
+        key_state[i].pending_event = KEY_EVENT_NONE;
+        key_state[i].short_release_pending = false;
+        key_state[i].short_release_consumed = false;
     }
 }

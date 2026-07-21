@@ -13,80 +13,35 @@
 extern "C" {
 #endif
 
-#ifndef KEY1_PORT
+/* 四个按键引脚 + 有效电平映射到 SysConfig 生成的板级名 (ACTIVE_LOW=1 低电平按下)。 */
 #define KEY1_PORT Key_PIN_1_PORT
-#endif
-
-#ifndef KEY1_PIN
-#define KEY1_PIN Key_PIN_1_PIN
-#endif
-
-#ifndef KEY1_ACTIVE_LOW
+#define KEY1_PIN  Key_PIN_1_PIN
 #define KEY1_ACTIVE_LOW 1U
-#endif
-
-#ifndef KEY2_PORT
 #define KEY2_PORT Key_PIN_2_PORT
-#endif
-
-#ifndef KEY2_PIN
-#define KEY2_PIN Key_PIN_2_PIN
-#endif
-
-#ifndef KEY2_ACTIVE_LOW
+#define KEY2_PIN  Key_PIN_2_PIN
 #define KEY2_ACTIVE_LOW 1U
-#endif
-
-#ifndef KEY3_PORT
 #define KEY3_PORT Key_PIN_3_PORT
-#endif
-
-#ifndef KEY3_PIN
-#define KEY3_PIN Key_PIN_3_PIN
-#endif
-
-#ifndef KEY3_ACTIVE_LOW
+#define KEY3_PIN  Key_PIN_3_PIN
 #define KEY3_ACTIVE_LOW 1U
-#endif
-
-#ifndef KEY4_PORT
 #define KEY4_PORT Key_PIN_4_PORT
-#endif
-
-#ifndef KEY4_PIN
-#define KEY4_PIN Key_PIN_4_PIN
-#endif
-
-#ifndef KEY4_ACTIVE_LOW
+#define KEY4_PIN  Key_PIN_4_PIN
 #define KEY4_ACTIVE_LOW 1U
-#endif
 
-#ifndef KEY_DEBOUNCE_MS
-#define KEY_DEBOUNCE_MS 20U
-#endif
-
-#ifndef KEY_SHORT_PRESS_MIN_MS
+/* 消抖/短按下限/长按/双击窗口, 单位 ms。 */
+#define KEY_DEBOUNCE_MS        20U
 #define KEY_SHORT_PRESS_MIN_MS 50U
-#endif
-
-#ifndef KEY_LONG_PRESS_MS
-#define KEY_LONG_PRESS_MS 1000U
-#endif
-
-#ifndef KEY_DOUBLE_CLICK_MS
-#define KEY_DOUBLE_CLICK_MS 300U
-#endif
+#define KEY_LONG_PRESS_MS      1000U
+#define KEY_DOUBLE_CLICK_MS    300U
 
 /**
  * @brief 按键编号。
  */
 typedef enum {
     KEY_ID_UP = 0,
-    KEY_ID_CALIB,
+    KEY_ID_BACK,
     KEY_ID_ENTER,
     KEY_ID_DOWN,
-    KEY_ID_MAX,
-    KEY_ID_1 = KEY_ID_ENTER
+    KEY_ID_MAX
 } KEY_ID;
 
 /**
@@ -111,7 +66,7 @@ void Key_Init(void);
 void Key_Scan(void);
 
 /**
- * @brief 获取指定按键最近事件，不自动清除事件。
+ * @brief 获取并清除指定按键最近一次事件 (读取即消费)。
  */
 KEY_EVENT Key_GetEvent(KEY_ID key_id);
 
@@ -151,11 +106,6 @@ void Key_ClearEvent(KEY_ID key_id);
  * @brief 清除全部按键事件。
  */
 void Key_ClearAllEvents(void);
-
-#define Key_Read()         Key_IsPressed(KEY_ID_1)
-#define Key_short_press()  Key_IsShortPress(KEY_ID_1)
-#define Key_long_press()   Key_IsLongPress(KEY_ID_1)
-#define Key_double_click() Key_IsDoubleClick(KEY_ID_1)
 
 #ifdef __cplusplus
 }

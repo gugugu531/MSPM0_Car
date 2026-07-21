@@ -41,7 +41,7 @@ static const char *const s_cal_test_items[CAL_TEST_COUNT] = {
 };
 
 static bool CalTest_IsBack(void){
-    return Key_IsLongPress(KEY_ID_CALIB);
+    return Key_IsLongPress(KEY_ID_BACK);
 }
 
 static void CalTest_SetLaser(bool enabled){

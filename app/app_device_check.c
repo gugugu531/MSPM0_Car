@@ -517,7 +517,7 @@ static bool AppDeviceCheck_IsActionEvent(void){
 }
 
 static bool AppDeviceCheck_IsBackEvent(void){
-    return Key_IsShortPress(KEY_ID_CALIB) || Key_IsLongPress(KEY_ID_CALIB);
+    return Key_IsShortPress(KEY_ID_BACK) || Key_IsLongPress(KEY_ID_BACK);
 }
 
 /*

@@ -203,7 +203,7 @@ static uint32_t AppE_ElapsedMs(uint32_t start_ms){
 }
 
 static bool AppE_IsBackEvent(void){
-    return Key_IsLongPress(KEY_ID_CALIB);
+    return Key_IsLongPress(KEY_ID_BACK);
 }
 
 static void AppE_WaitBack(void){
