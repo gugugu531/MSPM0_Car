@@ -8,7 +8,6 @@
 
 - 保存结构化故障码和故障消息。
 - 故障时刹车底盘。
-- 故障时停止云台无刷电机。
 - 故障时通过 `middleware/ui` 显示错误页。
 - 故障时进入停机循环。
 
@@ -96,11 +95,10 @@ typedef struct {
 使用当前故障信息进入停机处理。内部执行：
 
 1. `Chassis_Brake()`
-2. `Gimbal_Stop()`
-3. `Ui_RenderStatusPage("System Fault", UI_STATUS_ERROR, message, code_text)`
-4. `while (1)`
+2. `Ui_RenderStatusPage("System Fault", UI_STATUS_ERROR, message, code_text)`
+3. `while (1)`
 
-故障处理阶段会忽略底盘和云台停止接口的返回值，因为此时只能尽力进入安全状态。
+故障处理阶段会忽略底盘刹车接口的返回值，因为此时只能尽力进入安全状态。
 
 ## 迁移说明
 

@@ -18,14 +18,3 @@ typedef struct {
 ```
 
 二维浮点坐标。当前用于纸面坐标、图像平面坐标和二维几何计算。
-
-### `CORE_ATTITUDE2F`
-
-```c
-typedef struct {
-    float yaw;
-    float pitch;
-} CORE_ATTITUDE2F;
-```
-
-二维姿态或二维角速度修正量。当前用于旧云台跟踪模块的 yaw/pitch 修正量，后续会随 `middleware/gimbal_tracking` 重写继续收敛语义。

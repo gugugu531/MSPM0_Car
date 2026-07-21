@@ -2,6 +2,18 @@
 
 ## 未发布
 
+- 移除二维云台/瞄准子系统（分四步，各步 Keil `0 Error(s), 0 Warning(s)` 验证）：
+  ① `app` 清空为极简启动骨架（仅 `main.c`：SysConfig 初始化后空循环 + 空 `SysTick_Handler`），
+  删除全部原任务框架文件（`app_launcher`/`app_e_task`/`app_e_calibration`/`app_device_check`/
+  `app_debug_cmd` 等）；② 删除 middleware 云台控制（`gimbal`/`gimbal_tracking`/`auto_aim`），
+  `system_fault` 去掉 `Gimbal_Stop()` 依赖仅保留 `Chassis_Brake()`；③ 删除 core 瞄准/定位算法
+  （`aim_solver`/`aim_fusion`/`localization`），保留 `common`/`kinematics`/`pid`；④ 删除
+  `bsp/bldc`，并从 `G3507.syscfg` 移除 UART3(BLDC)/PWM2(SMotor_1)/GPIO1(SMotor_IO)，用
+  SysConfig CLI 重新生成 `ti_msp_dl_config`（BLDC/SMotor 零残留）。同步清理 Keil/CCS 工程条目
+  与 include 路径、删除对应接口文档，更新 `architecture`/`interfaces`/`project-structure`。
+  释放引脚 PB3/PB12、PA29/PA30、PB14/PA15/PB11/PB20。Code 54056→7246 字节。
+  遗留：`docs/rewrite-baseline`、`docs/aim-tracking-plan`、`docs/angle_tracking_calibration`、
+  `docs/calibration` 与 `tools/aim_*` 为旧任务历史资料，暂保留待新任务确定后清理。
 - 消除 `core ↔ middleware` 循环依赖：将 `motion`、`gimbal_tracking`、`line_tracking` 三个模块从 `core/` 迁入 `middleware/`。这三者需直接调用 `Chassis_*`/`Gimbal_*`/`LineFollow_*` 并读取硬件观测，本质是中间件能力；迁移后 `core` 恢复为纯计算层（仅 `pid`/`kinematics`/`rotation`/`geometry`/`localization`/`aim_solver`/`common`），依赖方向恢复单向 `app → middleware → {core, bsp}`。同步更新 Keil/CCS 工程文件、include 路径、相关 include 语句为裸文件名，并重命名接口文档 `core_* → middleware_*`。编译验证 `0 Error(s), 0 Warning(s)`。
 - 将 E3 拆分为 `E3 Yaw+` 和 `E3 Yaw-` 两个主菜单入口；矩形扫描识别成功后先停止云台约 `200ms`，随后直接复用 E2 的靶心瞄准逻辑，不再单独执行矩形中心跟踪。
 - 收紧 E1 与 Corner test 的转弯结束条件：中心 3/4 重新检测到轨道后需要连续确认 3 次，才刹车退出转弯。
