@@ -9,6 +9,7 @@
 extern "C" {
 #endif
 
+#include <stdbool.h>
 #include <stdint.h>
 #include "ti_msp_dl_config.h"
 #include "reg.h"
@@ -144,6 +145,8 @@ void JY61P_Init(UART_Regs *uart);
 
 void JY61P_I2C_Init(void);
 void JY61P_I2C_Poll(void);
+/* 挂起/恢复 JY61P I2C0 轮询与中断 (与 MPU6050 共用总线时, 测试期让位)。 */
+void JY61P_I2C_SetSuspended(bool suspend);
 uint32_t JY61P_I2C_GetPollCount(void);
 uint32_t JY61P_I2C_GetErrorCount(void);
 uint32_t JY61P_I2C_GetNackCount(void);

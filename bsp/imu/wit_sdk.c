@@ -757,12 +757,32 @@ static void JY61P_I2C_PublishGyro(const uint8_t *buf)
     GyroscopeChannelData[5] = (double)JY61P_I2C_ParseI16(&buf[4]) / 32768.0 * 2000.0;
 }
 
+/* 挂起标志: 与 MPU6050 共用 I2C0 时, 测试期挂起 JY61P (停轮询 + 关 I2C0 NVIC),
+ * 避免 MPU6050 的 I2C 事务触发本驱动的 I2C0 中断而误动状态机/污染总线。 */
+static volatile bool s_jy61p_suspended;
+
+void JY61P_I2C_SetSuspended(bool suspend)
+{
+    if (suspend){
+        s_jy61p_suspended = true;
+        NVIC_DisableIRQ(JY61P_I2C_IRQN);
+        DL_I2C_resetControllerTransfer(JY61P_I2C_INST);
+        s_jy61p_state = JY61P_I2C_IDLE;
+    } else{
+        s_jy61p_state = JY61P_I2C_IDLE;
+        NVIC_ClearPendingIRQ(JY61P_I2C_IRQN);
+        NVIC_EnableIRQ(JY61P_I2C_IRQN);
+        s_jy61p_suspended = false;
+    }
+}
+
 void JY61P_I2C_Init(void)
 {
     s_jy61p_i2c_poll_count  = 0U;
     s_jy61p_i2c_error_count = 0U;
     s_jy61p_i2c_nack_count  = 0U;
     s_jy61p_state           = JY61P_I2C_IDLE;
+    s_jy61p_suspended       = false;
     /* 校准已固化在 JY61P flash 中, 上电无需重复执行 */
 
     /* I2C 事件中断由 SysConfig 生成的 init 使能 (intController);
@@ -782,6 +802,8 @@ void JY61P_I2C_Init(void)
 void JY61P_I2C_Poll(void)
 {
     uint32_t now_ms = BSP_Time_GetMs();
+
+    if (s_jy61p_suspended){ return; }   /* 挂起期不发起 I2C0 事务 (让位 MPU6050 测试) */
 
     if (s_jy61p_state != JY61P_I2C_IDLE){
         if ((uint32_t)(now_ms - s_jy61p_state_ms) >= JY61P_I2C_XFER_TIMEOUT_MS){

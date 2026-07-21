@@ -9,6 +9,7 @@
 #include "hall_encoder.h"
 #include "key.h"
 #include "line_follow.h"
+#include "mpu6050.h"
 #include "ui.h"
 #include "wit_sdk.h"
 #include "bsp/bldc/f32c_bldc.h"
@@ -50,6 +51,7 @@ typedef enum {
     APP_DEVICE_MODULE_K230,
     APP_DEVICE_MODULE_BLDC,
     APP_DEVICE_MODULE_PID,
+    APP_DEVICE_MODULE_MPU6050,
     APP_DEVICE_MODULE_COUNT
 } APP_DEVICE_MODULE;
 
@@ -231,6 +233,7 @@ static const char *AppDeviceCheck_ModuleTitle(APP_DEVICE_MODULE module){
         "K230",
         "BLDC",
         "PID Comm",
+        "MPU6050",
     };
 
     return (module < APP_DEVICE_MODULE_COUNT) ? titles[module] : "Device";
@@ -448,6 +451,7 @@ static void AppDeviceCheck_EnterModule(APP_DEVICE_MODULE module){
 }
 
 static void AppDeviceCheck_RunPidCommTest(void);
+static void AppDeviceCheck_RunMpu6050Test(void);
 
 static void AppDeviceCheck_AdvanceTest(APP_DEVICE_MODULE module){
     switch (module){
@@ -496,6 +500,9 @@ static void AppDeviceCheck_AdvanceTest(APP_DEVICE_MODULE module){
         }
         case APP_DEVICE_MODULE_PID:
             AppDeviceCheck_RunPidCommTest();   /* K3 启动 PID 通讯测试 (阻塞至返回) */
+            break;
+        case APP_DEVICE_MODULE_MPU6050:
+            AppDeviceCheck_RunMpu6050Test();   /* K3 启动 MPU6050 DMP 测试 (阻塞至返回) */
             break;
         case APP_DEVICE_MODULE_LINE:
         case APP_DEVICE_MODULE_K230:
@@ -559,6 +566,76 @@ static void AppDeviceCheck_RunPidCommTest(void){
 
     GimbalTracking_Init(NULL);          /* 退出: 恢复宏定义默认 PID */
     AppDebugCmd_EmitConfig();
+    Key_ClearAllEvents();
+}
+
+/*
+ * MPU6050 DMP 测试 (阻塞至长按返回)。MPU6050 与 JY61P 共用 I2C0, 故进入时挂起
+ * JY61P 轮询+中断让位, 退出时恢复。DMP 初始化 ~1s, 之后循环显示 yaw/pitch/roll。
+ */
+static void AppDeviceCheck_RunMpu6050Test(void){
+    char line0[24];
+    char line1[24];
+    char line2[24];
+    char line3[24];
+    MPU6050_ATTITUDE att = {0};
+    uint32_t last_render_ms;
+    uint8_t rc;
+    bool have = false;
+
+    AppDeviceCheck_StopOutputs();
+    JY61P_I2C_SetSuspended(true);   /* 让位: 停 JY61P I2C0 轮询与中断 */
+    BSP_DelayMs(5U);                /* 等在途事务/总线释放 */
+
+    Ui_RenderLines("MPU6050 DMP", "connecting...", "", "", "", "K2 long:back", NULL);
+    if (!MPU6050_TestConnection()){
+        Ui_RenderLines("MPU6050 DMP", "WHO_AM_I FAIL", "check wiring/addr", "",
+                       "", "K2 long:back", NULL);
+        while (!AppDeviceCheck_IsBackEvent()){ BSP_DelayMs(APP_DEVICE_LOOP_DELAY_MS); }
+        JY61P_I2C_SetSuspended(false);
+        Key_ClearAllEvents();
+        return;
+    }
+
+    Ui_RenderLines("MPU6050 DMP", "connected", "dmp init ~1s...", "",
+                   "", "K2 long:back", NULL);
+    rc = MPU6050_DmpInitialize();
+    if (rc != 0U){
+        snprintf(line0, sizeof(line0), "DMP init FAIL rc=%u", (unsigned)rc);
+        Ui_RenderLines("MPU6050 DMP", line0, "1=fw 2=cfg 3=fifo", "",
+                       "", "K2 long:back", NULL);
+        while (!AppDeviceCheck_IsBackEvent()){ BSP_DelayMs(APP_DEVICE_LOOP_DELAY_MS); }
+        JY61P_I2C_SetSuspended(false);
+        Key_ClearAllEvents();
+        return;
+    }
+
+    MPU6050_SetDMPEnabled(true);
+    Key_ClearAllEvents();
+    last_render_ms = BSP_Time_GetMs();
+
+    while (!AppDeviceCheck_IsBackEvent()){
+        if (MPU6050_DmpGetAttitude(&att) == BSP_STATUS_OK){ have = true; }
+
+        if ((BSP_Time_GetMs() - last_render_ms) >= APP_DEVICE_RENDER_PERIOD_MS){
+            last_render_ms = BSP_Time_GetMs();
+            if (have){
+                snprintf(line0, sizeof(line0), "Yaw:%0.1f", att.yaw_deg);
+                snprintf(line1, sizeof(line1), "Pitch:%0.1f", att.pitch_deg);
+                snprintf(line2, sizeof(line2), "Roll:%0.1f", att.roll_deg);
+                snprintf(line3, sizeof(line3), "Gz:%0.1f", att.gyro_z_deg_s);
+            } else {
+                snprintf(line0, sizeof(line0), "waiting FIFO...");
+                line1[0] = '\0';
+                line2[0] = '\0';
+                line3[0] = '\0';
+            }
+            Ui_RenderLines("MPU6050 DMP", line0, line1, line2, line3, "K2 long:back", NULL);
+        }
+        BSP_DelayMs(APP_DEVICE_LOOP_DELAY_MS);
+    }
+
+    JY61P_I2C_SetSuspended(false);   /* 恢复 JY61P */
     Key_ClearAllEvents();
 }
 
@@ -680,6 +757,15 @@ static void AppDeviceCheck_Render(APP_DEVICE_MODULE module){
             snprintf(line1, sizeof(line1), "PID comm test");
             snprintf(line2, sizeof(line2), "K3: start test");
             snprintf(line3, sizeof(line3), "PC send s/g");
+            Ui_RenderLines(AppDeviceCheck_ModuleTitle(module), line0, line1,
+                           line2, line3, "K3:test K1/4:mod", NULL);
+            break;
+        }
+        case APP_DEVICE_MODULE_MPU6050:{
+            snprintf(line0, sizeof(line0), "MPU6050 DMP");
+            snprintf(line1, sizeof(line1), "shares I2C0/JY61P");
+            snprintf(line2, sizeof(line2), "K3: start test");
+            snprintf(line3, sizeof(line3), "yaw/pitch/roll");
             Ui_RenderLines(AppDeviceCheck_ModuleTitle(module), line0, line1,
                            line2, line3, "K3:test K1/4:mod", NULL);
             break;
