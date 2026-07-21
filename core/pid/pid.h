@@ -74,7 +74,7 @@ typedef struct {
 /**
  * @brief 初始化 PID 控制器。
  * @param pid 控制器实例指针。
- * @param config 参数配置；传入 NULL 时使用全零配置。
+ * @param config 参数配置；pid 或 config 为 NULL 时不做任何操作。
  */
 void PID_Init(PID_CONTROLLER *pid, const PID_CONFIG *config);
 
@@ -85,13 +85,6 @@ void PID_Init(PID_CONTROLLER *pid, const PID_CONFIG *config);
 void PID_Reset(PID_CONTROLLER *pid);
 
 /**
- * @brief 更新 PID 参数配置并清空运行状态。
- * @param pid 控制器实例指针。
- * @param config 新参数配置；传入 NULL 时使用全零配置。
- */
-void PID_SetConfig(PID_CONTROLLER *pid, const PID_CONFIG *config);
-
-/**
  * @brief 执行一次 PID 更新。
  * @param pid 控制器实例指针。
  * @param target 目标值。
@@ -100,27 +93,6 @@ void PID_SetConfig(PID_CONTROLLER *pid, const PID_CONFIG *config);
  * @return 本次控制输出。
  */
 float PID_Update(PID_CONTROLLER *pid, float target, float feedback, float dt_s);
-
-/**
- * @brief 获取最近一次 PID 输出。
- * @param pid 控制器实例指针。
- * @return 当前输出；非法参数返回 0。
- */
-float PID_GetOutput(const PID_CONTROLLER *pid);
-
-/**
- * @brief 获取最近一次 PID 误差。
- * @param pid 控制器实例指针。
- * @return 当前误差；非法参数返回 0。
- */
-float PID_GetError(const PID_CONTROLLER *pid);
-
-/**
- * @brief 获取最近一次增量式 PID 输出增量。
- * @param pid 控制器实例指针。
- * @return 当前增量；非法参数返回 0。
- */
-float PID_GetIncrement(const PID_CONTROLLER *pid);
 
 #ifdef __cplusplus
 }

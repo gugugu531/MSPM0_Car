@@ -84,12 +84,6 @@ float Kinematics_NormalizeAngleDeg(float angle_deg);
 float Kinematics_AngleDiffDeg(float target_deg, float current_deg);
 
 /**
- * @brief 计算二维点间欧氏距离。
- * @return 距离，单位 m。
- */
-float Kinematics_Distance2D(float x0_m, float y0_m, float x1_m, float y1_m);
-
-/**
  * @brief 将前进量和转向量混合为左右轮输出。
  * @param forward 前进分量。
  * @param turn 转向分量。
@@ -99,24 +93,6 @@ float Kinematics_Distance2D(float x0_m, float y0_m, float x1_m, float y1_m);
 KINEMATICS_DIFFERENTIAL_OUTPUT Kinematics_DifferentialMix(float forward,
                                                           float turn,
                                                           float output_limit);
-
-/**
- * @brief 清零二维位姿。
- * @param pose 位姿对象。
- */
-void Kinematics_PoseInit(KINEMATICS_POSE *pose);
-
-/**
- * @brief 根据线速度和航向角积分更新二维位姿。
- * @param pose 待更新位姿对象。
- * @param linear_mps 线速度，单位 m/s。
- * @param heading_deg 当前航向角，单位 deg。
- * @param dt_s 积分周期，单位 s。
- */
-void Kinematics_PoseUpdate(KINEMATICS_POSE *pose,
-                           float linear_mps,
-                           float heading_deg,
-                           float dt_s);
 
 #ifdef __cplusplus
 }

@@ -15,14 +15,4 @@ typedef struct {
     float y;
 } CORE_POINT2F;
 
-/**
- * @brief 二维云台/平面姿态角。
- */
-typedef struct {
-    /** yaw 角，单位 deg。 */
-    float yaw;
-    /** pitch 角，单位 deg。 */
-    float pitch;
-} CORE_ATTITUDE2F;
-
 #endif /* CORE_TYPES_H */

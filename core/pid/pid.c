@@ -43,14 +43,6 @@ void PID_Reset(PID_CONTROLLER *pid){
     pid->state.output = 0.0f;
 }
 
-void PID_SetConfig(PID_CONTROLLER *pid, const PID_CONFIG *config){
-    if ((pid == NULL) || (config == NULL)){
-        return;
-    }
-
-    pid->config = *config;
-}
-
 float PID_Update(PID_CONTROLLER *pid, float target, float feedback, float dt_s){
     if (pid == NULL){
         return 0.0f;
@@ -96,28 +88,4 @@ float PID_Update(PID_CONTROLLER *pid, float target, float feedback, float dt_s){
     pid->state.increment = pid->state.output - last_output;
 
     return pid->state.output;
-}
-
-float PID_GetOutput(const PID_CONTROLLER *pid){
-    if (pid == NULL){
-        return 0.0f;
-    }
-
-    return pid->state.output;
-}
-
-float PID_GetError(const PID_CONTROLLER *pid){
-    if (pid == NULL){
-        return 0.0f;
-    }
-
-    return pid->state.error;
-}
-
-float PID_GetIncrement(const PID_CONTROLLER *pid){
-    if (pid == NULL){
-        return 0.0f;
-    }
-
-    return pid->state.increment;
 }
