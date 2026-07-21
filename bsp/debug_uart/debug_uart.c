@@ -89,8 +89,9 @@ void DebugUart_Printf(const char *fmt, ...){
     if (n <= 0){
         return;
     }
-    if (n > (int)sizeof(buf)){
-        n = (int)sizeof(buf);   /* 截断: 超长内容按缓冲上限发送 */
+    if (n >= (int)sizeof(buf)){
+        /* 溢出截断: vsnprintf 最多写 sizeof-1 个有效字符 + '\0'; 只发有效字符, 不发末尾 NUL。 */
+        n = (int)sizeof(buf) - 1;
     }
     DebugUart_Write((const uint8_t *)buf, (uint16_t)n);
 }
