@@ -1,6 +1,5 @@
 # Todo
 
-- 后续评估移除 `core/kinematics` 中的 `DEG_TO_RAD`、`RAD_TO_DEG` 和 `RotationAngles` 兼容定义。
 - 实机标定 `AUTO_AIM_CONFIG.encoder_lateral_offset_m` 的左右侧符号和轮距等效偏移。
 - 上板校准 E1 循迹圈数计数策略，重点检查 `LineFollow_IsHalfDetected()` 判定范围、最小距离门限和不同车速下的重复计数问题。
 - 后续根据真实系统时钟复核 `BSP_TIME_CPUCLK_HZ`，必要时改为从时钟配置自动派生。

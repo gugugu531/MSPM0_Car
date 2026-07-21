@@ -86,13 +86,6 @@ void Localization_Init(KINEMATICS_POSE start_pose,
                        float initial_distance_m);
 
 /**
- * @brief 用最新里程与航向推进一步。
- * @param distance_m 编码器累计里程当前读数, 单位 m。
- * @param heading_deg IMU 融合航向, 单位 deg (世界系)。
- */
-void Localization_Update(float distance_m, float heading_deg);
-
-/**
  * @brief 用已经换算到车体中心的位移增量推进一步。
  * @param center_delta_m 本周期车体中心前向位移，单位 m，可正可负。
  * @param heading_deg IMU 融合航向，单位 deg（世界系）。
@@ -117,30 +110,6 @@ float Localization_CorrectWheelDelta(float wheel_delta_m,
                                      float dt_s);
 
 /**
- * @brief 单轮里程一步推进: 先车心修正, 再航位推算 (组合入口)。
- * @param wheel_delta_m 编码轮本周期位移, 单位 m。
- * @param gyro_z_deg_s 车体绕 +Z 的角速度, 单位 deg/s, 逆时针为正。
- * @param encoder_lateral_offset_m 编码轮相对车体中心的横向偏移, 单位 m;
- *        位于车体左侧为正, 右侧为负。
- * @param heading_deg IMU 融合航向, 单位 deg (世界系)。
- * @param dt_s 本周期时长, 单位 s。
- * @note = Localization_CorrectWheelDelta() + Localization_UpdateDelta(),
- *       S5 传感器接线单次调用即可, 避免两步误用。
- */
-void Localization_UpdateFromWheel(float wheel_delta_m,
-                                  float gyro_z_deg_s,
-                                  float encoder_lateral_offset_m,
-                                  float heading_deg,
-                                  float dt_s);
-
-/**
- * @brief 路标校正: 已到达某已知角点, 把估计位置 snap 到该角世界坐标。
- * @param corner 角点标识。
- * @note 只重置 x/y, 不动航向 (航向由 IMU 提供, 无需重置)。
- */
-void Localization_ResetToCorner(LOCALIZATION_CORNER corner);
-
-/**
  * @brief 路标校正并同步重锚累计路程。
  * @param corner 已确认到达的角点。
  * @param travelled_m 从任务起点到该角点的理论累计路程，单位 m。
@@ -159,25 +128,10 @@ CORE_POINT2F Localization_CornerPoint(LOCALIZATION_CORNER corner);
 KINEMATICS_POSE Localization_GetPose(void);
 
 /**
- * @brief 获取自 Init 起累计行进里程, 单位 m。
- */
-float Localization_GetTravelled(void);
-
-/**
  * @brief 获取当前圈内进度, 范围 [0,1)。
  * @note = fmod(travelled, perimeter) / perimeter, 供 E3 画圆相位使用。
  */
 float Localization_GetLapProgress(void);
-
-/**
- * @brief 获取已完成圈数 (向下取整)。
- */
-uint32_t Localization_GetLapCount(void);
-
-/**
- * @brief 获取估计器完整状态快照。
- */
-LOCALIZATION_STATE Localization_GetState(void);
 
 #ifdef __cplusplus
 }

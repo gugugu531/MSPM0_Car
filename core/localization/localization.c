@@ -23,19 +23,6 @@ void Localization_Init(KINEMATICS_POSE start_pose,
     s_loc.initialized = true;
 }
 
-void Localization_Update(float distance_m, float heading_deg){
-    if (!s_loc.initialized){
-        KINEMATICS_POSE zero = {0.0f, 0.0f, 0.0f};
-        Localization_Init(zero, LOCALIZATION_DEFAULT_TRACK_SIDE_M, distance_m);
-    }
-
-    /* 兼容累计里程输入；发挥任务使用 UpdateDelta 注入车心修正后的增量。 */
-    float delta_m = distance_m - s_loc.last_distance_m;
-    s_loc.last_distance_m = distance_m;
-
-    Localization_UpdateDelta(delta_m, heading_deg);
-}
-
 void Localization_UpdateDelta(float center_delta_m, float heading_deg){
     if (!s_loc.initialized){
         KINEMATICS_POSE zero = {0.0f, 0.0f, 0.0f};
@@ -74,18 +61,6 @@ float Localization_CorrectWheelDelta(float wheel_delta_m,
     return wheel_delta_m + omega_rad_s * encoder_lateral_offset_m * dt_s;
 }
 
-void Localization_UpdateFromWheel(float wheel_delta_m,
-                                  float gyro_z_deg_s,
-                                  float encoder_lateral_offset_m,
-                                  float heading_deg,
-                                  float dt_s){
-    float center_delta_m = Localization_CorrectWheelDelta(wheel_delta_m,
-                                                          gyro_z_deg_s,
-                                                          encoder_lateral_offset_m,
-                                                          dt_s);
-    Localization_UpdateDelta(center_delta_m, heading_deg);
-}
-
 CORE_POINT2F Localization_CornerPoint(LOCALIZATION_CORNER corner){
     float half = Localization_HalfSide();
     float side = s_loc.track_side_m;
@@ -115,18 +90,6 @@ CORE_POINT2F Localization_CornerPoint(LOCALIZATION_CORNER corner){
     return point;
 }
 
-void Localization_ResetToCorner(LOCALIZATION_CORNER corner){
-    if (corner >= LOCALIZATION_CORNER_COUNT){
-        return;
-    }
-    CORE_POINT2F p = Localization_CornerPoint(corner);
-    s_loc.pose.x_m = p.x;
-    s_loc.pose.y_m = p.y;
-    /* 立即 snap: 清掉未完成的渐变待修正量。 */
-    s_loc.pending_corr_x_m = 0.0f;
-    s_loc.pending_corr_y_m = 0.0f;
-}
-
 void Localization_ResetToCornerAtTravel(LOCALIZATION_CORNER corner,
                                         float travelled_m){
     if ((corner >= LOCALIZATION_CORNER_COUNT) || (travelled_m < 0.0f)){
@@ -148,10 +111,6 @@ KINEMATICS_POSE Localization_GetPose(void){
     return s_loc.pose;
 }
 
-float Localization_GetTravelled(void){
-    return s_loc.travelled_m;
-}
-
 float Localization_GetLapProgress(void){
     if (s_loc.perimeter_m <= 0.0f){
         return 0.0f;
@@ -160,13 +119,3 @@ float Localization_GetLapProgress(void){
     return lap - floorf(lap);
 }
 
-uint32_t Localization_GetLapCount(void){
-    if (s_loc.perimeter_m <= 0.0f){
-        return 0U;
-    }
-    return (uint32_t)(s_loc.travelled_m / s_loc.perimeter_m);
-}
-
-LOCALIZATION_STATE Localization_GetState(void){
-    return s_loc;
-}

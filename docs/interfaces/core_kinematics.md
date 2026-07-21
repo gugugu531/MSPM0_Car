@@ -45,11 +45,7 @@ typedef struct {
 } KINEMATICS_ATTITUDE;
 ```
 
-姿态角，单位为度。为兼容当前 `rotation` 接口，暂时提供：
-
-```c
-typedef KINEMATICS_ATTITUDE RotationAngles;
-```
+姿态角，单位为度。
 
 ```c
 typedef struct {

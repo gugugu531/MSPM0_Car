@@ -13,9 +13,6 @@ extern "C" {
 #define KINEMATICS_DEG_TO_RAD(deg) ((deg) * (KINEMATICS_PI / 180.0f))
 #define KINEMATICS_RAD_TO_DEG(rad) ((rad) * (180.0f / KINEMATICS_PI))
 
-#define DEG_TO_RAD(deg) KINEMATICS_DEG_TO_RAD(deg)
-#define RAD_TO_DEG(rad) KINEMATICS_RAD_TO_DEG(rad)
-
 /**
  * @brief 相对运动方向判定结果。
  */
@@ -67,8 +64,6 @@ typedef struct {
     /** 右轮输出，具体单位由调用方定义。 */
     float right;
 } KINEMATICS_DIFFERENTIAL_OUTPUT;
-
-typedef KINEMATICS_ATTITUDE RotationAngles;
 
 /**
  * @brief 将数值限制在指定闭区间内。
