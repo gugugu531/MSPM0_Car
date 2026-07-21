@@ -86,20 +86,6 @@ SetTargetCenter()
 PID_SMotor_Cont()
 ```
 
-### `BSP_STATUS GimbalTracking_UpdateRectCircle(int32_t edge_index, float angle_offset_deg, float dt_s)`
-
-从 `CANMV_TARGET_RECT` 读取矩形角点，根据 `edge_index` 和 `angle_offset_deg` 计算纸面圆点，并映射到图像矩形后执行跟踪。
-
-该接口不读取旧 `edge` 和 `sInedge`，调用方负责传入阶段参数。
-
-### `BSP_STATUS GimbalTracking_UpdateRectCenter(float dt_s)`
-
-从 `CANMV_TARGET_RECT` 读取矩形角点，计算矩形中心，并让云台跟踪该中心点。
-
-### `bool GimbalTracking_IsRectValid(void)`
-
-检查当前是否已经收到有效矩形角点。该接口只用于任务流程判断，不输出云台速度，也不触发视觉跟踪超时停机；扫描阶段可以安全地反复调用该接口等待矩形出现。
-
 ### `BSP_STATUS GimbalTracking_TrackPoints(CORE_POINT2F target, CORE_POINT2F laser, float dt_s)`
 
 直接根据目标点和激光点执行一次 PID 控制并调用 `Gimbal_SetSpeed()`。

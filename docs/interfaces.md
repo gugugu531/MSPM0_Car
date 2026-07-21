@@ -13,8 +13,6 @@
 - `pid/pid.h`：位置式和增量式 PID 控制器，详细说明见 `docs/interfaces/core_pid.md`。
 - `common/core_types.h`：core 层基础二维点和二维姿态类型，详细说明见 `docs/interfaces/core_common.md`。
 - `kinematics/kinematics.h`：角度、位姿、差速混控和二维几何计算，详细说明见 `docs/interfaces/core_kinematics.md`。
-- `rotation/rotation.h`：欧拉角、旋转矩阵和三维向量旋转计算，详细说明见 `docs/interfaces/core_rotation.md`。
-- `geometry/geometry.h`：二维矩形插值、纸面到矩形映射和圆点计算，详细说明见 `docs/interfaces/core_geometry.md`。
 - `localization/localization.h`：单轮车心位移修正、航位推算和角点重锚。
 - `aim_solver/aim_solver.h`：靶心/圆周几何前馈与视觉 bias 纯计算。
 

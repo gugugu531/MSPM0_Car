@@ -42,8 +42,6 @@
 - `common/`：core 层基础数据类型。
 - `pid/`：位置式和增量式 PID 控制器。
 - `kinematics/`：角度、位姿、差速混控和二维几何计算。
-- `rotation/`：欧拉角、旋转矩阵和三维向量旋转计算。
-- `geometry/`：二维矩形插值、纸面到矩形映射和圆点计算。
 - `localization/`：车心位移、IMU 航向积分和角点重锚。
 - `aim_solver/`：靶心/圆周几何前馈和视觉 bias。
 

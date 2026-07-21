@@ -152,27 +152,6 @@ BSP_STATUS GimbalTracking_TrackAngleErrors(float yaw_error_deg,
                                            float dt_s);
 
 /**
- * @brief 根据 CanMV 矩形角点和圆周角度计算圆上目标并跟踪。
- * @param edge_index 使用的矩形边/点索引，具体含义由任务流程约定。
- * @param angle_offset_deg 圆轨迹角度偏移，单位 deg。
- * @param dt_s 控制周期，单位 s。
- */
-BSP_STATUS GimbalTracking_UpdateRectCircle(int32_t edge_index,
-                                           float angle_offset_deg,
-                                           float dt_s);
-
-/**
- * @brief 根据 CanMV 矩形角点计算矩形中心并跟踪。
- * @param dt_s 控制周期，单位 s。
- */
-BSP_STATUS GimbalTracking_UpdateRectCenter(float dt_s);
-
-/**
- * @brief 检查当前是否已经收到有效矩形角点。
- */
-bool GimbalTracking_IsRectValid(void);
-
-/**
  * @brief 跟踪指定目标点和激光点。
  * @param target 目标点。
  * @param laser 激光点。

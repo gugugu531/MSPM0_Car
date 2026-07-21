@@ -1,7 +1,6 @@
 #include "gimbal_tracking.h"
 
 #include "bsp_time.h"
-#include "geometry/geometry.h"
 #include "gimbal.h"
 
 #include <stddef.h>
@@ -167,20 +166,6 @@ static BSP_STATUS GimbalTracking_ReadAngleError(float *yaw_error_deg,
     return BSP_STATUS_OK;
 }
 
-static BSP_STATUS GimbalTracking_ReadRect(GEOMETRY_RECT2F *rect){
-    uint16_t rect_data[8];
-    uint8_t count = CanMvUart_GetData(CANMV_TARGET_RECT, rect_data, 8U);
-
-    s_gimbal_tracking_state.rect_status = CanMvUart_GetStatus(CANMV_TARGET_RECT);
-
-    if ((s_gimbal_tracking_state.rect_status != CANMV_STATUS_OK) || (count < 8U)){
-        return BSP_STATUS_NOT_READY;
-    }
-
-    Geometry_RectFromArray(rect_data, rect);
-    return BSP_STATUS_OK;
-}
-
 void GimbalTracking_Init(const GIMBAL_TRACKING_CONFIG *config){
     if (config == NULL){
         s_gimbal_tracking_config = GimbalTracking_DefaultConfig();
@@ -270,84 +255,6 @@ BSP_STATUS GimbalTracking_UpdateLaserCenter(float dt_s){
 
     GimbalTracking_MarkTargetReady();
     return GimbalTracking_TrackPoints(target, laser, dt_s);
-}
-
-BSP_STATUS GimbalTracking_UpdateRectCircle(int32_t edge_index,
-                                           float angle_offset_deg,
-                                           float dt_s){
-    GimbalTracking_EnsureInitialized();
-
-    CORE_POINT2F laser_target;
-    CORE_POINT2F laser;
-    BSP_STATUS status = GimbalTracking_ReadLaser(&laser_target, &laser);
-    (void)laser_target;
-
-    if (status != BSP_STATUS_OK){
-        return GimbalTracking_HandleTargetNotReady();
-    }
-
-    GEOMETRY_RECT2F rect;
-    status = GimbalTracking_ReadRect(&rect);
-
-    if (status != BSP_STATUS_OK){
-        s_gimbal_tracking_state.target_valid = false;
-        return GimbalTracking_HandleTargetNotReady();
-    }
-
-    CORE_POINT2F paper_center = {
-        .x = s_gimbal_tracking_config.paper_width / 2.0f,
-        .y = s_gimbal_tracking_config.paper_height / 2.0f,
-    };
-
-    /* 先在题目纸面坐标系中生成圆轨迹目标，再映射到 CanMV 识别到的四边形。 */
-    float target_angle_deg = (float)(edge_index - 1) * 90.0f + angle_offset_deg;
-    CORE_POINT2F paper_target = Geometry_CirclePointDeg(paper_center,
-                                                        s_gimbal_tracking_config.circle_radius,
-                                                        target_angle_deg);
-    CORE_POINT2F target = Geometry_PaperToRectPoint(paper_target,
-                                                    s_gimbal_tracking_config.paper_width,
-                                                    s_gimbal_tracking_config.paper_height,
-                                                    &rect);
-
-    s_gimbal_tracking_state.target_valid = true;
-    GimbalTracking_MarkTargetReady();
-    return GimbalTracking_TrackPoints(target, laser, dt_s);
-}
-
-BSP_STATUS GimbalTracking_UpdateRectCenter(float dt_s){
-    GimbalTracking_EnsureInitialized();
-
-    CORE_POINT2F laser_target;
-    CORE_POINT2F laser;
-    BSP_STATUS status = GimbalTracking_ReadLaser(&laser_target, &laser);
-    (void)laser_target;
-
-    if (status != BSP_STATUS_OK){
-        return GimbalTracking_HandleTargetNotReady();
-    }
-
-    GEOMETRY_RECT2F rect;
-    status = GimbalTracking_ReadRect(&rect);
-
-    if (status != BSP_STATUS_OK){
-        s_gimbal_tracking_state.target_valid = false;
-        return GimbalTracking_HandleTargetNotReady();
-    }
-
-    CORE_POINT2F raw_center = Geometry_RectBilinearInterpolate(&rect, 0.5f, 0.5f);
-    CORE_POINT2F target = GimbalTracking_ImagePoint((uint16_t)raw_center.x,
-                                                    (uint16_t)raw_center.y);
-
-    s_gimbal_tracking_state.target_valid = true;
-    GimbalTracking_MarkTargetReady();
-    return GimbalTracking_TrackPoints(target, laser, dt_s);
-}
-
-bool GimbalTracking_IsRectValid(void){
-    GimbalTracking_EnsureInitialized();
-
-    GEOMETRY_RECT2F rect;
-    return GimbalTracking_ReadRect(&rect) == BSP_STATUS_OK;
 }
 
 /*
