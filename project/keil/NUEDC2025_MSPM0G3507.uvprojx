@@ -585,6 +585,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\bsp\mpu6050\mpu6050.c</FilePath>
             </File>
+            <File>
+              <FileName>mpu6050_dmp_fw.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\mpu6050\mpu6050_dmp_fw.c</FilePath>
+            </File>
           </Files>
         </Group>
       </Groups>
