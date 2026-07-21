@@ -14,73 +14,26 @@ extern "C" {
 
 #define GRAYSCALE_SENSOR_CHANNEL_COUNT 8U
 
-#ifndef GRAYSCALE_SENSOR_1_PORT
-#define GRAYSCALE_SENSOR_1_PORT Tracking_Tracking_1_PORT
-#endif
+/* 引脚映射到 SysConfig 生成的板级名 (逻辑通道 0..7 对应物理 Tracking_8..1, 见 .c)。 */
+#define GRAYSCALE_SENSOR_1_PORT     Tracking_Tracking_1_PORT
+#define GRAYSCALE_SENSOR_1_PIN      Tracking_Tracking_1_PIN
+#define GRAYSCALE_SENSOR_2_PORT     Tracking_Tracking_2_PORT
+#define GRAYSCALE_SENSOR_2_PIN      Tracking_Tracking_2_PIN
+#define GRAYSCALE_SENSOR_3_PORT     Tracking_Tracking_3_PORT
+#define GRAYSCALE_SENSOR_3_PIN      Tracking_Tracking_3_PIN
+#define GRAYSCALE_SENSOR_4_PORT     Tracking_Tracking_4_PORT
+#define GRAYSCALE_SENSOR_4_PIN      Tracking_Tracking_4_PIN
+#define GRAYSCALE_SENSOR_5_PORT     Tracking_Tracking_5_PORT
+#define GRAYSCALE_SENSOR_5_PIN      Tracking_Tracking_5_PIN
+#define GRAYSCALE_SENSOR_6_PORT     Tracking_Tracking_6_PORT
+#define GRAYSCALE_SENSOR_6_PIN      Tracking_Tracking_6_PIN
+#define GRAYSCALE_SENSOR_7_PORT     Tracking_Tracking_7_PORT
+#define GRAYSCALE_SENSOR_7_PIN      Tracking_Tracking_7_PIN
+#define GRAYSCALE_SENSOR_8_PORT     Tracking_Tracking_8_PORT
+#define GRAYSCALE_SENSOR_8_PIN      Tracking_Tracking_8_PIN
 
-#ifndef GRAYSCALE_SENSOR_1_PIN
-#define GRAYSCALE_SENSOR_1_PIN Tracking_Tracking_1_PIN
-#endif
-
-#ifndef GRAYSCALE_SENSOR_2_PORT
-#define GRAYSCALE_SENSOR_2_PORT Tracking_Tracking_2_PORT
-#endif
-
-#ifndef GRAYSCALE_SENSOR_2_PIN
-#define GRAYSCALE_SENSOR_2_PIN Tracking_Tracking_2_PIN
-#endif
-
-#ifndef GRAYSCALE_SENSOR_3_PORT
-#define GRAYSCALE_SENSOR_3_PORT Tracking_Tracking_3_PORT
-#endif
-
-#ifndef GRAYSCALE_SENSOR_3_PIN
-#define GRAYSCALE_SENSOR_3_PIN Tracking_Tracking_3_PIN
-#endif
-
-#ifndef GRAYSCALE_SENSOR_4_PORT
-#define GRAYSCALE_SENSOR_4_PORT Tracking_Tracking_4_PORT
-#endif
-
-#ifndef GRAYSCALE_SENSOR_4_PIN
-#define GRAYSCALE_SENSOR_4_PIN Tracking_Tracking_4_PIN
-#endif
-
-#ifndef GRAYSCALE_SENSOR_5_PORT
-#define GRAYSCALE_SENSOR_5_PORT Tracking_Tracking_5_PORT
-#endif
-
-#ifndef GRAYSCALE_SENSOR_5_PIN
-#define GRAYSCALE_SENSOR_5_PIN Tracking_Tracking_5_PIN
-#endif
-
-#ifndef GRAYSCALE_SENSOR_6_PORT
-#define GRAYSCALE_SENSOR_6_PORT Tracking_Tracking_6_PORT
-#endif
-
-#ifndef GRAYSCALE_SENSOR_6_PIN
-#define GRAYSCALE_SENSOR_6_PIN Tracking_Tracking_6_PIN
-#endif
-
-#ifndef GRAYSCALE_SENSOR_7_PORT
-#define GRAYSCALE_SENSOR_7_PORT Tracking_Tracking_7_PORT
-#endif
-
-#ifndef GRAYSCALE_SENSOR_7_PIN
-#define GRAYSCALE_SENSOR_7_PIN Tracking_Tracking_7_PIN
-#endif
-
-#ifndef GRAYSCALE_SENSOR_8_PORT
-#define GRAYSCALE_SENSOR_8_PORT Tracking_Tracking_8_PORT
-#endif
-
-#ifndef GRAYSCALE_SENSOR_8_PIN
-#define GRAYSCALE_SENSOR_8_PIN Tracking_Tracking_8_PIN
-#endif
-
-#ifndef GRAYSCALE_SENSOR_ACTIVE_LOW
+/* 有效电平: 1 = 低电平有效 (多数数字灰度模块), BSP 内翻转为"有效为 1"。 */
 #define GRAYSCALE_SENSOR_ACTIVE_LOW 1U
-#endif
 
 /**
  * @brief 灰度传感器通道编号。
@@ -115,8 +68,6 @@ uint8_t GrayscaleSensor_ReadMask(void);
  * @return 1 表示有效，0 表示无效或通道非法。
  */
 uint8_t GrayscaleSensor_ReadSingle(GRAYSCALE_SENSOR_CHANNEL channel);
-
-#define TrackingSensor_Read(digital_array) GrayscaleSensor_Read(digital_array)
 
 #ifdef __cplusplus
 }

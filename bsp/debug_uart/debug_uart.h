@@ -1,10 +1,10 @@
 /**
  * @file  debug_uart.h
- * @brief 非阻塞 debug 串口 (UART0/BlueTooth) 输出: 环形缓冲 + TX 中断排空。
+ * @brief 非阻塞 debug 串口 (Debug_Ex/UART1) 输出: 环形缓冲 + TX 中断排空。
  *
- * 控制环只把字节写入环形缓冲即返回 (缓冲满则丢弃并计数, 绝不忙等), TX 由 UART0
- * TX 中断慢慢排空, 对控制链路零阻塞。生产者(线程) 写 head, 消费者(TX ISR) 写 tail,
- * 单生产者单消费者, 无需加锁。
+ * 控制环只把字节写入环形缓冲即返回 (缓冲满则丢弃并计数, 绝不忙等), TX 由 Debug_Ex
+ * (UART1) TX 中断慢慢排空, 对控制链路零阻塞。生产者(线程) 写 head, 消费者(TX ISR)
+ * 写 tail, 单生产者单消费者, 无需加锁。(注: UART0 是独立的 BlueTooth 口, 与此无关。)
  */
 #ifndef DEBUG_UART_H
 #define DEBUG_UART_H
@@ -17,7 +17,7 @@ extern "C" {
 
 /**
  * @brief 初始化 debug 串口输出 (设置 TX FIFO 阈值, 关闭 TX 中断待用)。
- * @note  须在 SYSCFG_DL_init() 之后调用; UART0 的 RX 中断由 main 另行配置。
+ * @note  须在 SYSCFG_DL_init() 之后调用; Debug_Ex 的 RX 中断由 main 另行配置。
  */
 void DebugUart_Init(void);
 

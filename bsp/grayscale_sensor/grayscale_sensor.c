@@ -16,7 +16,7 @@ typedef struct {
  * 逻辑通道顺序沿用旧 Digital[8] 的顺序：channel 0 对应物理 Tracking_8，
  * channel 7 对应物理 Tracking_1。这样上层巡线算法不需要关心板上排线方向。
  */
-static const GRAYSCALE_SENSOR_HW_CONFIG s_grayscale_sensor_hw[GRAYSCALE_SENSOR_CHANNEL_COUNT] = {
+static const GRAYSCALE_SENSOR_HW_CONFIG grayscale_sensor_hw[GRAYSCALE_SENSOR_CHANNEL_COUNT] = {
     [GRAYSCALE_SENSOR_CHANNEL_0] = {
         .port = GRAYSCALE_SENSOR_8_PORT,
         .pin = GRAYSCALE_SENSOR_8_PIN,
@@ -56,7 +56,7 @@ uint8_t GrayscaleSensor_ReadSingle(GRAYSCALE_SENSOR_CHANNEL channel){
         return 0U;
     }
 
-    const GRAYSCALE_SENSOR_HW_CONFIG *hw = &s_grayscale_sensor_hw[channel];
+    const GRAYSCALE_SENSOR_HW_CONFIG *hw = &grayscale_sensor_hw[channel];
     uint8_t high_level = (DL_GPIO_readPins(hw->port, hw->pin) != 0U) ? 1U : 0U;
 
     /*
