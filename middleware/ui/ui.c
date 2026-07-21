@@ -83,6 +83,7 @@ void Ui_UpdateContentLine(uint8_t line_index, const char *text){
     }
 
     Ui_UpdateText(UI_CONTENT_X, page, text);
+    OLED_Flush();   /* 帧缓冲: 单行更新后刷屏 */
 }
 
 void Ui_RenderTextPage(const UI_TEXT_PAGE *page){
@@ -97,6 +98,8 @@ void Ui_RenderTextPage(const UI_TEXT_PAGE *page){
     for (uint8_t i = 0U; i < UI_CONTENT_LINE_COUNT; i++){
         Ui_DrawContentLine(i, page->line[i]);
     }
+
+    OLED_Flush();   /* 帧缓冲: 整页绘制后一次刷屏 */
 }
 
 void Ui_RenderLines(const char *title,
@@ -161,4 +164,6 @@ void Ui_RenderListPage(const UI_LIST_PAGE *page){
         Ui_DrawText(UI_LIST_MARK_X, display_page, mark);
         Ui_DrawText(UI_LIST_TEXT_X, display_page, item_text);
     }
+
+    OLED_Flush();   /* 帧缓冲: 整页绘制后一次刷屏 */
 }

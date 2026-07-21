@@ -23,6 +23,12 @@ extern "C" {
 void OLED_Init(void);
 
 /**
+ * @brief 把帧缓冲整帧刷新到屏幕 (水平寻址一次事务)。
+ * @note 绘制函数只写帧缓冲, 须由上层在一批绘制后调用本函数才真正显示。
+ */
+void OLED_Flush(void);
+
+/**
  * @brief 打开 OLED 显示。
  */
 void OLED_DisplayOn(void);
