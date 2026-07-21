@@ -957,7 +957,7 @@ static void AppE_RunVisualAim2s(void){
         }
 
         last_ms = now_ms;
-        BSP_STATUS status = GimbalTracking_UpdateLaserCenter(dt_s);
+        BSP_STATUS status = GimbalTracking_UpdateAngle(dt_s);
         GIMBAL_TRACKING_STATE state = GimbalTracking_GetState();
 
         if ((status == BSP_STATUS_OK) &&

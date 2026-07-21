@@ -6,7 +6,7 @@
 
 脚本发送 9 字节帧：`A5 5A status seq yaw_hi yaw_lo pitch_hi pitch_lo checksum`。其中 yaw/pitch 是 `deg × 100` 的 `int16` 大端数，`status` 表示有效、未找到或丢失，`seq` 是滚动帧序号，校验是前八字节之和的低八位。
 
-固件的 `bsp/canmv` 已支持本帧，并在 `GimbalTracking_UpdateLaserCenter()` 收到第一帧后自动切换到角度模式。该模式使用独立的 yaw/pitch 角度 PID，原 `0x12 ... 0x5B` 坐标帧仍保留给矩形扫描和旧脚本。
+固件的 `bsp/canmv` 已支持本帧，`GimbalTracking_UpdateAngle()` 为唯一视觉闭环入口，使用独立的 yaw/pitch 角度 PID。原 `0x12 ... 0x5B` 像素坐标帧的固件跟踪路径已移除（旧脚本若仍发送该帧将不再被消费）。
 
 ## 0.5 蓝紫色光点的人工标定
 

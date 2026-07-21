@@ -34,9 +34,9 @@ void AppDebugCmd_EmitConfig(void){
     GIMBAL_TRACKING_CONFIG c = GimbalTracking_GetConfig();
     DebugUart_Printf(
         "[CFG] ykp=%.3f yki=%.3f ykd=%.3f pkp=%.3f pki=%.3f pkd=%.3f olim=%.1f\r\n",
-        (double)c.yaw_pid.kp, (double)c.yaw_pid.ki, (double)c.yaw_pid.kd,
-        (double)c.pitch_pid.kp, (double)c.pitch_pid.ki, (double)c.pitch_pid.kd,
-        (double)c.yaw_pid.output_limit);
+        (double)c.yaw_angle_pid.kp, (double)c.yaw_angle_pid.ki, (double)c.yaw_angle_pid.kd,
+        (double)c.pitch_angle_pid.kp, (double)c.pitch_angle_pid.ki, (double)c.pitch_angle_pid.kd,
+        (double)c.yaw_angle_pid.output_limit);
 }
 
 void AppDebugCmd_Poll(void){

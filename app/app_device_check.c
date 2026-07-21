@@ -545,12 +545,12 @@ static void AppDeviceCheck_RunPidCommTest(void){
             GIMBAL_TRACKING_CONFIG c = GimbalTracking_GetConfig();
             last_render_ms = BSP_Time_GetMs();
             snprintf(line0, sizeof(line0), "Ykp%.2f Yki%.2f",
-                     (double)c.yaw_pid.kp, (double)c.yaw_pid.ki);
+                     (double)c.yaw_angle_pid.kp, (double)c.yaw_angle_pid.ki);
             snprintf(line1, sizeof(line1), "Ykd%.2f Ol%.0f",
-                     (double)c.yaw_pid.kd, (double)c.yaw_pid.output_limit);
+                     (double)c.yaw_angle_pid.kd, (double)c.yaw_angle_pid.output_limit);
             snprintf(line2, sizeof(line2), "Pkp%.2f Pki%.2f",
-                     (double)c.pitch_pid.kp, (double)c.pitch_pid.ki);
-            snprintf(line3, sizeof(line3), "Pkd%.2f", (double)c.pitch_pid.kd);
+                     (double)c.pitch_angle_pid.kp, (double)c.pitch_angle_pid.ki);
+            snprintf(line3, sizeof(line3), "Pkd%.2f", (double)c.pitch_angle_pid.kd);
             Ui_RenderLines("PID Test", line0, line1, line2, line3,
                            "PC:s/g  K2long:back", NULL);
         }
@@ -676,7 +676,7 @@ static void AppDeviceCheck_Render(APP_DEVICE_MODULE module){
         case APP_DEVICE_MODULE_PID:{
             GIMBAL_TRACKING_CONFIG c = GimbalTracking_GetConfig();
             snprintf(line0, sizeof(line0), "Ykp%.2f Pkp%.2f",
-                     (double)c.yaw_pid.kp, (double)c.pitch_pid.kp);
+                     (double)c.yaw_angle_pid.kp, (double)c.pitch_angle_pid.kp);
             snprintf(line1, sizeof(line1), "PID comm test");
             snprintf(line2, sizeof(line2), "K3: start test");
             snprintf(line3, sizeof(line3), "PC send s/g");

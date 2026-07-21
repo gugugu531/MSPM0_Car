@@ -8,8 +8,6 @@
 
 static GIMBAL_TRACKING_CONFIG s_gimbal_tracking_config;
 static GIMBAL_TRACKING_STATE s_gimbal_tracking_state;
-static PID_CONTROLLER s_yaw_pid;
-static PID_CONTROLLER s_pitch_pid;
 static PID_CONTROLLER s_yaw_angle_pid;
 static PID_CONTROLLER s_pitch_angle_pid;
 static bool s_gimbal_tracking_initialized;
@@ -18,42 +16,25 @@ static uint32_t s_last_angle_frame_count;
 static bool s_angle_protocol_active;
 
 static GIMBAL_TRACKING_CONFIG GimbalTracking_DefaultConfig(void){
-    PID_CONFIG yaw_pid_config = {
-        .kp = GIMBAL_TRACKING_DEFAULT_YAW_PID_KP,
-        .ki = GIMBAL_TRACKING_DEFAULT_YAW_PID_KI,
-        .kd = GIMBAL_TRACKING_DEFAULT_YAW_PID_KD,
-        .integral_limit = GIMBAL_TRACKING_DEFAULT_YAW_PID_INTEGRAL_LIMIT,
+    PID_CONFIG yaw_angle_pid_config = {
+        .kp = GIMBAL_TRACKING_DEFAULT_ANGLE_YAW_PID_KP,
+        .ki = GIMBAL_TRACKING_DEFAULT_ANGLE_YAW_PID_KI,
+        .kd = GIMBAL_TRACKING_DEFAULT_ANGLE_YAW_PID_KD,
+        .integral_limit = GIMBAL_TRACKING_DEFAULT_ANGLE_YAW_PID_INTEGRAL_LIMIT,
         .output_limit = GIMBAL_TRACKING_DEFAULT_YAW_PID_OUTPUT_LIMIT,
         .mode = PID_MODE_POSITION,
     };
-    PID_CONFIG pitch_pid_config = {
-        .kp = GIMBAL_TRACKING_DEFAULT_PITCH_PID_KP,
-        .ki = GIMBAL_TRACKING_DEFAULT_PITCH_PID_KI,
-        .kd = GIMBAL_TRACKING_DEFAULT_PITCH_PID_KD,
-        .integral_limit = GIMBAL_TRACKING_DEFAULT_PITCH_PID_INTEGRAL_LIMIT,
+    PID_CONFIG pitch_angle_pid_config = {
+        .kp = GIMBAL_TRACKING_DEFAULT_ANGLE_PITCH_PID_KP,
+        .ki = GIMBAL_TRACKING_DEFAULT_ANGLE_PITCH_PID_KI,
+        .kd = GIMBAL_TRACKING_DEFAULT_ANGLE_PITCH_PID_KD,
+        .integral_limit = GIMBAL_TRACKING_DEFAULT_ANGLE_PITCH_PID_INTEGRAL_LIMIT,
         .output_limit = GIMBAL_TRACKING_DEFAULT_PITCH_PID_OUTPUT_LIMIT,
         .mode = PID_MODE_POSITION,
     };
-    PID_CONFIG yaw_angle_pid_config = yaw_pid_config;
-    PID_CONFIG pitch_angle_pid_config = pitch_pid_config;
-
-    yaw_angle_pid_config.kp = GIMBAL_TRACKING_DEFAULT_ANGLE_YAW_PID_KP;
-    yaw_angle_pid_config.ki = GIMBAL_TRACKING_DEFAULT_ANGLE_YAW_PID_KI;
-    yaw_angle_pid_config.kd = GIMBAL_TRACKING_DEFAULT_ANGLE_YAW_PID_KD;
-    yaw_angle_pid_config.integral_limit = GIMBAL_TRACKING_DEFAULT_ANGLE_YAW_PID_INTEGRAL_LIMIT;
-    pitch_angle_pid_config.kp = GIMBAL_TRACKING_DEFAULT_ANGLE_PITCH_PID_KP;
-    pitch_angle_pid_config.ki = GIMBAL_TRACKING_DEFAULT_ANGLE_PITCH_PID_KI;
-    pitch_angle_pid_config.kd = GIMBAL_TRACKING_DEFAULT_ANGLE_PITCH_PID_KD;
-    pitch_angle_pid_config.integral_limit = GIMBAL_TRACKING_DEFAULT_ANGLE_PITCH_PID_INTEGRAL_LIMIT;
     GIMBAL_TRACKING_CONFIG config = {
-        .yaw_pid = yaw_pid_config,
-        .pitch_pid = pitch_pid_config,
         .yaw_angle_pid = yaw_angle_pid_config,
         .pitch_angle_pid = pitch_angle_pid_config,
-        .image_height = GIMBAL_TRACKING_DEFAULT_IMAGE_HEIGHT,
-        .paper_width = GIMBAL_TRACKING_DEFAULT_PAPER_WIDTH,
-        .paper_height = GIMBAL_TRACKING_DEFAULT_PAPER_HEIGHT,
-        .circle_radius = GIMBAL_TRACKING_DEFAULT_CIRCLE_RADIUS,
         /* 输出方向系数: 隔离电机安装方向 (实机标定)。
          * 实测: yaw 需反向 (-1); pitch 方向与 yaw 相反, 取 +1。 */
         .yaw_output_sign = -1.0f,
@@ -68,19 +49,6 @@ static void GimbalTracking_EnsureInitialized(void){
     if (!s_gimbal_tracking_initialized){
         GimbalTracking_Init(NULL);
     }
-}
-
-static CORE_POINT2F GimbalTracking_ImagePoint(uint16_t x, uint16_t y){
-    /*
-     * 当前 K230 端已经在发送前处理摄像头倒装问题，并按 320x240 图像坐标
-     * 直接发送目标点和图像中心。MCU 侧不再额外翻转 y 轴，避免二次修正。
-     */
-    CORE_POINT2F point = {
-        .x = (float)x,
-        .y = (float)y,
-    };
-
-    return point;
 }
 
 static BSP_STATUS GimbalTracking_HandleTargetNotReady(void){
@@ -107,8 +75,7 @@ static BSP_STATUS GimbalTracking_HandleTargetNotReady(void){
     (void)Gimbal_HoldOnTargetLost();
     s_gimbal_tracking_state.pitch_speed = Gimbal_GetSpeed().pitch_deg_s;
 
-    /* 清零角度 PID 积分: 丢失期间不再累积, 重获目标从新鲜误差起步, 避免陈旧积分甩动。
-     * (像素模式不用这两个控制器, 清零无副作用。) */
+    /* 清零角度 PID 积分: 丢失期间不再累积, 重获目标从新鲜误差起步, 避免陈旧积分甩动。 */
     s_yaw_angle_pid.state.integral = 0.0f;
     s_pitch_angle_pid.state.integral = 0.0f;
     return BSP_STATUS_NOT_READY;
@@ -117,37 +84,6 @@ static BSP_STATUS GimbalTracking_HandleTargetNotReady(void){
 static void GimbalTracking_MarkTargetReady(void){
     s_last_frame_ms = BSP_Time_GetMs();
     s_gimbal_tracking_state.link_timeout = false;
-}
-
-static BSP_STATUS GimbalTracking_ReadLaser(CORE_POINT2F *target,
-                                           CORE_POINT2F *laser){
-    const CANMV_TARGET_DATA *data = CanMvUart_GetTargetData(CANMV_TARGET_LASER);
-
-    s_gimbal_tracking_state.laser_status = CanMvUart_GetStatus(CANMV_TARGET_LASER);
-
-    if ((data == NULL) || (data->status != CANMV_STATUS_OK) || (data->count < 4U)){
-        s_gimbal_tracking_state.laser_valid = false;
-        return BSP_STATUS_NOT_READY;
-    }
-
-    /* 前两个值为目标中心，旧协议用 0,0 表示未识别到目标。 */
-    if ((data->value[0] == 0U) || (data->value[1] == 0U)){
-        s_gimbal_tracking_state.target_valid = false;
-        return BSP_STATUS_NOT_READY;
-    }
-
-    if (target != NULL){
-        *target = GimbalTracking_ImagePoint(data->value[0], data->value[1]);
-    }
-
-    if (laser != NULL){
-        *laser = GimbalTracking_ImagePoint(data->value[2], data->value[3]);
-    }
-
-    s_gimbal_tracking_state.target_valid = true;
-    s_gimbal_tracking_state.laser_valid = true;
-
-    return BSP_STATUS_OK;
 }
 
 static BSP_STATUS GimbalTracking_ReadAngleError(float *yaw_error_deg,
@@ -173,8 +109,6 @@ void GimbalTracking_Init(const GIMBAL_TRACKING_CONFIG *config){
         s_gimbal_tracking_config = *config;
     }
 
-    PID_Init(&s_yaw_pid, &s_gimbal_tracking_config.yaw_pid);
-    PID_Init(&s_pitch_pid, &s_gimbal_tracking_config.pitch_pid);
     PID_Init(&s_yaw_angle_pid, &s_gimbal_tracking_config.yaw_angle_pid);
     PID_Init(&s_pitch_angle_pid, &s_gimbal_tracking_config.pitch_angle_pid);
     GimbalTracking_Reset();
@@ -182,8 +116,6 @@ void GimbalTracking_Init(const GIMBAL_TRACKING_CONFIG *config){
 }
 
 void GimbalTracking_Reset(void){
-    PID_Reset(&s_yaw_pid);
-    PID_Reset(&s_pitch_pid);
     PID_Reset(&s_yaw_angle_pid);
     PID_Reset(&s_pitch_angle_pid);
     s_last_frame_ms = BSP_Time_GetMs();
@@ -233,83 +165,6 @@ BSP_STATUS GimbalTracking_UpdateAngle(float dt_s){
     }
 
     return GimbalTracking_HandleTargetNotReady();
-}
-
-BSP_STATUS GimbalTracking_UpdateLaserCenter(float dt_s){
-    GimbalTracking_EnsureInitialized();
-
-    /* 角度协议一旦出现即优先，并持续使用；否则兼容旧像素激光协议。 */
-    if ((g_canmv_uart_angle_frame_count != s_last_angle_frame_count) ||
-        s_angle_protocol_active){
-        return GimbalTracking_UpdateAngle(dt_s);
-    }
-
-    /* 每帧先读最新目标: Lock 则跟踪, Lost 则停转但继续接收(不永久锁死)。 */
-    CORE_POINT2F target;
-    CORE_POINT2F laser;
-    BSP_STATUS status = GimbalTracking_ReadLaser(&target, &laser);
-
-    if (status != BSP_STATUS_OK){
-        return GimbalTracking_HandleTargetNotReady();
-    }
-
-    GimbalTracking_MarkTargetReady();
-    return GimbalTracking_TrackPoints(target, laser, dt_s);
-}
-
-/*
- * 最小速度地板 + 像素死区: 补偿 yaw 轴底层整数 RPM 台阶 (最小 6 deg/s)。
- *   - |axis_error| <= 死区: 输出 0, 中心处停住不抖;
- *   - 死区外但 |speed| < 最小驱动速度: 抬到 ±min, 保证任何真实误差都能驱动电机。
- */
-static float GimbalTracking_ApplyMinSpeed(float speed, float axis_error, float min_move){
-    float abs_err = (axis_error < 0.0f) ? -axis_error : axis_error;
-
-    if (abs_err <= GIMBAL_TRACKING_DEFAULT_DEADBAND_PX){
-        return 0.0f;
-    }
-
-    float abs_speed = (speed < 0.0f) ? -speed : speed;
-
-    if ((abs_speed > 0.0f) && (abs_speed < min_move)){
-        return (speed > 0.0f) ? min_move : -min_move;
-    }
-
-    return speed;
-}
-
-BSP_STATUS GimbalTracking_TrackPoints(CORE_POINT2F target,
-                                      CORE_POINT2F laser,
-                                      float dt_s){
-    GimbalTracking_EnsureInitialized();
-
-    s_gimbal_tracking_state.target = target;
-    s_gimbal_tracking_state.laser = laser;
-    s_gimbal_tracking_state.error.x = target.x - laser.x;
-    s_gimbal_tracking_state.error.y = target.y - laser.y;
-    s_gimbal_tracking_state.target_valid = true;
-    s_gimbal_tracking_state.laser_valid = true;
-    s_gimbal_tracking_state.angle_mode = false;
-
-    float yaw_output = PID_Update(&s_yaw_pid, target.x, laser.x, dt_s);
-    float pitch_output = PID_Update(&s_pitch_pid, target.y, laser.y, dt_s);
-
-    /* 输出方向系数用于隔离电机安装方向差异，避免在 PID 误差定义中混入硬件极性。 */
-    float yaw_speed = s_gimbal_tracking_config.yaw_output_sign * yaw_output;
-    float pitch_speed = s_gimbal_tracking_config.pitch_output_sign * pitch_output;
-
-    /*
-     * yaw(速度模式): 死区外加最小速度地板, 越过底层整数 RPM 台阶。
-     * pitch(位置模式): 只保留像素死区, 不加地板。
-     */
-    yaw_speed = GimbalTracking_ApplyMinSpeed(yaw_speed, s_gimbal_tracking_state.error.x,
-                                             GIMBAL_TRACKING_DEFAULT_MIN_MOVE_YAW_DEG_S);
-    pitch_speed = GimbalTracking_ApplyMinSpeed(pitch_speed, s_gimbal_tracking_state.error.y, 0.0f);
-
-    s_gimbal_tracking_state.yaw_speed = yaw_speed;
-    s_gimbal_tracking_state.pitch_speed = pitch_speed;
-
-    return Gimbal_SetSpeed(yaw_speed, pitch_speed);
 }
 
 BSP_STATUS GimbalTracking_TrackAngleErrors(float yaw_error_deg,
@@ -370,8 +225,8 @@ void GimbalTracking_SetGain(const char *key, float value){
         return;
     }
 
-    PID_CONFIG *y = &s_gimbal_tracking_config.yaw_pid;
-    PID_CONFIG *p = &s_gimbal_tracking_config.pitch_pid;
+    PID_CONFIG *y = &s_gimbal_tracking_config.yaw_angle_pid;
+    PID_CONFIG *p = &s_gimbal_tracking_config.pitch_angle_pid;
 
     if (strcmp(key, "ykp") == 0){
         y->kp = value;
@@ -392,9 +247,9 @@ void GimbalTracking_SetGain(const char *key, float value){
         return;
     }
 
-    /* 即时应用到在用控制器: 只替换 config, 保留积分/状态, 调参不产生跳变。 */
-    s_yaw_pid.config = *y;
-    s_pitch_pid.config = *p;
+    /* 即时应用到在用的角度控制器: 只替换 config, 保留积分/状态, 调参不产生跳变。 */
+    s_yaw_angle_pid.config = *y;
+    s_pitch_angle_pid.config = *p;
 }
 
 GIMBAL_TRACKING_CONFIG GimbalTracking_GetConfig(void){
