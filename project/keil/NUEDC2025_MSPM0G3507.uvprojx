@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\aim_fusion;..\..\core\aim_solver;..\..\core\common;..\..\core\kinematics;..\..\core\localization;..\..\core\pid;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\gimbal;..\..\middleware\gimbal_tracking;..\..\middleware\line_follow;..\..\middleware\line_tracking;..\..\middleware\ui;..\..\bsp\canmv;..\..\bsp\common;..\..\bsp\debug_uart;..\..\bsp\grayscale_sensor;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\bsp\bldc;..\..\board\sys_config;C:\ti\mspm0_sdk_2_10_00_04\source;C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include</IncludePath>
+              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\aim_fusion;..\..\core\aim_solver;..\..\core\common;..\..\core\kinematics;..\..\core\localization;..\..\core\pid;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\gimbal;..\..\middleware\gimbal_tracking;..\..\middleware\line_follow;..\..\middleware\line_tracking;..\..\middleware\ui;..\..\bsp\canmv;..\..\bsp\common;..\..\bsp\debug_uart;..\..\bsp\grayscale_sensor;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\bsp\bldc;..\..\bsp\mpu6050;..\..\board\sys_config;C:\ti\mspm0_sdk_2_10_00_04\source;C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -579,6 +579,11 @@
               <FileName>f32c_bldc.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\bldc\f32c_bldc.c</FilePath>
+            </File>
+            <File>
+              <FileName>mpu6050.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\mpu6050\mpu6050.c</FilePath>
             </File>
           </Files>
         </Group>
