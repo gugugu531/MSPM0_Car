@@ -33,3 +33,16 @@ app ─► middleware ─► bsp
 - `core` 只能包含标准头和 `core` 内部头文件。
 - `app` 可以包含任意下层公开头文件。
 - 跨模块状态应优先由明确拥有该状态的模块维护，并通过公开接口读取；不要重新引入裸全局状态兼容头。
+
+## 中断分发策略
+
+中断入口按"谁拥有该外设/职责，谁定义 ISR"划分，`middleware` 不做中断转发：
+
+- **BSP 驱动自持其专属外设中断**：
+  - `bsp/bldc/f32c_bldc.c` → `BLDC_INST_IRQHandler`（UART3 无刷反馈）
+  - `bsp/motor/hall_encoder.c` → `GROUP1_IRQHandler`（编码器 GPIO）、`TIMER_0_INST_IRQHandler`（编码器采样定时器）
+- **`app/main.c` 持有需跨子系统分发或属应用调度的中断**：
+  - `UART0/1/2_IRQHandler`（蓝牙/调试上位机命令/CanMV 视觉的收发路由）
+  - `SysTick_Handler`（分频调度按键扫描、JY61P 轮询、系统计时）
+
+> 新增外设时遵循同一原则：仅该驱动使用的中断放进对应 BSP 源文件；需要唤醒多个上层子系统或承担应用级调度的中断放进 `app`。不要在 `middleware` 里写"转发到下层驱动"的空壳 ISR 入口。
