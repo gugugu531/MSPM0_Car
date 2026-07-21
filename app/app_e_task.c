@@ -22,12 +22,10 @@
 #define APP_E_EDGES_PER_LAP 4U
 #define APP_E_LINE_TIMEOUT_MS 20000U
 #define APP_E_LINE_LOST_GRACE_MS 1000U
-#define APP_E_LINE_EDGE_MIN_DISTANCE_M 0.15f
 /* CORNER_ARC 原地转弯占空比: ±9→±11 适当提速防超时。±9 转弯慢约一倍(CORNER_ARC 帧数翻倍);
  * 现有陀螺增稳(压航向蛇形) + differential_limit 16(出弯刹车权限) + anchor 位姿渐变(消 snap
  * 阶跃) 三重保护已把出弯云台过冲压到 ~5.7°, 可承受更快转弯。±11 提速明显但不满打(原 ±12)。
  * 若出弯过冲又变大就回调 ±10; 若仍超时可试 ±12。 */
-#define APP_E_CORNER_TURN_LEFT_DUTY_PERCENT -11.0f
 #define APP_E_CORNER_TURN_RIGHT_DUTY_PERCENT 11.0f
 #define APP_E_CORNER_FORWARD_DISTANCE_M 0.09f
 #define APP_E_CORNER_FORWARD_DUTY_PERCENT 15.0f
