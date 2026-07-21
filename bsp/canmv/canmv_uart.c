@@ -12,7 +12,7 @@ typedef struct {
     uint8_t byte_count;
 } CANMV_TARGET_PARSE_CONFIG;
 
-static const CANMV_TARGET_PARSE_CONFIG s_canmv_parse_config[CANMV_TARGET_MAX] = {
+static const CANMV_TARGET_PARSE_CONFIG canmv_parse_config[CANMV_TARGET_MAX] = {
     [CANMV_TARGET_LASER] = {
         .begin = CANMV_LASER_BEGIN,
         .byte_count = CANMV_LASER_BYTE_COUNT,
@@ -23,14 +23,14 @@ static const CANMV_TARGET_PARSE_CONFIG s_canmv_parse_config[CANMV_TARGET_MAX] = 
     },
 };
 
-static uint8_t s_canmv_rx_buffer[CANMV_RX_BUFFER_LEN];
-static uint8_t s_canmv_frame[CANMV_RX_BUFFER_LEN];
-static uint8_t s_canmv_rx_count;
-static bool s_canmv_receiving;
-static uint8_t s_canmv_expected_len;
-static bool s_canmv_receiving_angle;
-static bool s_canmv_target_seen[CANMV_TARGET_MAX];
-static CANMV_TARGET_DATA s_canmv_target_data[CANMV_TARGET_MAX];
+static uint8_t canmv_rx_buffer[CANMV_RX_BUFFER_LEN];
+static uint8_t canmv_frame[CANMV_RX_BUFFER_LEN];
+static uint8_t canmv_rx_count;
+static bool canmv_receiving;
+static uint8_t canmv_expected_len;
+static bool canmv_receiving_angle;
+static bool canmv_target_seen[CANMV_TARGET_MAX];
+static CANMV_TARGET_DATA canmv_target_data[CANMV_TARGET_MAX];
 
 volatile uint32_t g_canmv_uart_rx_byte_count;
 volatile uint32_t g_canmv_uart_valid_frame_count;
@@ -84,58 +84,58 @@ static void CanMvUart_SetAllStatus(CANMV_STATUS status){
     }
 
     for (uint8_t i = 0U; i < (uint8_t)CANMV_TARGET_MAX; i++){
-        s_canmv_target_data[i].status = status;
+        canmv_target_data[i].status = status;
     }
 }
 
 static void CanMvUart_ClearTargetData(void){
     for (uint8_t i = 0U; i < (uint8_t)CANMV_TARGET_MAX; i++){
-        memset(s_canmv_target_data[i].value, 0, sizeof(s_canmv_target_data[i].value));
-        s_canmv_target_data[i].count = 0U;
-        s_canmv_target_data[i].status = CANMV_STATUS_INIT;
-        s_canmv_target_seen[i] = false;
+        memset(canmv_target_data[i].value, 0, sizeof(canmv_target_data[i].value));
+        canmv_target_data[i].count = 0U;
+        canmv_target_data[i].status = CANMV_STATUS_INIT;
+        canmv_target_seen[i] = false;
     }
 }
 
 static void CanMvUart_ResetRxState(void){
-    memset(s_canmv_rx_buffer, 0, sizeof(s_canmv_rx_buffer));
-    s_canmv_rx_count = 0U;
-    s_canmv_receiving = false;
-    s_canmv_expected_len = 0U;
-    s_canmv_receiving_angle = false;
+    memset(canmv_rx_buffer, 0, sizeof(canmv_rx_buffer));
+    canmv_rx_count = 0U;
+    canmv_receiving = false;
+    canmv_expected_len = 0U;
+    canmv_receiving_angle = false;
 }
 
 static void CanMvUart_ParseAngleFrame(void){
-    CANMV_TARGET_DATA *data = &s_canmv_target_data[CANMV_TARGET_ANGLE];
+    CANMV_TARGET_DATA *data = &canmv_target_data[CANMV_TARGET_ANGLE];
     uint8_t checksum = 0U;
     uint8_t vision_status;
 
     for (uint8_t i = 0U; i < (CANMV_ANGLE_FRAME_LEN - 1U); i++){
-        checksum = (uint8_t)(checksum + s_canmv_rx_buffer[i]);
+        checksum = (uint8_t)(checksum + canmv_rx_buffer[i]);
     }
-    if (checksum != s_canmv_rx_buffer[CANMV_ANGLE_FRAME_LEN - 1U]){
+    if (checksum != canmv_rx_buffer[CANMV_ANGLE_FRAME_LEN - 1U]){
         data->status = CANMV_STATUS_FRAME_DROP;
         g_canmv_uart_drop_count++;
         return;
     }
 
-    vision_status = s_canmv_rx_buffer[2];
+    vision_status = canmv_rx_buffer[2];
     if (vision_status > CANMV_ANGLE_STATUS_LOST){
         data->status = CANMV_STATUS_FRAME_DROP;
         g_canmv_uart_drop_count++;
         return;
     }
 
-    data->value[0] = (uint16_t)(((uint16_t)s_canmv_rx_buffer[4] << 8) |
-                                s_canmv_rx_buffer[5]);
-    data->value[1] = (uint16_t)(((uint16_t)s_canmv_rx_buffer[6] << 8) |
-                                s_canmv_rx_buffer[7]);
+    data->value[0] = (uint16_t)(((uint16_t)canmv_rx_buffer[4] << 8) |
+                                canmv_rx_buffer[5]);
+    data->value[1] = (uint16_t)(((uint16_t)canmv_rx_buffer[6] << 8) |
+                                canmv_rx_buffer[7]);
     data->count = 2U;
     if (vision_status == CANMV_ANGLE_STATUS_VALID){
         data->status = CANMV_STATUS_OK;
-        s_canmv_target_seen[CANMV_TARGET_ANGLE] = true;
+        canmv_target_seen[CANMV_TARGET_ANGLE] = true;
     } else if ((vision_status == CANMV_ANGLE_STATUS_LOST) ||
-               s_canmv_target_seen[CANMV_TARGET_ANGLE]){
+               canmv_target_seen[CANMV_TARGET_ANGLE]){
         data->status = CANMV_STATUS_LOST;
     } else{
         data->status = CANMV_STATUS_NOT_FOUND;
@@ -144,20 +144,20 @@ static void CanMvUart_ParseAngleFrame(void){
 }
 
 static void CanMvUart_UpdateTargetStatus(CANMV_TARGET target){
-    CANMV_TARGET_DATA *data = &s_canmv_target_data[target];
+    CANMV_TARGET_DATA *data = &canmv_target_data[target];
 
     if (CanMvUart_IsTargetEmpty(data)){
-        data->status = s_canmv_target_seen[target] ? CANMV_STATUS_LOST : CANMV_STATUS_NOT_FOUND;
+        data->status = canmv_target_seen[target] ? CANMV_STATUS_LOST : CANMV_STATUS_NOT_FOUND;
         return;
     }
 
     data->status = CANMV_STATUS_OK;
-    s_canmv_target_seen[target] = true;
+    canmv_target_seen[target] = true;
 }
 
 static bool CanMvUart_ParseTarget(CANMV_TARGET target){
-    const CANMV_TARGET_PARSE_CONFIG *config = &s_canmv_parse_config[target];
-    CANMV_TARGET_DATA *data = &s_canmv_target_data[target];
+    const CANMV_TARGET_PARSE_CONFIG *config = &canmv_parse_config[target];
+    CANMV_TARGET_DATA *data = &canmv_target_data[target];
     uint8_t value_count = (uint8_t)(config->byte_count / 2U);
 
     if (value_count > CANMV_TARGET_VALUE_CAPACITY){
@@ -169,8 +169,8 @@ static bool CanMvUart_ParseTarget(CANMV_TARGET target){
 
     for (uint8_t i = 0U; i < value_count; i++){
         uint8_t frame_index = (uint8_t)(config->begin + (i * 2U));
-        if (!CanMvUart_CombineCoordinate(s_canmv_frame[frame_index],
-                                         s_canmv_frame[frame_index + 1U],
+        if (!CanMvUart_CombineCoordinate(canmv_frame[frame_index],
+                                         canmv_frame[frame_index + 1U],
                                          &data->value[i])){
             memset(data->value, 0, sizeof(data->value));
             data->count = 0U;
@@ -195,7 +195,7 @@ static void CanMvUart_ParseFrame(void){
 
 BSP_STATUS CanMvUart_Init(void){
     CanMvUart_ResetRxState();
-    memset(s_canmv_frame, 0, sizeof(s_canmv_frame));
+    memset(canmv_frame, 0, sizeof(canmv_frame));
     CanMvUart_ClearTargetData();
     g_canmv_uart_rx_byte_count = 0U;
     g_canmv_uart_valid_frame_count = 0U;
@@ -225,26 +225,26 @@ void CanMvUart_ProcessByte(uint8_t byte){
      * 就会把整帧打散, 导致含这些字节的目标(尤其静止靶重复发同一帧)永远收不到。
      * 对齐后每帧「满 27 字节->校验帧尾 0x5B->复位」自然衔接下一帧, 保持对齐。
      */
-    if (!s_canmv_receiving){
+    if (!canmv_receiving){
         /* 空闲态: 识别两种帧头；其余为帧间噪声。 */
         if (byte == CANMV_FRAME_START){
-            s_canmv_rx_count = 0U;
-            s_canmv_rx_buffer[s_canmv_rx_count++] = byte;
-            s_canmv_receiving = true;
-            s_canmv_expected_len = CANMV_MIN_FRAME_LEN;
+            canmv_rx_count = 0U;
+            canmv_rx_buffer[canmv_rx_count++] = byte;
+            canmv_receiving = true;
+            canmv_expected_len = CANMV_MIN_FRAME_LEN;
         } else if (byte == CANMV_ANGLE_FRAME_START0){
-            s_canmv_rx_count = 0U;
-            s_canmv_rx_buffer[s_canmv_rx_count++] = byte;
-            s_canmv_receiving = true;
-            s_canmv_receiving_angle = true;
+            canmv_rx_count = 0U;
+            canmv_rx_buffer[canmv_rx_count++] = byte;
+            canmv_receiving = true;
+            canmv_receiving_angle = true;
         }
         return;
     }
 
-    if (s_canmv_receiving_angle && (s_canmv_rx_count == 1U)){
+    if (canmv_receiving_angle && (canmv_rx_count == 1U)){
         if (byte == CANMV_ANGLE_FRAME_START1){
-            s_canmv_rx_buffer[s_canmv_rx_count++] = byte;
-            s_canmv_expected_len = CANMV_ANGLE_FRAME_LEN;
+            canmv_rx_buffer[canmv_rx_count++] = byte;
+            canmv_expected_len = CANMV_ANGLE_FRAME_LEN;
             return;
         }
         CanMvUart_ResetRxState();
@@ -255,19 +255,19 @@ void CanMvUart_ProcessByte(uint8_t byte){
     }
 
     /* 接收态: 载荷字节(含 0x12/0x5B)一律按数据存入。 */
-    s_canmv_rx_buffer[s_canmv_rx_count++] = byte;
+    canmv_rx_buffer[canmv_rx_count++] = byte;
 
-    if (s_canmv_rx_count < s_canmv_expected_len){
+    if (canmv_rx_count < canmv_expected_len){
         return;   /* 帧未满, 继续接收 */
     }
 
-    if (s_canmv_receiving_angle){
+    if (canmv_receiving_angle){
         CanMvUart_ParseAngleFrame();
         CanMvUart_ResetRxState();
         g_canmv_uart_valid_frame_count++;
-    } else if (s_canmv_rx_buffer[CANMV_MIN_FRAME_LEN - 1U] == CANMV_FRAME_END){
+    } else if (canmv_rx_buffer[CANMV_MIN_FRAME_LEN - 1U] == CANMV_FRAME_END){
         /* 长度到位且帧尾正确 => 有效帧。复位后下一字节即下一帧帧头, 天然对齐。 */
-        memcpy(s_canmv_frame, s_canmv_rx_buffer, sizeof(s_canmv_frame));
+        memcpy(canmv_frame, canmv_rx_buffer, sizeof(canmv_frame));
         CanMvUart_ResetRxState();
         g_canmv_uart_valid_frame_count++;
         CanMvUart_ParseFrame();
@@ -329,7 +329,7 @@ CANMV_STATUS CanMvUart_GetStatus(CANMV_TARGET target){
         return CANMV_STATUS_INIT;
     }
 
-    return s_canmv_target_data[target].status;
+    return canmv_target_data[target].status;
 }
 
 uint8_t CanMvUart_GetData(CANMV_TARGET target, uint16_t *out, uint8_t max_count){
@@ -337,7 +337,7 @@ uint8_t CanMvUart_GetData(CANMV_TARGET target, uint16_t *out, uint8_t max_count)
         return 0U;
     }
 
-    const CANMV_TARGET_DATA *data = &s_canmv_target_data[target];
+    const CANMV_TARGET_DATA *data = &canmv_target_data[target];
     uint8_t copy_count = data->count;
 
     if (copy_count > max_count){
@@ -356,13 +356,13 @@ const CANMV_TARGET_DATA *CanMvUart_GetTargetData(CANMV_TARGET target){
         return NULL;
     }
 
-    return &s_canmv_target_data[target];
+    return &canmv_target_data[target];
 }
 
 /* ===== 干净 API: 解码后的角度目标 + 判新原语 + 诊断访问函数 ===== */
 
 CANMV_ANGLE CanMvUart_GetAngle(void){
-    const CANMV_TARGET_DATA *data = &s_canmv_target_data[CANMV_TARGET_ANGLE];
+    const CANMV_TARGET_DATA *data = &canmv_target_data[CANMV_TARGET_ANGLE];
     CANMV_ANGLE angle;
 
     angle.status = data->status;

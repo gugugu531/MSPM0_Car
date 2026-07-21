@@ -14,25 +14,14 @@
 extern "C" {
 #endif
 
-#ifndef CANMV_UART_INST
+/* UART2 实例/中断映射到 SysConfig 生成的板级名。 */
 #define CANMV_UART_INST UART2
-#endif
-
-#ifndef CANMV_UART_IRQN
 #define CANMV_UART_IRQN UART2_INT_IRQn
-#endif
 
-#ifndef CANMV_RX_BUFFER_LEN
+/* 接收缓冲长度; 单类目标 value[] 容量; 坐标合理性上限(超此判字节序异常)。 */
 #define CANMV_RX_BUFFER_LEN 100U
-#endif
-
-#ifndef CANMV_TARGET_VALUE_CAPACITY
 #define CANMV_TARGET_VALUE_CAPACITY 10U
-#endif
-
-#ifndef CANMV_COORDINATE_SANITY_LIMIT
 #define CANMV_COORDINATE_SANITY_LIMIT 1000U
-#endif
 
 #define CANMV_FRAME_START 0x12U
 #define CANMV_FRAME_END   0x5BU
@@ -50,6 +39,7 @@ extern "C" {
 #define CANMV_RECT_BEGIN      10U
 #define CANMV_RECT_BYTE_COUNT 16U
 
+/* 坐标帧定长 = 帧头 + laser(2..9) + rect(10..25) + 帧尾 = 27 字节 (名为 MIN 属历史遗留)。 */
 #define CANMV_MIN_FRAME_LEN (CANMV_RECT_BEGIN + CANMV_RECT_BYTE_COUNT + 1U)
 
 /*
