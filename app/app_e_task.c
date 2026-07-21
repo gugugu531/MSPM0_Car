@@ -13,7 +13,6 @@
 #include "line_follow.h"
 #include "line_tracking.h"
 #include "kinematics/kinematics.h"
-#include "motion.h"
 #include "ui.h"
 
 #include <stdbool.h>
@@ -304,7 +303,6 @@ static void AppE_RunLineTask(uint8_t lap_count, APP_E_AIM_MODE aim_mode,
     bool initial_start_turn = (aim_mode != APP_E_AIM_MODE_NONE);
     uint8_t auto_aim_imu_fail_count = 0U;
     APP_E_CALIBRATION_CONFIG calibration = AppE_GetCalibrationConfig();
-    MOTION_COMMAND line_follow_command = Motion_CommandLineFollow();
 
     /*
      * 基本要求(1)只使用底盘巡线；发挥任务在同一主循环中并行运行云台视觉控制。
@@ -319,7 +317,7 @@ static void AppE_RunLineTask(uint8_t lap_count, APP_E_AIM_MODE aim_mode,
         if (AutoAim_Start(aim_mode == APP_E_AIM_MODE_CIRCLE_FEEDFORWARD
                               ? AUTO_AIM_MODE_CIRCLE
                               : AUTO_AIM_MODE_CENTER) != BSP_STATUS_OK){
-            (void)Motion_Stop();
+            (void)Chassis_Brake();
             AppE_SetLaserEnabled(false);
             Ui_RenderStatusPage("Line aim", UI_STATUS_WARN, "IMU not ready", "K2 long:back");
             AppE_WaitBack();
@@ -333,7 +331,6 @@ static void AppE_RunLineTask(uint8_t lap_count, APP_E_AIM_MODE aim_mode,
     LINE_TRACKING_CONFIG lt_cfg = LineTracking_GetDefaultConfig();
     lt_cfg.base_duty = prof.line_base_duty;   /* 按档位覆盖直线基础速度 */
     LineTracking_Init(&lt_cfg);
-    Motion_Init();
     Ui_RenderLines("E1 Line",
                    "Running...",
                    "Lap:0",
@@ -529,7 +526,7 @@ static void AppE_RunLineTask(uint8_t lap_count, APP_E_AIM_MODE aim_mode,
             if (AutoAim_Update(dt_s) == BSP_STATUS_OK){
                 auto_aim_imu_fail_count = 0U;
             } else if (++auto_aim_imu_fail_count >= calibration.imu_fail_limit){
-                (void)Motion_Stop();
+                (void)Chassis_Brake();
                 AppE_StopLineAim(aim_mode);
                 Ui_RenderStatusPage("Line aim", UI_STATUS_WARN, "IMU lost", "K2 long:back");
                 AppE_WaitBack();
@@ -613,8 +610,9 @@ static void AppE_RunLineTask(uint8_t lap_count, APP_E_AIM_MODE aim_mode,
         }
 
         if (line_state == APP_E_LINE_STATE_FOLLOW){
-            /* Motion_Apply() 只执行巡线运动原语，圈数和丢线仍由 E1 任务状态机判断。 */
-            status = Motion_Apply(&line_follow_command, dt_s);
+            /* 直线段执行巡线闭环 (LineTracking 内部读灰度+陀螺增稳并下发底盘);
+             * 圈数和丢线仍由 E1 任务状态机判断。 */
+            status = LineTracking_Update(dt_s);
             (void)LineFollow_GetSensor(&sensor);
 
             /*
@@ -714,7 +712,7 @@ static void AppE_RunLineTask(uint8_t lap_count, APP_E_AIM_MODE aim_mode,
             char turn_line[24];
 
             /* 丢线属于题目流程故障，在 app 层刹车并等待用户长按返回。 */
-            (void)Motion_Stop();
+            (void)Chassis_Brake();
             DebugUart_Printf("[E1] LINE LOST turn=%lu t=%lu\r\n",
                              (unsigned long)corner_count,
                              (unsigned long)AppE_ElapsedMs(start_ms));
@@ -763,7 +761,7 @@ static void AppE_RunLineTask(uint8_t lap_count, APP_E_AIM_MODE aim_mode,
         }
 
         if (edge_count >= target_edges){
-            (void)Motion_Stop();
+            (void)Chassis_Brake();
             DebugUart_Printf("[E1] FINISH laps=%u t=%lu\r\n",
                              (unsigned)completed_laps,
                              (unsigned long)AppE_ElapsedMs(start_ms));
@@ -781,7 +779,7 @@ static void AppE_RunLineTask(uint8_t lap_count, APP_E_AIM_MODE aim_mode,
         BSP_DelayMs(APP_E_LOOP_DELAY_MS);
     }
 
-    (void)Motion_Stop();
+    (void)Chassis_Brake();
     AppE_StopLineAim(aim_mode);
     Ui_RenderStatusPage("E1 Line", UI_STATUS_WARN, "Stopped/timeout", "K2 long:back");
     AppE_WaitBack();

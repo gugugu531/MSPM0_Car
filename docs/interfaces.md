@@ -20,7 +20,6 @@
 
 - `auto_aim.h`：定位、几何前馈、视觉慢校正与云台位置控制协调层，详细说明见 `docs/interfaces/middleware_auto_aim.md`。
 - `chassis.h`：底盘组合服务，详细说明见 `docs/interfaces/middleware_chassis.md`。
-- `motion/motion.h`：底盘运动原语执行（组合 chassis 与 line_tracking），详细说明见 `docs/interfaces/middleware_motion.md`。
 - `gimbal.h`：云台组合服务，详细说明见 `docs/interfaces/middleware_gimbal.md`。
 - `gimbal_tracking/gimbal_tracking.h`：基于 CanMV 目标和 PID 的云台视觉跟踪控制，详细说明见 `docs/interfaces/middleware_gimbal_tracking.md`。
 - `line_follow.h`：巡线运行状态服务，详细说明见 `docs/interfaces/middleware_line_follow.md`。
