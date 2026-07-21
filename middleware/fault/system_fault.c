@@ -4,7 +4,6 @@
  */
 #include "system_fault.h"
 #include "chassis.h"
-#include "gimbal.h"
 #include "ui.h"
 #include <stddef.h>
 
@@ -83,7 +82,6 @@ void SystemFault_Handler(SYSTEM_FAULT_CODE code, const char *message){
 void SystemFault_Halt(void){
     /* 故障停机优先让执行机构进入安全状态，再刷新错误页。 */
     (void)Chassis_Brake();
-    (void)Gimbal_Stop();
 
     Ui_RenderStatusPage("System Fault",
                         UI_STATUS_ERROR,
