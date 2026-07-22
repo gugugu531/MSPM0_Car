@@ -45,6 +45,10 @@ void Ui_Init(void){
     OLED_Init();
 }
 
+void Ui_Flush(void){
+    OLED_Flush();
+}
+
 void Ui_Clear(void){
     OLED_Clear();
 }
