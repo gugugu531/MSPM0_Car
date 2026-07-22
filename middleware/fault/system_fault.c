@@ -5,6 +5,7 @@
 #include "system_fault.h"
 #include "chassis.h"
 #include "ui.h"
+#include "ti_msp_dl_config.h"   /* __disable_irq() (CMSIS intrinsic) */
 #include <stddef.h>
 
 static SYSTEM_FAULT_INFO system_fault_info = {
@@ -88,6 +89,11 @@ void SystemFault_Halt(void){
                         system_fault_info.message,
                         SystemFault_CodeText(system_fault_info.code));
 
+    /*
+     * 已进安全状态并渲染完错误页(OLED 为阻塞刷屏, 不依赖中断), 此处关中断使停机成为
+     * 真正终态, 杜绝任何 ISR(如重建 app 后挂在 SysTick 的控制环)在停机后复驱动执行器。
+     */
+    __disable_irq();
     while (1){
         ;
     }

@@ -62,11 +62,16 @@ void SystemFault_Clear(void);
 
 /**
  * @brief 执行故障处理流程，设置故障、刹停底盘并显示故障页。
+ * @note 需在 Chassis_Init()/Ui_Init() 之后调用：内部会刹停底盘并渲染错误页；
+ *       若在基础外设初始化前触发，刹车/显示可能无效（不会崩溃，仅无输出）。
+ * @note 内部经 SystemFault_Halt() 进入死循环并关中断，函数不会返回。
  */
 void SystemFault_Handler(SYSTEM_FAULT_CODE code, const char *message);
 
 /**
  * @brief 停机等待，用于不可恢复故障。
+ * @note 刹停底盘并渲染错误页后 __disable_irq() 并死循环，函数不会返回；
+ *       依赖 Chassis_Init()/Ui_Init() 已完成（见 SystemFault_Handler 说明）。
  */
 void SystemFault_Halt(void);
 
