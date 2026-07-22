@@ -17,7 +17,6 @@
 | 底盘轮 | 直流电机 ×2 + 霍尔编码器 | PWM/GPIO | `bsp/motor` (TB6612) |
 | 姿态 | JY61P (WIT 协议) | I2C0 | `bsp/imu` (wit_sdk, 中断驱动) |
 | 姿态 | MPU6050 (DMP) | I2C0（与 JY61P 共总线） | `bsp/mpu6050` |
-| 视觉 | K230 (CanMV) | UART2 | `bsp/canmv` |
 | 循迹 | 8 路灰度 | GPIO | `bsp/grayscale_sensor` |
 | 显示/输入 | OLED / 按键 | I2C1/GPIO | `bsp/oled`, `bsp/key` |
 
@@ -26,7 +25,7 @@
 ```
 MSPM0_Car/
 ├── app/                  # 应用层 (当前仅 main.c 启动骨架)
-├── bsp/                  # 板级驱动 (motor, imu, mpu6050, canmv, grayscale, oled, key, debug_uart, time, common)
+├── bsp/                  # 板级驱动 (motor, imu, mpu6050, grayscale, oled, key, debug_uart, time, common)
 ├── board/
 │   ├── startup/          # 启动文件, 链接脚本
 │   └── sys_config/       # SysConfig 源文件及生成代码

@@ -57,7 +57,6 @@ weak 死循环。重建 app 时在此接入调度与任务流程。
 `bsp` 是最低层，直接面对板级外设：
 
 - `common/`
-- `canmv/`（K230 视觉 UART）
 - `imu/`（JY61P，WIT 协议，I2C0 中断驱动）
 - `mpu6050/`（MPU6050 DMP 姿态，I2C0，与 JY61P 共总线）
 - `key/`

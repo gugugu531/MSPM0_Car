@@ -58,7 +58,6 @@ SYSCONFIG_WEAK void SYSCFG_DL_init(void)
     SYSCFG_DL_OLED_init();
     SYSCFG_DL_MPU6050_JY61P_Tracking_init();
     SYSCFG_DL_BlueTooth_init();
-    SYSCFG_DL_K230_init();
     SYSCFG_DL_Debug_Ex_init();
     SYSCFG_DL_SYSTICK_init();
     /* Ensure backup structures have no valid state */
@@ -101,7 +100,6 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_I2C_reset(OLED_INST);
     DL_I2C_reset(MPU6050_JY61P_Tracking_INST);
     DL_UART_Main_reset(BlueTooth_INST);
-    DL_UART_Main_reset(K230_INST);
     DL_UART_Main_reset(Debug_Ex_INST);
 
 
@@ -112,7 +110,6 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_I2C_enablePower(OLED_INST);
     DL_I2C_enablePower(MPU6050_JY61P_Tracking_INST);
     DL_UART_Main_enablePower(BlueTooth_INST);
-    DL_UART_Main_enablePower(K230_INST);
     DL_UART_Main_enablePower(Debug_Ex_INST);
 
     delay_cycles(POWER_STARTUP_DELAY);
@@ -155,10 +152,6 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
         GPIO_BlueTooth_IOMUX_TX, GPIO_BlueTooth_IOMUX_TX_FUNC);
     DL_GPIO_initPeripheralInputFunction(
         GPIO_BlueTooth_IOMUX_RX, GPIO_BlueTooth_IOMUX_RX_FUNC);
-    DL_GPIO_initPeripheralOutputFunction(
-        GPIO_K230_IOMUX_TX, GPIO_K230_IOMUX_TX_FUNC);
-    DL_GPIO_initPeripheralInputFunction(
-        GPIO_K230_IOMUX_RX, GPIO_K230_IOMUX_RX_FUNC);
     DL_GPIO_initPeripheralOutputFunction(
         GPIO_Debug_Ex_IOMUX_TX, GPIO_Debug_Ex_IOMUX_TX_FUNC);
     DL_GPIO_initPeripheralInputFunction(
@@ -514,44 +507,6 @@ SYSCONFIG_WEAK void SYSCFG_DL_BlueTooth_init(void)
 
 
     DL_UART_Main_enable(BlueTooth_INST);
-}
-static const DL_UART_Main_ClockConfig gK230ClockConfig = {
-    .clockSel    = DL_UART_MAIN_CLOCK_BUSCLK,
-    .divideRatio = DL_UART_MAIN_CLOCK_DIVIDE_RATIO_1
-};
-
-static const DL_UART_Main_Config gK230Config = {
-    .mode        = DL_UART_MAIN_MODE_NORMAL,
-    .direction   = DL_UART_MAIN_DIRECTION_TX_RX,
-    .flowControl = DL_UART_MAIN_FLOW_CONTROL_NONE,
-    .parity      = DL_UART_MAIN_PARITY_NONE,
-    .wordLength  = DL_UART_MAIN_WORD_LENGTH_8_BITS,
-    .stopBits    = DL_UART_MAIN_STOP_BITS_ONE
-};
-
-SYSCONFIG_WEAK void SYSCFG_DL_K230_init(void)
-{
-    DL_UART_Main_setClockConfig(K230_INST, (DL_UART_Main_ClockConfig *) &gK230ClockConfig);
-
-    DL_UART_Main_init(K230_INST, (DL_UART_Main_Config *) &gK230Config);
-    /*
-     * Configure baud rate by setting oversampling and baud rate divisors.
-     *  Target baud rate: 115200
-     *  Actual baud rate: 115211.52
-     */
-    DL_UART_Main_setOversampling(K230_INST, DL_UART_OVERSAMPLING_RATE_16X);
-    DL_UART_Main_setBaudRateDivisor(K230_INST, K230_IBRD_32_MHZ_115200_BAUD, K230_FBRD_32_MHZ_115200_BAUD);
-
-
-    /* Configure Interrupts */
-    DL_UART_Main_enableInterrupt(K230_INST,
-                                 DL_UART_MAIN_INTERRUPT_RX |
-                                 DL_UART_MAIN_INTERRUPT_TX);
-    /* Setting the Interrupt Priority */
-    NVIC_SetPriority(K230_INST_INT_IRQN, 0);
-
-
-    DL_UART_Main_enable(K230_INST);
 }
 static const DL_UART_Main_ClockConfig gDebug_ExClockConfig = {
     .clockSel    = DL_UART_MAIN_CLOCK_BUSCLK,

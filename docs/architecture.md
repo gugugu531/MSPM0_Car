@@ -21,7 +21,7 @@ app ─► middleware ─► bsp
 - `app`：固件入口。当前仅极简启动骨架（SysConfig 初始化后空循环），待按新需求重建。
 - `core`：PID、运动学等纯计算能力。
 - `middleware`：组合 core 与 BSP，包括底盘、巡线（line_follow/line_tracking）、UI 和故障处理。
-- `bsp`：直接面向板级外设的驱动，包括直流电机(TB6612)、霍尔编码器、OLED、按键、CanMV 串口(K230)、JY61P IMU、MPU6050 和灰度巡线传感器。
+- `bsp`：直接面向板级外设的驱动，包括直流电机(TB6612)、霍尔编码器、OLED、按键、JY61P IMU、MPU6050 和灰度巡线传感器。
 
 ## 支撑目录
 
@@ -47,6 +47,6 @@ app ─► middleware ─► bsp
   - `bsp/imu/wit_sdk.c` → `I2C0_IRQHandler`（JY61P I2C 中断驱动状态机）
 - **`app` 持有需跨子系统分发或属应用调度的中断**：当前 app 为极简骨架，仅提供空
   `SysTick_Handler`（占位以避免 startup weak 死循环）。重建 app 时在此接入 UART 命令路由
-  （蓝牙/调试上位机/CanMV 视觉）与分频调度（按键扫描、传感器轮询、系统计时）。
+  （蓝牙/调试上位机等）与分频调度（按键扫描、传感器轮询、系统计时）。
 
 > 新增外设时遵循同一原则：仅该驱动使用的中断放进对应 BSP 源文件；需要唤醒多个上层子系统或承担应用级调度的中断放进 `app`。不要在 `middleware` 里写"转发到下层驱动"的空壳 ISR 入口。

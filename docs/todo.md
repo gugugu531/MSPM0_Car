@@ -3,10 +3,6 @@
 > 二维云台/瞄准子系统与原 E 题任务框架已移除，新任务待定。原与云台/瞄准/E 题标定相关的
 > 待办及历史文档已随之删除。
 
-- **清理 `bsp/canmv` 死代码**：视觉 UART 的 `@deprecated` 旧 API（`g_canmv_uart_*` 裸全局
-  与手动解码路径）在原消费者（app_e_task/gimbal_tracking/auto_aim/app_device_check）删除后
-  已无调用点，可连同 `CANMV_TARGET_LASER/RECT` 坐标帧死链一并评估退役（保留 `CanMvUart_GetAngle`
-  等干净 getter）。
 - 后续根据真实系统时钟复核 `BSP_TIME_CPUCLK_HZ`，必要时改为从时钟配置自动派生。
 - 后续如增加第二个实体按键，在 `KEY_ID`、硬件映射宏和 `bsp/key` 内部配置表中同步扩展。
 - 后续构建具体 BSP 外设时，继续按 SDK 风格统一公开类型和枚举成员命名。

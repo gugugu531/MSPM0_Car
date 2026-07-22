@@ -29,7 +29,6 @@ const TIMER   = scripting.addModule("/ti/driverlib/TIMER", {}, false);
 const TIMER1  = TIMER.addInstance();
 const UART    = scripting.addModule("/ti/driverlib/UART", {}, false);
 const UART1   = UART.addInstance();
-const UART2   = UART.addInstance();
 const UART4   = UART.addInstance();
 
 /**
@@ -246,23 +245,6 @@ UART1.rxPinConfig.hideOutputInversion  = scripting.forceWrite(false);
 UART1.rxPinConfig.onlyInternalResistor = scripting.forceWrite(false);
 UART1.rxPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
 UART1.rxPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric13";
-
-UART2.$name                            = "K230";
-UART2.targetBaudRate                   = 115200;
-UART2.enabledInterrupts                = ["RX","TX"];
-UART2.interruptPriority                = "0";
-UART2.peripheral.$assign               = "UART2";
-UART2.peripheral.rxPin.$assign         = "PA24";
-UART2.peripheral.txPin.$assign         = "PA23";
-UART2.txPinConfig.direction            = scripting.forceWrite("OUTPUT");
-UART2.txPinConfig.hideOutputInversion  = scripting.forceWrite(false);
-UART2.txPinConfig.onlyInternalResistor = scripting.forceWrite(false);
-UART2.txPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
-UART2.txPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric16";
-UART2.rxPinConfig.hideOutputInversion  = scripting.forceWrite(false);
-UART2.rxPinConfig.onlyInternalResistor = scripting.forceWrite(false);
-UART2.rxPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
-UART2.rxPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric17";
 
 UART4.$name                            = "Debug_Ex";
 UART4.targetBaudRate                   = 115200;

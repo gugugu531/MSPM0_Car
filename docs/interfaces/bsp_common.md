@@ -36,7 +36,7 @@ typedef enum {
 
 ## 不放入 common 的内容
 
-- CanMV 状态码：属于 `bsp/canmv/canmv_uart.h`。
+- 各外设专属的状态码/枚举：属于对应外设驱动的头文件。
 - 时间和延时函数：已由 `bsp/time` 单独提供。
 - duty 限幅、频率换算等工具：放在对应外设驱动的 `.c` 文件中。
 - 二维点和二维姿态类型：属于 `core/common/core_types.h`。

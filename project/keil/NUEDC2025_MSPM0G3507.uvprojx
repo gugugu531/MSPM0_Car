@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\kinematics;..\..\core\pid;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\line_tracking;..\..\middleware\ui;..\..\bsp\canmv;..\..\bsp\common;..\..\bsp\debug_uart;..\..\bsp\grayscale_sensor;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\bsp\mpu6050;..\..\board\sys_config;C:\ti\mspm0_sdk_2_10_00_04\source;C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include</IncludePath>
+              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\kinematics;..\..\core\pid;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\line_tracking;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\debug_uart;..\..\bsp\grayscale_sensor;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\bsp\mpu6050;..\..\board\sys_config;C:\ti\mspm0_sdk_2_10_00_04\source;C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -470,11 +470,6 @@
         <Group>
           <GroupName>BSP</GroupName>
           <Files>
-            <File>
-              <FileName>canmv_uart.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\canmv\canmv_uart.c</FilePath>
-            </File>
             <File>
               <FileName>debug_uart.c</FileName>
               <FileType>1</FileType>

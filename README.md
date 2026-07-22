@@ -14,7 +14,6 @@
 | 底盘轮 | 直流电机 ×2 (TB6612FNG) + 霍尔编码器 | PWM / GPIO | `bsp/motor` |
 | 姿态 | JY61P 六轴 (WIT 协议) | I2C0 | `bsp/imu` (wit_sdk) |
 | 姿态 | MPU6050 (DMP) | I2C0（与 JY61P 共总线） | `bsp/mpu6050` |
-| 视觉 | K230 (CanMV) | UART2 | `bsp/canmv` |
 | 循迹 | 8 路灰度传感器 | GPIO | `bsp/grayscale_sensor` |
 | 人机 | OLED + 独立按键 | I2C1 / GPIO | `bsp/oled`, `bsp/key` |
 

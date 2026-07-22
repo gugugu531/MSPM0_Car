@@ -163,22 +163,6 @@ extern "C" {
 #define BlueTooth_BAUD_RATE                                             (115200)
 #define BlueTooth_IBRD_32_MHZ_115200_BAUD                                   (17)
 #define BlueTooth_FBRD_32_MHZ_115200_BAUD                                   (23)
-/* Defines for K230 */
-#define K230_INST                                                          UART2
-#define K230_INST_FREQUENCY                                             32000000
-#define K230_INST_IRQHandler                                    UART2_IRQHandler
-#define K230_INST_INT_IRQN                                        UART2_INT_IRQn
-#define GPIO_K230_RX_PORT                                                  GPIOA
-#define GPIO_K230_TX_PORT                                                  GPIOA
-#define GPIO_K230_RX_PIN                                          DL_GPIO_PIN_24
-#define GPIO_K230_TX_PIN                                          DL_GPIO_PIN_23
-#define GPIO_K230_IOMUX_RX                                       (IOMUX_PINCM54)
-#define GPIO_K230_IOMUX_TX                                       (IOMUX_PINCM53)
-#define GPIO_K230_IOMUX_RX_FUNC                        IOMUX_PINCM54_PF_UART2_RX
-#define GPIO_K230_IOMUX_TX_FUNC                        IOMUX_PINCM53_PF_UART2_TX
-#define K230_BAUD_RATE                                                  (115200)
-#define K230_IBRD_32_MHZ_115200_BAUD                                        (17)
-#define K230_FBRD_32_MHZ_115200_BAUD                                        (23)
 /* Defines for Debug_Ex */
 #define Debug_Ex_INST                                                      UART1
 #define Debug_Ex_INST_FREQUENCY                                         32000000
@@ -342,7 +326,6 @@ void SYSCFG_DL_TIMER_0_init(void);
 void SYSCFG_DL_OLED_init(void);
 void SYSCFG_DL_MPU6050_JY61P_Tracking_init(void);
 void SYSCFG_DL_BlueTooth_init(void);
-void SYSCFG_DL_K230_init(void);
 void SYSCFG_DL_Debug_Ex_init(void);
 
 void SYSCFG_DL_SYSTICK_init(void);
