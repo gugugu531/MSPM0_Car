@@ -2,6 +2,13 @@
 
 ## 未发布
 
+- 修复 Keil 烧录 `Programming Failed`（擦除成功但编程失败）：MSPM0 Flash 按 64 位(8 字节)字
+  +ECC 编程，镜像总长须为 8 的倍数；此前镜像尾长 4-mod-8 导致最后一字编程失败（与镜像大小
+  相关、与调试时钟无关——恰好旧镜像 8 对齐能烧、新镜像不对齐失败）。加一段 8 字节对齐的
+  尾填充(`g_flash_tail_pad`)，经 `board/startup/mspm0g3507.sct` 以 `+Last` 放在镜像末尾，
+  强制总长 8 对齐；镜像 `0x58dc→0x58e8`，`Programming Done. Verify OK.`。填充用
+  `__ARMCC_VERSION` 限定仅 Keil 生效，不影响 CCS/GCC。
+
 - app 层加入外设自检并改为嵌套菜单：
   - 新增 `app_menu`(菜单树 `MENU_NODE`/`MENU_ITEM` + 导航栈 + 渲染) 与 `app_menu_def`(菜单树实例)，
     取代原扁平任务注册表；`app_mode` 的 MENU 态委派 `app_menu`，选中任务由 `Menu_Tick` 返回

@@ -41,6 +41,7 @@ LR_IROM1 0x00000000 0x00020000  {    ; load region size_region
    *(InRoot$$Sections)
    .ANY (+RO)
    .ANY (+XO)
+   *(.flash_tail_pad, +Last)   ; 8 字节对齐尾填充: 保证镜像长为 8 的倍数(MSPM0 flash 64 位字编程)
   }
   RW_IRAM2 0x20200000 0x00008000  {  ; RW data
    .ANY (+RW +ZI)
