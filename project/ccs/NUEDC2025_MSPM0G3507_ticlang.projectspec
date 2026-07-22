@@ -11,6 +11,14 @@
     <pathVariable name="REPO_ROOT" path="../.." scope="project" />
     <file path="${REPO_ROOT}/board/sys_config/empty.syscfg" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/app/main.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+    <file path="${REPO_ROOT}/app/app_init.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+    <file path="${REPO_ROOT}/app/app_init.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+    <file path="${REPO_ROOT}/app/app_scheduler.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+    <file path="${REPO_ROOT}/app/app_scheduler.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+    <file path="${REPO_ROOT}/app/app_mode.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+    <file path="${REPO_ROOT}/app/app_mode.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+    <file path="${REPO_ROOT}/app/app_tasks.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+    <file path="${REPO_ROOT}/app/app_tasks.h" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/board/sys_config/ti_msp_dl_config.c" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/board/sys_config/ti_msp_dl_config.h" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/bsp/common/bsp_common.h" openOnCreation="false" excludeFromBuild="false" action="link" />

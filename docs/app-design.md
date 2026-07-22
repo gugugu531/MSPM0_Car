@@ -1,0 +1,101 @@
+# app 层设计（裸机菜单调度框架）
+
+## 目标形态
+
+上电初始化后进入**任务选择菜单**；短按选择一个任务执行；任务完成或用户中止后退回菜单。
+裸机（nortos）下用**协作式时间触发超循环**实现：ISR 只做时基/采样，主循环按周期分派
+run-to-completion 任务。
+
+## 顶层状态机
+
+```
+                ┌───────────── 致命故障 ──────────► SystemFault_Halt (终态)
+                │
+ INIT ──ok──► MENU ──短按ENTER──► RUN ──DONE/短按BACK──► MENU
+                ▲                 │
+                │                 └──on_tick 返回 FAULT──► FAULT ──短按ENTER──► MENU
+                └──────────────────────────────────────────┘
+```
+
+- **INIT**：`App_Init()` 期间；完成后置 MENU。
+- **MENU**：遍历任务注册表渲染列表；短按 UP/DOWN 选择、ENTER 进入。
+- **RUN**：调度器每 20ms 调 `App_ControlTick` 委派 `current_task->on_tick`；短按 BACK 中止。
+- **FAULT**：可恢复故障；显示错误页，短按 ENTER 复位回 MENU。
+
+所有状态转移集中在 `app_mode.c` 的入口函数（`App_EnterRun/App_ExitRun/App_RaiseFault`）；
+进 RUN 必 `Chassis_ResetDistance`+`on_enter`，出 RUN 必 `Chassis_Brake`。任务只通过 `on_tick`
+返回值表达迁移意图，不直接改模式/调度。
+
+## 两级故障模型
+
+- **致命/不可恢复**：`SystemFault_Handler → Halt`（刹车+显示+`__disable_irq`+死循环），
+  用于 init 失败等。绕过状态机。
+- **可恢复**：app 的 FAULT 态，`App_RaiseFault` 记录+刹车+进 FAULT，调度器继续跑，短按复位。
+
+## 调度器
+
+`app_scheduler`：任务表 `{cb, period_ms, last_ms}`，`Scheduler_Run()` 按 `BSP_Time_GetMs()`
+分派到期任务。注册：`App_ControlTick`(20ms)、`App_UiTick`(50ms)。
+
+`SysTick_Handler`(1ms，app 自持)：`BSP_Time_TickInc()` + `Key_Scan()`；`tick_active` 门控
+避免初始化完成前误触发。
+
+## 中断归属
+
+| ISR | 归属 | 职责 |
+|---|---|---|
+| `SysTick_Handler` (1ms) | app/app_scheduler | 时基递增 + 按键扫描 |
+| `GROUP1_IRQHandler` | bsp/hall_encoder | 编码器边沿 |
+| `TIMER_0_INST_IRQHandler` (100ms) | bsp/hall_encoder | 编码器测速 |
+| `I2C0_IRQHandler` | bsp/imu | JY61P I2C 状态机 |
+
+## 按键交互（仅短按）
+
+| 模式 | UP | DOWN | ENTER | BACK |
+|---|---|---|---|---|
+| MENU | 上移选择 | 下移选择 | 进入任务 | — |
+| RUN | — | — | — | 中止回菜单 |
+| FAULT | — | — | 复位回菜单 | — |
+
+`KEY_ID`：`KEY_ID_UP / KEY_ID_DOWN / KEY_ID_ENTER / KEY_ID_BACK`。用 `Key_GetEvent()==KEY_EVENT_SHORT_PRESS` 消费。
+
+---
+
+## 任务开发规范
+
+### 三步接入
+1. 在 `app_tasks.c` 写私有状态 + 三个钩子 `TaskXxx_Enter/Tick/Exit`。
+2. 往 `TASK_REGISTRY[]` 加一行 `{ "名字", Enter, Tick, Exit }`（`on_exit` 可 NULL）。
+3. 编译。菜单自动出现该项，其它文件不动。
+
+### 钩子契约
+
+| 钩子 | 必须 | 禁止 |
+|---|---|---|
+| `on_enter` | 复位本任务全部 `static` 私有状态（相位/计数/滤波/`PID_Reset`/基准） | 驱动执行器、写模式 |
+| `on_tick(dt)` | 走取值→计算→执行→监督，返回 RUNNING/DONE/FAULT | 阻塞/延时、直接读慢速外设、写模式/调度 |
+| `on_exit` | 仅任务专属收尾（可 NULL） | 把安全停机只放这里（框架已 Brake） |
+
+返回值：`RUNNING` 继续；`DONE` 框架刹停回菜单；`FAULT` 进 FAULT 态（致命才用 `SystemFault_Handler`）。
+
+### 硬性规范
+1. **非阻塞**：多步等待拆成相位，用 `BSP_Time_GetMs()` 差值推进，不忙等。
+2. **dt 权威**：只用传入 `dt`（=控制周期 0.02f），传给 `PID_Update` 等。
+3. **输入取快照/getter**：经 `Chassis_Get*` / IMU getter / 采样快照，不在任务里做阻塞读。
+4. **执行器单写者**：仅 `on_tick` 内、每拍至多一次 `Chassis_SetDuty/Brake`。
+5. **不碰框架内部**：只靠返回值迁移，不写 `app_mode`、不调调度/迁移函数。
+6. **进出对称**：`on_enter` Reset 的每项保证可重复启动（任务从菜单可反复进入）。
+7. **每相位带超时**兜底 → 返回 FAULT。
+8. **风格**：`static` 私有状态不加 `s_` 前缀；钩子命名 `TaskXxx_*`；魔法数提常量。
+9. **UI**：RUN 运行页由任务 `on_tick` 低频自渲染；MENU/FAULT 页归框架。
+
+### 参考实现
+`app_tasks.c` 的 `Timer Test`（5s 倒计时，到时 DONE 回菜单，BACK 中止）演示了 enter 复位、
+tick 非阻塞计时、按变化节流刷屏、DONE/中止两条退出路径。`Task 1/2/3` 为空占位。
+
+### 后续扩展点
+- **传感器采样进 ISR**：灰度/编码器等便宜同步量可在 SysTick/专用定时器采进 volatile 快照，
+  IMU 用「定时器 kick + I2C ISR 完成」；控制任务只消费快照（降低控制环输入抖动）。MPU6050
+  DMP 阻塞重，留任务。
+- **命令层**：蓝牙/调试 UART 的 RX/TX 中断 + 环形缓冲 + 命令解析，按需在 app 层新增
+  `UARTx_IRQHandler`。

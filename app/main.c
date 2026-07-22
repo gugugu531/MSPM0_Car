@@ -1,24 +1,20 @@
 /**
  * @file  main.c
- * @brief 极简骨架: SysConfig 外设/中断初始化后进入空循环。
+ * @brief 固件入口：初始化后进入协作式调度超循环。
  *
- * 云台/瞄准子系统与原任务框架已移除, 此处仅保留启动骨架, 供后续按新需求重建 app。
- * 底层驱动库(bsp)、通用中间件(chassis/line_follow/line_tracking/ui/fault)与
- * 算法(core: pid/kinematics)均保留, 但当前无调用者, 由链接器 GC。
+ * 应用层为“菜单选择 → 执行选中任务 → 退回菜单”的状态机(见 app_mode)，
+ * 由时间触发调度器(见 app_scheduler)驱动，任务注册见 app_tasks。
+ * SysTick_Handler 定义在 app_scheduler.c（时基递增 + 按键扫描）。
  */
+#include "app_init.h"
+#include "app_scheduler.h"
 #include "ti_msp_dl_config.h"
 
 int main(void){
-    SYSCFG_DL_init();
+    App_Init();
     __enable_irq();
 
     while (1){
+        Scheduler_Run();
     }
-}
-
-/*
- * SysConfig 使能了 SysTick(1ms 周期中断)。提供空处理以避免落到 startup 的
- * weak SysTick_Handler(B . 死循环)。重建 app 时在此接入调度。
- */
-void SysTick_Handler(void){
 }

@@ -13,12 +13,13 @@ app ─► middleware ─► bsp
 `core` 不读取硬件、不调用 middleware；`app` 只编排任务，不重复实现算法。
 
 > 二维云台/瞄准子系统（gimbal / auto_aim / aim_solver / aim_fusion / localization /
-> bldc / step_motor）已整体移除；原任务框架的 app 已清空为极简启动骨架。下述职责与依赖
-> 边界规则不变，模块清单反映移除后的当前状态。
+> bldc / step_motor）已整体移除。app 层已重建为「菜单选择 → 执行任务 → 退回菜单」的
+> 协作式调度框架（见 `docs/app-design.md`）。下述职责与依赖边界规则不变。
 
 ## 模块职责
 
-- `app`：固件入口。当前仅极简启动骨架（SysConfig 初始化后空循环），待按新需求重建。
+- `app`：固件入口与应用框架——上电初始化(`app_init`)、时间触发调度器(`app_scheduler`)、
+  顶层状态机 INIT/MENU/RUN/FAULT(`app_mode`)、任务注册表(`app_tasks`)。
 - `core`：PID、运动学等纯计算能力。
 - `middleware`：组合 core 与 BSP，包括底盘、巡线（line_follow/line_tracking）、UI 和故障处理。
 - `bsp`：直接面向板级外设的驱动，包括直流电机(TB6612)、霍尔编码器、OLED、按键、JY61P IMU、MPU6050 和灰度巡线传感器。
@@ -45,8 +46,9 @@ app ─► middleware ─► bsp
 - **BSP 驱动自持其专属外设中断**：
   - `bsp/motor/hall_encoder.c` → `GROUP1_IRQHandler`（编码器 GPIO）、`TIMER_0_INST_IRQHandler`（编码器采样定时器）
   - `bsp/imu/wit_sdk.c` → `I2C0_IRQHandler`（JY61P I2C 中断驱动状态机）
-- **`app` 持有需跨子系统分发或属应用调度的中断**：当前 app 为极简骨架，仅提供空
-  `SysTick_Handler`（占位以避免 startup weak 死循环）。重建 app 时在此接入 UART 命令路由
-  （蓝牙/调试上位机等）与分频调度（按键扫描、传感器轮询、系统计时）。
+- **`app` 持有需跨子系统分发或属应用调度的中断**：
+  - `app/app_scheduler.c` → `SysTick_Handler`（1ms：`BSP_Time_TickInc` 时基递增 + `Key_Scan`
+    按键消抖）。`tick_active` 门控确保初始化完成前不误触发。调度器时基即取自此。
+  - 后续接入 UART 命令路由（蓝牙/调试上位机）时，同样将其 `UARTx_IRQHandler` 放在 app 层。
 
 > 新增外设时遵循同一原则：仅该驱动使用的中断放进对应 BSP 源文件；需要唤醒多个上层子系统或承担应用级调度的中断放进 `app`。不要在 `middleware` 里写"转发到下层驱动"的空壳 ISR 入口。

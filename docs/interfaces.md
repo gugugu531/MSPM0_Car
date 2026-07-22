@@ -6,7 +6,12 @@
 
 ## app
 
-- `main.c`：极简启动骨架，`SYSCFG_DL_init()` 后 `__enable_irq()` 进入空循环，并提供空 `SysTick_Handler`。
+菜单驱动的协作式调度框架，详见 `docs/app-design.md`。
+
+- `app_init.h`：`App_Init()` 集中式上电初始化并注册调度任务。
+- `app_scheduler.h`：`Scheduler_Init/AddTask/Run/EnableTick` 时间触发调度器；自持 `SysTick_Handler`。
+- `app_mode.h`：状态机 `APP_MODE`（INIT/MENU/RUN/FAULT）与 `App_Mode_Init/Get`、`App_ControlTick/UiTick`。
+- `app_tasks.h`：任务注册表与 `APP_TASK_DESC`（`on_enter/on_tick/on_exit`）、`App_TaskCount/Name/At`。
 
 ## core
 

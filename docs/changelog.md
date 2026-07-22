@@ -2,6 +2,17 @@
 
 ## 未发布
 
+- 重建 app 层为裸机菜单调度框架（`docs/app-design.md`）：
+  - `app_scheduler`：协作式时间触发任务表 + `Scheduler_Run` 分派；自持 `SysTick_Handler`
+    (1ms：`BSP_Time_TickInc` + `Key_Scan`)，`tick_active` 门控防 init 期误触发。
+  - `app_mode`：顶层状态机 INIT/MENU/RUN/FAULT；状态转移集中于 `App_EnterRun/ExitRun/RaiseFault`；
+    进 RUN 必 ResetDistance+on_enter、出 RUN 必 Brake；两级故障（可恢复 FAULT 态 / 致命 Halt 终态）。
+  - `app_tasks`：任务注册表 `TASK_REGISTRY[]` + `on_enter/on_tick/on_exit` 契约；含 3 个空占位
+    任务与 1 个测试任务（Timer Test：5s 倒计时 DONE 回菜单）。
+  - `app_init`：集中式上电时序（Ui/Chassis 先于任何可能 fault 的步骤）。
+  - 按键仅用短按：MENU 用 UP/DOWN 选择、ENTER 进入；RUN 用 BACK 中止；FAULT 用 ENTER 复位。
+  - Keil/CCS 工程加入 4 个 app 源文件。Keil 0/0（Code 7102→14326，框架拉入 ui/chassis/key/fault）。
+
 - 删除 K230 视觉子系统：移除 `bsp/canmv`（原消费者删除后已无调用点），并从 `G3507.syscfg`
   移除 UART2(K230) 外设（释放 PA23/PA24，避免使能中断却无 ISR 的隐患），SysConfig CLI 重新
   生成 `ti_msp_dl_config`（K230/UART2 零残留）。同步删除接口文档 `bsp_canmv_uart` 与

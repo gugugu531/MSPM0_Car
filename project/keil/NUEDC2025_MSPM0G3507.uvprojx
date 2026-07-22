@@ -390,6 +390,26 @@
               <FileType>1</FileType>
               <FilePath>..\..\app\main.c</FilePath>
             </File>
+            <File>
+              <FileName>app_init.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_init.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_scheduler.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_scheduler.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_mode.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_mode.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_tasks.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_tasks.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

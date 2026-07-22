@@ -4,7 +4,7 @@
 
 当前工程采用“分层源码目录 + IDE 工程目录 + 板级配置目录”的组织方式：
 
-- `app/`：应用入口
+- `app/`：应用入口与框架（初始化/调度器/状态机/任务注册表）
 - `core/`：控制算法和数据处理
 - `middleware/`：系统组合能力与共享运行时状态
 - `bsp/`：板级外设驱动
@@ -14,19 +14,30 @@
 - `tools/`：调试和烧录脚本
 
 > 说明：二维云台/瞄准子系统（step_motor / bldc / gimbal / gimbal_tracking / auto_aim /
-> aim_solver / aim_fusion / localization）已整体移除，原任务框架的 app 亦已清空。当前
-> app 仅保留极简启动骨架，下层 bsp/middleware/core 能力保留但暂无调用者，等待按新需求重建。
+> aim_solver / aim_fusion / localization）已整体移除。app 层已重建为菜单驱动的协作式调度
+> 框架（详见 `docs/app-design.md`）；下层 bsp/middleware/core 能力保留供任务复用。
 
 ## 运行路径
 
-当前 `app/main.c` 为极简骨架：`SYSCFG_DL_init()` 完成 SysConfig 外设/中断初始化后
-`__enable_irq()` 进入空 `while(1)`，并提供空 `SysTick_Handler` 以避免落入 startup 的
-weak 死循环。重建 app 时在此接入调度与任务流程。
+1. `main.c` 调 `App_Init()`：SysConfig → BSP → 中间件 → 框架初始化并注册调度任务。
+2. `__enable_irq()` 后进入 `while(1) Scheduler_Run()` 超循环。
+3. `SysTick_Handler`(1ms) 递增时基并扫描按键；调度器按周期分派 `App_ControlTick`(20ms) 与
+   `App_UiTick`(50ms)。
+4. 状态机 INIT→MENU→RUN→FAULT：MENU 列出任务注册表，短按选择进入 RUN 委派任务 `on_tick`，
+   任务返回 DONE/中止/故障后退回 MENU/FAULT。
 
 ## app
 
-`app` 是顶层应用层。当前仅含 `main.c`（启动骨架）。重建时该层可以直接调用下层公开接口，
-但不应把纯算法或底层驱动细节继续塞入应用流程。
+`app` 是顶层应用层与框架，按职责拆分：
+
+- `main.c`：入口，初始化后进入调度超循环。
+- `app_init.c/.h`：集中式上电时序（Ui/Chassis 先于任何可能 fault 的步骤）。
+- `app_scheduler.c/.h`：时间触发任务表 + `Scheduler_Run` 分派；自持 `SysTick_Handler`。
+- `app_mode.c/.h`：顶层状态机 INIT/MENU/RUN/FAULT 与全部状态转移入口。
+- `app_tasks.c/.h`：任务注册表 `TASK_REGISTRY[]` 与 `on_enter/on_tick/on_exit` 生命周期契约。
+
+新增任务只需在 `app_tasks.c` 加一行注册并实现三个钩子，菜单/调度/进出清理自动接入。
+该层可直接调用下层公开接口，但不应把纯算法或底层驱动细节塞入应用流程。
 
 ## core
 
