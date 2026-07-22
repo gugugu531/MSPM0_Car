@@ -18,9 +18,28 @@ run-to-completion 任务。
 ```
 
 - **INIT**：`App_Init()` 期间；完成后置 MENU。
-- **MENU**：遍历任务注册表渲染列表；短按 UP/DOWN 选择、ENTER 进入。
+- **MENU**：委派 `app_menu` 的嵌套菜单导航（见下）；选中任务时返回给 app_mode 进入 RUN。
 - **RUN**：调度器每 20ms 调 `App_ControlTick` 委派 `current_task->on_tick`；短按 BACK 中止。
 - **FAULT**：可恢复故障；显示错误页，短按 ENTER 复位回 MENU。
+
+## 嵌套菜单（app_menu）
+
+菜单是一棵 `MENU_NODE` 树，每个 `MENU_ITEM` 或指向子菜单、或指向任务；导航用一个
+`node_stack`/`sel_stack` 深度栈。`app_menu` 不反向依赖 `app_mode`——选中任务时由
+`Menu_Tick()` 返回该任务描述符，`app_mode` 再调 `App_EnterRun`。当前菜单树（`app_menu_def.c`）：
+
+```
+Main Menu
+├── Timer Test          (task)
+└── Device Check        (submenu)
+    ├── Gyro JY61P       (task)   JY61P 陀螺/姿态/温度 + 诊断计数
+    ├── Gyro MPU6050     (task)   原始六轴; 与 JY61P 共 I2C0, 进挂起/出恢复
+    ├── Grayscale        (task)   8 路 mask 二进制 + 触发数
+    ├── TB6612           (task)   短按单次低速脉冲(20%/300ms) + 编码器响应, 抬轮提示
+    └── Encoder          (task)   count/speed/distance/dir
+```
+
+导航按键（仍仅短按）：`UP/DOWN` 移动、`ENTER` 进入子菜单/任务、`BACK` 返回上级。
 
 所有状态转移集中在 `app_mode.c` 的入口函数（`App_EnterRun/App_ExitRun/App_RaiseFault`）；
 进 RUN 必 `Chassis_ResetDistance`+`on_enter`，出 RUN 必 `Chassis_Brake`。任务只通过 `on_tick`
@@ -93,9 +112,14 @@ run-to-completion 任务。
 `app_tasks.c` 的 `Timer Test`（5s 倒计时，到时 DONE 回菜单，BACK 中止）演示了 enter 复位、
 tick 非阻塞计时、按变化节流刷屏、DONE/中止两条退出路径。`Task 1/2/3` 为空占位。
 
+### 公共支持
+- `app_fmt`：`AppFmt_I32/AppFmt_Fixed` 定点数字→字符串，供自检显示，不引浮点 printf。
+
 ### 后续扩展点
 - **传感器采样进 ISR**：灰度/编码器等便宜同步量可在 SysTick/专用定时器采进 volatile 快照，
   IMU 用「定时器 kick + I2C ISR 完成」；控制任务只消费快照（降低控制环输入抖动）。MPU6050
   DMP 阻塞重，留任务。
 - **命令层**：蓝牙/调试 UART 的 RX/TX 中断 + 环形缓冲 + 命令解析，按需在 app 层新增
   `UARTx_IRQHandler`。
+- **MPU6050 DMP 姿态**：当前自检用原始 `GetMotion6`；若要 DMP 融合姿态，需把阻塞的
+  `MPU6050_RunDmpTest` 改造为非阻塞的 `on_tick` 分步读 FIFO。

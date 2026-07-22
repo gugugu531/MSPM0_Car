@@ -410,6 +410,26 @@
               <FileType>1</FileType>
               <FilePath>..\..\app\app_tasks.c</FilePath>
             </File>
+            <File>
+              <FileName>app_checks.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_checks.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_menu.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_menu.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_menu_def.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_menu_def.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_fmt.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_fmt.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>

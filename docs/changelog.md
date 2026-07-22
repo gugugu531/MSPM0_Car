@@ -2,6 +2,17 @@
 
 ## 未发布
 
+- app 层加入外设自检并改为嵌套菜单：
+  - 新增 `app_menu`(菜单树 `MENU_NODE`/`MENU_ITEM` + 导航栈 + 渲染) 与 `app_menu_def`(菜单树实例)，
+    取代原扁平任务注册表；`app_mode` 的 MENU 态委派 `app_menu`，选中任务由 `Menu_Tick` 返回
+    给 `app_mode` 进入 RUN（app_menu 不反向依赖 app_mode）。BACK 短按=返回上级。
+  - 新增 `app_checks`：5 个外设自检任务——Gyro JY61P / Gyro MPU6050 / Grayscale / TB6612 /
+    Encoder，挂在「Device Check」子菜单。两个陀螺仪共 I2C0，靠 on_enter/on_exit 挂起/恢复分时。
+    TB6612 为主动自检，短按发单次低速脉冲(20%/300ms 自动 Brake)+抬轮提示，并显示编码器响应。
+  - 新增 `app_fmt`：定点数字格式化（不引浮点 printf）。
+  - `app_tasks` 精简为业务任务（Timer Test），移除空占位任务与扁平注册表 API。
+  - 按键仍仅短按。Keil/CCS 加入 4 个 app 源文件。Keil 0/0（Code 14326→19592）。
+
 - 重建 app 层为裸机菜单调度框架（`docs/app-design.md`）：
   - `app_scheduler`：协作式时间触发任务表 + `Scheduler_Run` 分派；自持 `SysTick_Handler`
     (1ms：`BSP_Time_TickInc` + `Key_Scan`)，`tick_active` 门控防 init 期误触发。
