@@ -1,6 +1,6 @@
 /**
  * @file  ui.c
- * @brief Lightweight OLED UI renderer implementation.
+ * @brief Middleware 层轻量 OLED UI 渲染实现。
  */
 #include "ui.h"
 #include "oled.h"
@@ -11,7 +11,7 @@
 #define UI_LIST_MARK_X 0U
 #define UI_LIST_TEXT_X 8U
 
-static const uint8_t s_ui_content_page[UI_CONTENT_LINE_COUNT] = {
+static const uint8_t ui_content_page[UI_CONTENT_LINE_COUNT] = {
     2U, 3U, 4U, 5U, 6U, 7U,
 };
 
@@ -38,7 +38,7 @@ static uint8_t Ui_ContentPageOf(uint8_t line_index){
         return 0xFFU;
     }
 
-    return s_ui_content_page[line_index];
+    return ui_content_page[line_index];
 }
 
 void Ui_Init(void){

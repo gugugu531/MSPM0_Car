@@ -1,19 +1,19 @@
 /**
  * @file  chassis.c
- * @brief Middleware chassis system implementation.
+ * @brief Middleware 层底盘组合服务实现。
  */
 #include "chassis.h"
 #include <stddef.h>
 
-static CHASSIS_DUTY s_chassis_duty;
+static CHASSIS_DUTY chassis_duty;
 
 static BSP_STATUS Chassis_CombineStatus(BSP_STATUS current, BSP_STATUS next){
     return (current == BSP_STATUS_OK) ? next : current;
 }
 
 static void Chassis_ClearDuty(void){
-    s_chassis_duty.left_percent = 0.0f;
-    s_chassis_duty.right_percent = 0.0f;
+    chassis_duty.left_percent = 0.0f;
+    chassis_duty.right_percent = 0.0f;
 }
 
 BSP_STATUS Chassis_Init(void){
@@ -31,8 +31,8 @@ BSP_STATUS Chassis_SetDuty(float left_percent, float right_percent){
     status = Chassis_CombineStatus(status, right_status);
 
     if (status == BSP_STATUS_OK){
-        s_chassis_duty.left_percent = TB6612FNG_GetDuty(TB6612FNG_CHANNEL_LEFT);
-        s_chassis_duty.right_percent = TB6612FNG_GetDuty(TB6612FNG_CHANNEL_RIGHT);
+        chassis_duty.left_percent = TB6612FNG_GetDuty(TB6612FNG_CHANNEL_LEFT);
+        chassis_duty.right_percent = TB6612FNG_GetDuty(TB6612FNG_CHANNEL_RIGHT);
     }
 
     return status;
@@ -68,7 +68,7 @@ BSP_STATUS Chassis_Coast(void){
 }
 
 CHASSIS_DUTY Chassis_GetDuty(void){
-    return s_chassis_duty;
+    return chassis_duty;
 }
 
 float Chassis_GetSpeed(void){

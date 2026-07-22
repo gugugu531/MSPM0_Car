@@ -61,7 +61,7 @@ const char *SystemFault_GetMessage(void);
 void SystemFault_Clear(void);
 
 /**
- * @brief 执行故障处理流程，设置故障、停止底盘和云台并显示故障页。
+ * @brief 执行故障处理流程，设置故障、刹停底盘并显示故障页。
  */
 void SystemFault_Handler(SYSTEM_FAULT_CODE code, const char *message);
 

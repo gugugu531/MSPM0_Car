@@ -1,3 +1,7 @@
+/**
+ * @file  line_tracking.c
+ * @brief Middleware 层巡线控制策略实现，将灰度传感器状态转换为底盘输出。
+ */
 #include "line_tracking.h"
 
 #include "chassis.h"
@@ -6,7 +10,7 @@
 
 #include <stddef.h>
 
-static const float s_sensor_position[LINE_FOLLOW_SENSOR_COUNT] = {
+static const float sensor_position[LINE_FOLLOW_SENSOR_COUNT] = {
     -3.5f, -2.5f, -1.5f, -0.5f, 0.5f, 1.5f, 2.5f, 3.5f,
 };
 
@@ -16,26 +20,22 @@ static const float s_sensor_position[LINE_FOLLOW_SENSOR_COUNT] = {
  *   - 中心死区: 线在中心两传感器内(|error|<=5, 即偏心 <=0.5 格)不修, 消除绕中心的极限环。
  * alpha 越小越平滑但越滞后; deadband 越大越不抖但容许的偏心越大。
  */
-#ifndef LINE_TRACKING_ERROR_LPF_ALPHA
 #define LINE_TRACKING_ERROR_LPF_ALPHA 0.5f
-#endif
 /* 中心死区: 线大致居中(|error|<=该值)就直行、不做微修正, 让车"提交直线运动", 消掉数字灰度
  * 量化噪声引起的高频微修蛇形。scale=10 时 error 10 ≈ 偏 1 个传感器, 故 10 ≈ 容许 ±1 格偏心。
  * 放宽 -> 更不抖但容许偏心更大(过大可能贴近传感器阵列边缘才纠、转弯入口判断变晚);
  * 收窄 -> 循迹更贴线但微修蛇形回来。现场按"直线不抖 & 不跑偏丢线"折中(可试 6~15)。 */
-#ifndef LINE_TRACKING_ERROR_DEADBAND
 #define LINE_TRACKING_ERROR_DEADBAND 10.0f
-#endif
-static float s_line_tracking_filtered_error;
+static float line_tracking_filtered_error;
 
 static bool LineTracking_IsSensorEnabled(uint8_t index){
     return ((LINE_TRACKING_ACTIVE_SENSOR_MASK & (1U << index)) != 0U);
 }
 
-static LINE_TRACKING_CONFIG s_line_tracking_config;
-static LINE_TRACKING_OUTPUT s_line_tracking_output;
-static PID_CONTROLLER s_line_tracking_pid;
-static bool s_line_tracking_initialized;
+static LINE_TRACKING_CONFIG line_tracking_config;
+static LINE_TRACKING_OUTPUT line_tracking_output;
+static PID_CONTROLLER line_tracking_pid;
+static bool line_tracking_initialized;
 
 static LINE_TRACKING_CONFIG LineTracking_DefaultConfig(void){
     /*
@@ -67,7 +67,7 @@ static LINE_TRACKING_CONFIG LineTracking_DefaultConfig(void){
 
 static void LineTracking_EnsureInitialized(void){
     /* 允许上层忘记显式 Init 时仍能使用默认参数运行。 */
-    if (!s_line_tracking_initialized){
+    if (!line_tracking_initialized){
         LineTracking_Init(NULL);
     }
 }
@@ -78,26 +78,26 @@ LINE_TRACKING_CONFIG LineTracking_GetDefaultConfig(void){
 
 void LineTracking_Init(const LINE_TRACKING_CONFIG *config){
     if (config == NULL){
-        s_line_tracking_config = LineTracking_DefaultConfig();
+        line_tracking_config = LineTracking_DefaultConfig();
     } else{
-        s_line_tracking_config = *config;
+        line_tracking_config = *config;
     }
 
-    PID_Init(&s_line_tracking_pid, &s_line_tracking_config.pid_config);
+    PID_Init(&line_tracking_pid, &line_tracking_config.pid_config);
     LineTracking_Reset();
-    s_line_tracking_initialized = true;
+    line_tracking_initialized = true;
 }
 
 void LineTracking_Reset(void){
-    PID_Reset(&s_line_tracking_pid);
+    PID_Reset(&line_tracking_pid);
 
-    s_line_tracking_filtered_error = 0.0f;
-    s_line_tracking_output.error = 0.0f;
-    s_line_tracking_output.correction = 0.0f;
-    s_line_tracking_output.left_duty = 0.0f;
-    s_line_tracking_output.right_duty = 0.0f;
-    s_line_tracking_output.active_count = 0U;
-    s_line_tracking_output.line_lost = true;
+    line_tracking_filtered_error = 0.0f;
+    line_tracking_output.error = 0.0f;
+    line_tracking_output.correction = 0.0f;
+    line_tracking_output.left_duty = 0.0f;
+    line_tracking_output.right_duty = 0.0f;
+    line_tracking_output.active_count = 0U;
+    line_tracking_output.line_lost = true;
 }
 
 BSP_STATUS LineTracking_Update(float dt_s){
@@ -121,19 +121,19 @@ BSP_STATUS LineTracking_Update(float dt_s){
      * 增稳关闭或 IMU 读失败 → omega=0, Compute 退化为纯位置控制 (无阻尼, 但不崩)。
      */
     float omega_deg_s = 0.0f;
-    if (s_line_tracking_config.gyro_stab_enabled){
+    if (line_tracking_config.gyro_stab_enabled){
         WIT_IMU_DATA imu;
         if (WitGetData(&imu) == WIT_HAL_OK){
-            omega_deg_s = s_line_tracking_config.gyro_z_sign * imu.gyro_deg_s.z;
+            omega_deg_s = line_tracking_config.gyro_z_sign * imu.gyro_deg_s.z;
         }
     }
 
-    status = LineTracking_Compute(&sensor, dt_s, omega_deg_s, &s_line_tracking_output);
+    status = LineTracking_Compute(&sensor, dt_s, omega_deg_s, &line_tracking_output);
     if (status != BSP_STATUS_OK){
         return status;
     }
 
-    if (s_line_tracking_output.line_lost){
+    if (line_tracking_output.line_lost){
         /*
          * 丢线时不在本层自行搜索或刹车。不同题目流程可能有不同恢复策略，
          * 因此只返回 NOT_READY，由 app 决定是否刹车、等待或切换状态。
@@ -141,8 +141,8 @@ BSP_STATUS LineTracking_Update(float dt_s){
         return BSP_STATUS_NOT_READY;
     }
 
-    return Chassis_SetDuty(s_line_tracking_output.left_duty,
-                           s_line_tracking_output.right_duty);
+    return Chassis_SetDuty(line_tracking_output.left_duty,
+                           line_tracking_output.right_duty);
 }
 
 BSP_STATUS LineTracking_Compute(const LINE_FOLLOW_SENSOR_STATE *sensor,
@@ -164,7 +164,7 @@ BSP_STATUS LineTracking_Compute(const LINE_FOLLOW_SENSOR_STATE *sensor,
      */
     for (uint8_t i = 0; i < LINE_FOLLOW_SENSOR_COUNT; i++){
         if (LineTracking_IsSensorEnabled(i) && sensor->value[i] == 0U){
-            position_sum += s_sensor_position[i];
+            position_sum += sensor_position[i];
             active_count++;
         }
     }
@@ -185,15 +185,15 @@ BSP_STATUS LineTracking_Compute(const LINE_FOLLOW_SENSOR_STATE *sensor,
      * 偏差为负说明线更靠左，偏差为正说明线更靠右。
      */
     float average_position = position_sum / (float)active_count;
-    out->error = average_position * s_line_tracking_config.sensor_position_scale;
+    out->error = average_position * line_tracking_config.sensor_position_scale;
 
     /*
      * error 一阶低通 + 中心死区: 把喂给 PID 的误差平滑并对小偏心置零,
      * 消除数字灰度量化跳变导致的转向尖峰/极限环蛇形。out->error 仍保留原始值。
      */
-    s_line_tracking_filtered_error += LINE_TRACKING_ERROR_LPF_ALPHA *
-        (out->error - s_line_tracking_filtered_error);
-    float pid_error = s_line_tracking_filtered_error;
+    line_tracking_filtered_error += LINE_TRACKING_ERROR_LPF_ALPHA *
+        (out->error - line_tracking_filtered_error);
+    float pid_error = line_tracking_filtered_error;
     if ((pid_error > -LINE_TRACKING_ERROR_DEADBAND) &&
         (pid_error < LINE_TRACKING_ERROR_DEADBAND)){
         pid_error = 0.0f;
@@ -206,23 +206,23 @@ BSP_STATUS LineTracking_Compute(const LINE_FOLLOW_SENSOR_STATE *sensor,
      * 居中时 ω_ref=0 → 内环把实际 gz 压向 0 → 自动补偿不对称直行, 且 gz 是航向阻尼项。
      * 关闭增稳(或无 IMU 传 0)则退回纯位置 PID 旧行为。
      */
-    if (s_line_tracking_config.gyro_stab_enabled){
+    if (line_tracking_config.gyro_stab_enabled){
         float omega_ref = Kinematics_Clamp(
-            s_line_tracking_config.gyro_line_kp * pid_error,
-            -s_line_tracking_config.omega_ref_limit,
-            s_line_tracking_config.omega_ref_limit);
-        out->correction = s_line_tracking_config.gyro_stab_kp *
+            line_tracking_config.gyro_line_kp * pid_error,
+            -line_tracking_config.omega_ref_limit,
+            line_tracking_config.omega_ref_limit);
+        out->correction = line_tracking_config.gyro_stab_kp *
                           (omega_ref - omega_deg_s);
     } else{
-        out->correction = PID_Update(&s_line_tracking_pid, pid_error, 0.0f, dt_s);
+        out->correction = PID_Update(&line_tracking_pid, pid_error, 0.0f, dt_s);
     }
 
     /*
      * 巡线时左右轮差值为 2 * correction。这里单独限制 correction，
      * 只收敛循迹动作的差速强度，不影响 Motion 的直行、倒车和原地转向。
      */
-    if (s_line_tracking_config.differential_limit > 0.0f){
-        float correction_limit = s_line_tracking_config.differential_limit * 0.5f;
+    if (line_tracking_config.differential_limit > 0.0f){
+        float correction_limit = line_tracking_config.differential_limit * 0.5f;
         out->correction = Kinematics_Clamp(out->correction,
                                            -correction_limit,
                                            correction_limit);
@@ -233,9 +233,9 @@ BSP_STATUS LineTracking_Compute(const LINE_FOLLOW_SENSOR_STATE *sensor,
      * Kinematics_DifferentialMix() 负责把二者混成左右轮占空比并统一限幅。
      */
     KINEMATICS_DIFFERENTIAL_OUTPUT duty =
-        Kinematics_DifferentialMix(s_line_tracking_config.base_duty,
+        Kinematics_DifferentialMix(line_tracking_config.base_duty,
                                    out->correction,
-                                   s_line_tracking_config.output_limit);
+                                   line_tracking_config.output_limit);
 
     out->left_duty = duty.left;
     out->right_duty = duty.right;
@@ -244,5 +244,5 @@ BSP_STATUS LineTracking_Compute(const LINE_FOLLOW_SENSOR_STATE *sensor,
 }
 
 LINE_TRACKING_OUTPUT LineTracking_GetOutput(void){
-    return s_line_tracking_output;
+    return line_tracking_output;
 }

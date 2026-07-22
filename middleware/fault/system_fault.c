@@ -1,13 +1,13 @@
 /**
  * @file  system_fault.c
- * @brief Middleware system fault handling implementation.
+ * @brief Middleware 层系统故障处理实现。
  */
 #include "system_fault.h"
 #include "chassis.h"
 #include "ui.h"
 #include <stddef.h>
 
-static SYSTEM_FAULT_INFO s_system_fault_info = {
+static SYSTEM_FAULT_INFO system_fault_info = {
     .code = SYSTEM_FAULT_NONE,
     .message = "",
 };
@@ -47,8 +47,8 @@ static void SystemFault_CopyMessage(char *dst, const char *src){
 }
 
 BSP_STATUS SystemFault_Set(SYSTEM_FAULT_CODE code, const char *message){
-    s_system_fault_info.code = code;
-    SystemFault_CopyMessage(s_system_fault_info.message, message);
+    system_fault_info.code = code;
+    SystemFault_CopyMessage(system_fault_info.message, message);
     return BSP_STATUS_OK;
 }
 
@@ -57,21 +57,21 @@ BSP_STATUS SystemFault_Get(SYSTEM_FAULT_INFO *out){
         return BSP_STATUS_NULL;
     }
 
-    *out = s_system_fault_info;
+    *out = system_fault_info;
     return BSP_STATUS_OK;
 }
 
 SYSTEM_FAULT_CODE SystemFault_GetCode(void){
-    return s_system_fault_info.code;
+    return system_fault_info.code;
 }
 
 const char *SystemFault_GetMessage(void){
-    return s_system_fault_info.message;
+    return system_fault_info.message;
 }
 
 void SystemFault_Clear(void){
-    s_system_fault_info.code = SYSTEM_FAULT_NONE;
-    s_system_fault_info.message[0] = '\0';
+    system_fault_info.code = SYSTEM_FAULT_NONE;
+    system_fault_info.message[0] = '\0';
 }
 
 void SystemFault_Handler(SYSTEM_FAULT_CODE code, const char *message){
@@ -85,8 +85,8 @@ void SystemFault_Halt(void){
 
     Ui_RenderStatusPage("System Fault",
                         UI_STATUS_ERROR,
-                        s_system_fault_info.message,
-                        SystemFault_CodeText(s_system_fault_info.code));
+                        system_fault_info.message,
+                        SystemFault_CodeText(system_fault_info.code));
 
     while (1){
         ;
