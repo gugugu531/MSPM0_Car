@@ -11,7 +11,9 @@
 - `app_init.h`：`App_Init()` 集中式上电初始化并注册调度任务。
 - `app_scheduler.h`：`Scheduler_Init/AddTask/Run/EnableTick` 时间触发调度器；自持 `SysTick_Handler`。
 - `app_mode.h`：状态机 `APP_MODE`（INIT/MENU/RUN/FAULT）与 `App_Mode_Init/Get`、`App_ControlTick/UiTick`。
-- `app_tasks.h`：任务注册表与 `APP_TASK_DESC`（`on_enter/on_tick/on_exit`）、`App_TaskCount/Name/At`。
+- `app_task.h`：任务生命周期契约——`APP_TASK_STATUS` 与 `APP_TASK_DESC`（`on_enter/on_tick/on_exit`），不含具体任务。
+- `app_menu.h`：菜单树类型 `MENU_NODE`/`MENU_ITEM` 与 `Menu_Tick` 导航；`app_menu_def.c` 定义菜单树实例 `APP_ROOT_MENU`。
+- `app_checks.h`：外设自检任务描述符 `APP_CHK_*`（JY61P / MPU6050 / Grayscale / TB6612 / Encoder）。
 
 ## core
 

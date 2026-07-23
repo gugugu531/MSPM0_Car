@@ -4,7 +4,7 @@
 
 当前工程采用“分层源码目录 + IDE 工程目录 + 板级配置目录”的组织方式：
 
-- `app/`：应用入口与框架（初始化/调度器/状态机/任务注册表）
+- `app/`：应用入口与框架（初始化/调度器/状态机/菜单树/任务）
 - `core/`：控制算法和数据处理
 - `middleware/`：系统组合能力与共享运行时状态
 - `bsp/`：板级外设驱动
@@ -23,8 +23,8 @@
 2. `__enable_irq()` 后进入 `while(1) Scheduler_Run()` 超循环。
 3. `SysTick_Handler`(1ms) 递增时基并扫描按键；调度器按周期分派 `App_ControlTick`(20ms) 与
    `App_UiTick`(50ms)。
-4. 状态机 INIT→MENU→RUN→FAULT：MENU 列出任务注册表，短按选择进入 RUN 委派任务 `on_tick`，
-   任务返回 DONE/中止/故障后退回 MENU/FAULT。
+4. 状态机 INIT→MENU→RUN→FAULT：MENU 委派 `app_menu` 的嵌套菜单导航，短按选中任务进入 RUN
+   委派任务 `on_tick`，任务返回 DONE/中止/故障后退回 MENU/FAULT。
 
 ## app
 
@@ -34,10 +34,13 @@
 - `app_init.c/.h`：集中式上电时序（Ui/Chassis 先于任何可能 fault 的步骤）。
 - `app_scheduler.c/.h`：时间触发任务表 + `Scheduler_Run` 分派；自持 `SysTick_Handler`。
 - `app_mode.c/.h`：顶层状态机 INIT/MENU/RUN/FAULT 与全部状态转移入口。
-- `app_tasks.c/.h`：任务注册表 `TASK_REGISTRY[]` 与 `on_enter/on_tick/on_exit` 生命周期契约。
+- `app_task.h`：任务生命周期契约（`APP_TASK_STATUS` + `APP_TASK_DESC` 三钩子），不含具体任务。
+- `app_menu.c/.h` 与 `app_menu_def.c`：菜单树（`MENU_NODE`/`MENU_ITEM`）导航与菜单树实例定义。
+- `app_checks.c/.h`：外设自检任务描述符，挂在 Device Check 子菜单。
+- `app_fmt.c/.h`：定点数字格式化（不引浮点 printf），供自检显示。
 
-新增任务只需在 `app_tasks.c` 加一行注册并实现三个钩子，菜单/调度/进出清理自动接入。
-该层可直接调用下层公开接口，但不应把纯算法或底层驱动细节塞入应用流程。
+新增任务只需实现三个钩子（`on_enter/on_tick/on_exit`）并在 `app_menu_def.c` 的菜单树挂一项，
+调度/进出清理自动接入。该层可直接调用下层公开接口，但不应把纯算法或底层驱动细节塞入应用流程。
 
 ## core
 

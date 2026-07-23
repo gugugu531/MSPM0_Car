@@ -2,6 +2,12 @@
 
 ## 未发布
 
+- 拆分 app 任务框架契约：`app_tasks.h` 原混装框架契约与具体 Timer Test 任务，现拆为
+  `app_task.h`（仅 `APP_TASK_STATUS` + `APP_TASK_DESC` 生命周期契约，不含具体任务）；删除
+  `app_tasks.c` 及 `APP_TASK_TIMER` 测试任务与其根菜单项，具体任务改由 `app_checks` 定义、
+  经菜单树引用。同步更新各处 include 与 Keil/CCS 工程引用，并对齐
+  `architecture`/`interfaces`/`project-structure`/`app-design`/`build-guide` 文档。
+
 - 修复 Keil 烧录 `Programming Failed`（擦除成功但编程失败）：MSPM0 Flash 按 64 位(8 字节)字
   +ECC 编程，镜像总长须为 8 的倍数；此前镜像尾长 4-mod-8 导致最后一字编程失败（与镜像大小
   相关、与调试时钟无关——恰好旧镜像 8 对齐能烧、新镜像不对齐失败）。加一段 8 字节对齐的

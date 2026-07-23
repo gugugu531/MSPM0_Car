@@ -30,7 +30,6 @@ run-to-completion 任务。
 
 ```
 Main Menu
-├── Timer Test          (task)
 └── Device Check        (submenu)
     ├── Gyro JY61P       (task)   JY61P 陀螺/姿态/温度 + 诊断计数
     ├── Gyro MPU6050     (task)   原始六轴; 与 JY61P 共 I2C0, 进挂起/出恢复
@@ -83,9 +82,10 @@ Main Menu
 ## 任务开发规范
 
 ### 三步接入
-1. 在 `app_tasks.c` 写私有状态 + 三个钩子 `TaskXxx_Enter/Tick/Exit`。
-2. 往 `TASK_REGISTRY[]` 加一行 `{ "名字", Enter, Tick, Exit }`（`on_exit` 可 NULL）。
-3. 编译。菜单自动出现该项，其它文件不动。
+1. 在任务源文件（如 `app_checks.c`）写私有状态 + 三个钩子 `TaskXxx_Enter/Tick/Exit`，
+   导出一个 `const APP_TASK_DESC`。
+2. 在 `app_menu_def.c` 的菜单树挂一项 `{ .name="名字", .kind=MENU_ENTRY_TASK, .u.task=&描述符 }`（`on_exit` 可 NULL）。
+3. 编译。菜单出现该项，其它文件不动。
 
 ### 钩子契约
 
@@ -109,8 +109,8 @@ Main Menu
 9. **UI**：RUN 运行页由任务 `on_tick` 低频自渲染；MENU/FAULT 页归框架。
 
 ### 参考实现
-`app_tasks.c` 的 `Timer Test`（5s 倒计时，到时 DONE 回菜单，BACK 中止）演示了 enter 复位、
-tick 非阻塞计时、按变化节流刷屏、DONE/中止两条退出路径。`Task 1/2/3` 为空占位。
+`app_checks.c` 的 5 个外设自检（`APP_CHK_*`）演示了 enter 复位、tick 非阻塞采样、按变化节流刷屏、
+仅靠 BACK 短按退出；两个陀螺仪自检还示范了 on_enter/on_exit 挂起/恢复分时共用 I2C0。
 
 ### 公共支持
 - `app_fmt`：`AppFmt_I32/AppFmt_Fixed` 定点数字→字符串，供自检显示，不引浮点 printf。
