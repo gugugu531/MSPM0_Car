@@ -68,6 +68,15 @@ BSP_STATUS GanvGray_ReadError(uint8_t *err);
  */
 BSP_STATUS GanvGray_Reboot(void);
 
+/**
+ * @brief 读取临时诊断计数（定位失败阶段与类型）。
+ * @param wr_fail     输出：写命令阶段累计失败次数（可为 NULL）。
+ * @param rd_fail     输出：读数据阶段累计失败次数（可为 NULL）。
+ * @param last_status 输出：最近一次失败的 BSP_STATUS（可为 NULL）。
+ * @note 计数在 GanvGray_Init 时清零。用于间歇失败排查。
+ */
+void GanvGray_GetDiag(uint32_t *wr_fail, uint32_t *rd_fail, int32_t *last_status);
+
 #ifdef __cplusplus
 }
 #endif

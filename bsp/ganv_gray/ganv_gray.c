@@ -23,8 +23,9 @@
 #define GANV_GRAY_I2C_TIMEOUT  100000U
 /* 上电同步:每次 ping 间隔 1ms,最多重试 100 次(约 100ms)后判超时。 */
 #define GANV_GRAY_PING_RETRY   100U
-/* 单次读命令的瞬态失败(NACK/上升沿不足/传感器忙)重试次数。 */
-#define GANV_GRAY_RETRY        2U
+/* 命令切换(写命令帧)的重试次数。高频读命中命令缓存不写命令,仅切换命令时才写,
+ * 故给足重试以兜住写阶段偶发 NACK;读阶段实测可靠,不重试。 */
+#define GANV_GRAY_RETRY        3U
 
 /* ===== 命令符(见手册 7.17)===== */
 #define GANV_GRAY_CMD_DIGITAL  0xDDU   /* 读 8 路数字量,1 字节。 */
@@ -33,6 +34,16 @@
 #define GANV_GRAY_CMD_VERSION  0xC1U   /* 固件版本号。 */
 #define GANV_GRAY_CMD_ERROR    0xDEU   /* 错误寄存器(读后自清零)。 */
 #define GANV_GRAY_CMD_REBOOT   0xC0U   /* 软件重启(纯写,无应答)。 */
+
+/* ===== 诊断计数(健康监控,GanvGray_Init 时清零)===== */
+static uint32_t diag_wr_fail;   /* 写命令(命令切换)阶段累计失败次数。 */
+static uint32_t diag_rd_fail;   /* 读数据阶段累计失败次数。 */
+static BSP_STATUS diag_last;    /* 最近一次失败的状态码。 */
+
+/* 传感器"当前命令指针"缓存:手册方法 2/3——写一次命令后可反复读。仅命令变化时写,
+ * 连读同命令直接读、跳过写,避免高频写命令触发写阶段隔次 NACK(见诊断: W 涨 / R=0 / NACK)。 */
+static uint8_t  current_cmd;
+static bool     current_cmd_valid;
 
 /* ═══════════════════ 阻塞 I2C 底层(勿在 ISR 调用)═══════════════════════════ */
 
@@ -103,31 +114,44 @@ static BSP_STATUS GanvGray_ReadBytes(uint8_t *data, uint8_t len)
     return GanvGray_WaitIdle() ? BSP_STATUS_OK : BSP_STATUS_TIMEOUT;
 }
 
-/* 单次读命令 = 写命令(独立事务) + 读数据(独立事务),手册方法 2/3 结构。
- * 两个各带 STOP 的完整事务,收尾干净,避开 repeated-start 的 BUSY 中间态竞争。
- * 开机默认命令即 0xDD,但为避免被 version/error/ping 覆盖,每次仍显式先写命令再读。 */
-static BSP_STATUS GanvGray_ReadCmdOnce(uint8_t cmd, uint8_t *data, uint8_t len)
+/* 确保传感器当前命令指针 = cmd:命中缓存则不写(手册方法 2/3);否则写命令帧(带重试)。
+ * 高频读同一命令时几乎不写命令,从根上避开写阶段隔次 NACK。 */
+static BSP_STATUS GanvGray_SelectCmd(uint8_t cmd)
+{
+    BSP_STATUS st = BSP_STATUS_ERROR;
+
+    if (current_cmd_valid && (current_cmd == cmd)){
+        return BSP_STATUS_OK;
+    }
+
+    for (uint8_t i = 0U; i < GANV_GRAY_RETRY; i++){
+        st = GanvGray_WriteCmd(cmd);
+        if (st == BSP_STATUS_OK){
+            current_cmd       = cmd;
+            current_cmd_valid = true;
+            return BSP_STATUS_OK;
+        }
+    }
+    current_cmd_valid = false;   /* 写失败,命令指针未知,下次重选 */
+    diag_wr_fail++;
+    diag_last = st;
+    return st;
+}
+
+/* 读命令 = 选择命令(必要时写) + 读数据。读阶段实测可靠,不重试。 */
+static BSP_STATUS GanvGray_ReadCmd(uint8_t cmd, uint8_t *data, uint8_t len)
 {
     BSP_STATUS st;
 
     if ((data == NULL) || (len == 0U)){ return BSP_STATUS_INVALID_ARG; }
 
-    st = GanvGray_WriteCmd(cmd);
+    st = GanvGray_SelectCmd(cmd);
     if (st != BSP_STATUS_OK){ return st; }
 
-    return GanvGray_ReadBytes(data, len);
-}
-
-/* 读事务 + 有限重试: 滤掉真·瞬态错误(NACK / 上升沿不足 / 传感器忙)。
- * 每次单次事务失败出口均已复位控制器, 故重试从干净态开始。 */
-static BSP_STATUS GanvGray_ReadCmd(uint8_t cmd, uint8_t *data, uint8_t len)
-{
-    BSP_STATUS st = BSP_STATUS_ERROR;
-    for (uint8_t i = 0U; i < GANV_GRAY_RETRY; i++){
-        st = GanvGray_ReadCmdOnce(cmd, data, len);
-        if (st == BSP_STATUS_OK){
-            return BSP_STATUS_OK;
-        }
+    st = GanvGray_ReadBytes(data, len);
+    if (st != BSP_STATUS_OK){
+        diag_rd_fail++;
+        diag_last = st;
     }
     return st;
 }
@@ -137,13 +161,24 @@ static BSP_STATUS GanvGray_ReadCmd(uint8_t cmd, uint8_t *data, uint8_t len)
 BSP_STATUS GanvGray_Ping(void)
 {
     uint8_t reply = 0U;
-    BSP_STATUS st = GanvGray_ReadCmd(GANV_GRAY_CMD_PING, &reply, 1U);
+    BSP_STATUS st;
+
+    /* ping 有硬件回滚特性(不改持久命令指针):每次显式写 0xAA 并读,绕过命令缓存,
+     * 也不更新 current_cmd —— 回滚后指针不变,缓存仍有效。 */
+    st = GanvGray_WriteCmd(GANV_GRAY_CMD_PING);
+    if (st != BSP_STATUS_OK){ return st; }
+    st = GanvGray_ReadBytes(&reply, 1U);
     if (st != BSP_STATUS_OK){ return st; }
     return (reply == GANV_GRAY_PING_REPLY) ? BSP_STATUS_OK : BSP_STATUS_NOT_READY;
 }
 
 BSP_STATUS GanvGray_Init(void)
 {
+    diag_wr_fail = 0U;
+    diag_rd_fail = 0U;
+    diag_last    = BSP_STATUS_OK;
+    current_cmd_valid = false;   /* 命令缓存失效,首次读会显式选命令 */
+
     /* 主控可能比传感器先就绪:反复 ping 直到收到 0x66,或到达重试上限判超时。 */
     for (uint8_t i = 0U; i < GANV_GRAY_PING_RETRY; i++){
         if (GanvGray_Ping() == BSP_STATUS_OK){
@@ -174,5 +209,13 @@ BSP_STATUS GanvGray_ReadError(uint8_t *err)
 
 BSP_STATUS GanvGray_Reboot(void)
 {
+    current_cmd_valid = false;   /* 重启后传感器命令指针复位为默认,缓存失效 */
     return GanvGray_WriteCmd(GANV_GRAY_CMD_REBOOT);
+}
+
+void GanvGray_GetDiag(uint32_t *wr_fail, uint32_t *rd_fail, int32_t *last_status)
+{
+    if (wr_fail != NULL){ *wr_fail = diag_wr_fail; }
+    if (rd_fail != NULL){ *rd_fail = diag_rd_fail; }
+    if (last_status != NULL){ *last_status = (int32_t)diag_last; }
 }

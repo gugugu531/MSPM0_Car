@@ -74,17 +74,12 @@ static APP_TASK_STATUS ChkGrayscale_Tick(float dt){
 /* 与 JY61P/MPU6050 共 I2C0：进入时挂起 JY61P、退出时恢复。 */
 
 static uint32_t gi_last_ui;
-static uint8_t  gi_version;
-static bool     gi_version_ok;
 static uint32_t gi_ok_cnt;    /* 累计读取成功次数。 */
-static uint32_t gi_err_cnt;   /* 累计读取失败次数（重试 3 次仍失败才计）。 */
+static uint32_t gi_err_cnt;   /* 累计读取失败次数。 */
 
 static void ChkGrayI2c_Enter(void){
     JY61P_I2C_SetSuspended(true);    /* 让出 I2C0 */
-    (void)GanvGray_Init();           /* 上电 ping 同步；失败也进入，Tick 实时反映在线状态 */
-    uint8_t v = 0U;
-    gi_version_ok = (GanvGray_ReadVersion(&v) == BSP_STATUS_OK);
-    gi_version    = gi_version_ok ? v : 0U;
+    (void)GanvGray_Init();           /* 上电 ping 同步；同时清零驱动内部诊断计数 */
     gi_ok_cnt     = 0U;
     gi_err_cnt    = 0U;
     gi_last_ui    = 0U;
@@ -133,17 +128,19 @@ static APP_TASK_STATUS ChkGrayI2c_Tick(float dt){
     n += PutStr(&l3[n], " er ");
     AppFmt_I32(&l3[n], (int32_t)gi_err_cnt);
 
-    if (gi_version_ok){
-        /* 版本字节 = 高 4bit.低 4bit，如 0x3E → v3.14。 */
-        n = PutStr(l4, "ver ");
-        AppFmt_I32(&l4[n], (int32_t)(gi_version >> 4));
-        while (l4[n] != '\0'){ n++; }
-        n += PutStr(&l4[n], ".");
-        AppFmt_I32(&l4[n], (int32_t)(gi_version & 0x0FU));
-    } else {
-        (void)PutStr(l4, "ver --");
-        l4[6] = '\0';
-    }
+    /* 诊断：W=写命令阶段累计失败 R=读数据阶段累计失败 s=最近失败码(超时=-4 / NACK=-1)。 */
+    uint32_t wr_fail = 0U;
+    uint32_t rd_fail = 0U;
+    int32_t  last_status = 0;
+    GanvGray_GetDiag(&wr_fail, &rd_fail, &last_status);
+    n = PutStr(l4, "W");
+    AppFmt_I32(&l4[n], (int32_t)wr_fail);
+    while (l4[n] != '\0'){ n++; }
+    n += PutStr(&l4[n], " R");
+    AppFmt_I32(&l4[n], (int32_t)rd_fail);
+    while (l4[n] != '\0'){ n++; }
+    n += PutStr(&l4[n], " s");
+    AppFmt_I32(&l4[n], last_status);
 
     Ui_RenderLines("Chk Gray I2C", bits, l2, l3, l4, "BACK: exit", NULL);
     return APP_TASK_RUNNING;
