@@ -2,6 +2,11 @@
 
 ## 未发布
 
+- `ganv_gray` 健壮性加固：读命令（`ReadDigital`/`Ping`/`ReadVersion`/`ReadError`）加 3 次
+  瞬态重试，滤掉总线 NACK / 上升沿不足 / 传感器忙导致的偶发失败；修 `ReadCmd` 的 RX 超时
+  分支缺失的控制器复位（此前需靠下次事务开头 `WaitIdle` 才自愈，加重了 online/offline
+  交替观感）。`Gray I2C` 自检改显示累计 `ok`/`er` 计数，便于区分偶发瞬态与持续故障。
+
 - `Device Check` 接入感为灰度 I2C 自检项 `Gray I2C`：OLED 实时显示 8 路数字量二进制、
   在线/离线状态与固件版本；与 JY61P/MPU6050 共 I2C0，进入时挂起 JY61P、退出时恢复。
   同时把传感器手册归档到 `docs/datasheets/`（大体积 PDF 经 `.gitignore` 排除，不入库，

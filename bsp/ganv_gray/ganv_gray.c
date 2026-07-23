@@ -19,6 +19,8 @@
 #define GANV_GRAY_I2C_TIMEOUT  100000U
 /* 上电同步:每次 ping 间隔 1ms,最多重试 100 次(约 100ms)后判超时。 */
 #define GANV_GRAY_PING_RETRY   100U
+/* 单次读命令的瞬态失败(NACK/上升沿不足/传感器忙)重试次数。 */
+#define GANV_GRAY_RETRY        3U
 
 /* ===== 命令符(见手册 7.17)===== */
 #define GANV_GRAY_CMD_DIGITAL  0xDDU   /* 读 8 路数字量,1 字节。 */
@@ -44,8 +46,8 @@ static bool GanvGray_WaitIdle(void)
     return true;
 }
 
-/* 读: TX CMD(STOP_DISABLE) → REPEATED START → RX DATA[0..len-1]。 */
-static BSP_STATUS GanvGray_ReadCmd(uint8_t cmd, uint8_t *data, uint8_t len)
+/* 单次读事务: TX CMD(STOP_DISABLE) → REPEATED START → RX DATA[0..len-1]。 */
+static BSP_STATUS GanvGray_ReadCmdOnce(uint8_t cmd, uint8_t *data, uint8_t len)
 {
     uint8_t i;
     uint32_t timeout;
@@ -79,11 +81,28 @@ static BSP_STATUS GanvGray_ReadCmd(uint8_t cmd, uint8_t *data, uint8_t len)
     for (i = 0U; i < len; i++){
         timeout = GANV_GRAY_I2C_TIMEOUT;
         while (DL_I2C_isControllerRXFIFOEmpty(GANV_GRAY_I2C_INST)){
-            if (timeout-- == 0U){ return BSP_STATUS_TIMEOUT; }
+            if (timeout-- == 0U){
+                DL_I2C_resetControllerTransfer(GANV_GRAY_I2C_INST);   /* RX 卡死: 复位, 让下次重试从干净态开始 */
+                return BSP_STATUS_TIMEOUT;
+            }
         }
         data[i] = DL_I2C_receiveControllerData(GANV_GRAY_I2C_INST);
     }
     return GanvGray_WaitIdle() ? BSP_STATUS_OK : BSP_STATUS_TIMEOUT;
+}
+
+/* 读事务 + 有限重试: 滤掉总线瞬态错误(NACK / 上升沿不足 / 传感器忙)。
+ * 每次单次事务失败出口均已复位控制器, 故重试从干净态开始。 */
+static BSP_STATUS GanvGray_ReadCmd(uint8_t cmd, uint8_t *data, uint8_t len)
+{
+    BSP_STATUS st = BSP_STATUS_ERROR;
+    for (uint8_t i = 0U; i < GANV_GRAY_RETRY; i++){
+        st = GanvGray_ReadCmdOnce(cmd, data, len);
+        if (st == BSP_STATUS_OK){
+            return BSP_STATUS_OK;
+        }
+    }
+    return st;
 }
 
 /* 写: TX CMD + STOP(用于无数据命令,如软件重启)。 */

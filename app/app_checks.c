@@ -76,6 +76,8 @@ static APP_TASK_STATUS ChkGrayscale_Tick(float dt){
 static uint32_t gi_last_ui;
 static uint8_t  gi_version;
 static bool     gi_version_ok;
+static uint32_t gi_ok_cnt;    /* 累计读取成功次数。 */
+static uint32_t gi_err_cnt;   /* 累计读取失败次数（重试 3 次仍失败才计）。 */
 
 static void ChkGrayI2c_Enter(void){
     JY61P_I2C_SetSuspended(true);    /* 让出 I2C0 */
@@ -83,6 +85,8 @@ static void ChkGrayI2c_Enter(void){
     uint8_t v = 0U;
     gi_version_ok = (GanvGray_ReadVersion(&v) == BSP_STATUS_OK);
     gi_version    = gi_version_ok ? v : 0U;
+    gi_ok_cnt     = 0U;
+    gi_err_cnt    = 0U;
     gi_last_ui    = 0U;
 }
 
@@ -96,6 +100,7 @@ static APP_TASK_STATUS ChkGrayI2c_Tick(float dt){
 
     uint8_t mask = 0U;
     BSP_STATUS st = GanvGray_ReadDigital(&mask);
+    if (st == BSP_STATUS_OK){ gi_ok_cnt++; } else { gi_err_cnt++; }
 
     char bits[GANV_GRAY_CHANNEL_COUNT + 1U];
     uint8_t active = 0U;
@@ -110,29 +115,37 @@ static APP_TASK_STATUS ChkGrayI2c_Tick(float dt){
 
     char l2[16];
     char l3[16];
+    char l4[16];
     uint8_t n;
 
     if (st == BSP_STATUS_OK){
-        n = PutStr(l2, "online act ");
+        n = PutStr(l2, "act ");
         AppFmt_I32(&l2[n], (int32_t)active);
     } else {
-        (void)PutStr(l2, "OFFLINE");
-        l2[7] = '\0';
+        (void)PutStr(l2, "READ FAIL");
+        l2[9] = '\0';
     }
+
+    /* 累计成功/失败次数：便于判断是偶发瞬态（err 少）还是持续故障（err 涨得快）。 */
+    n = PutStr(l3, "ok ");
+    AppFmt_I32(&l3[n], (int32_t)gi_ok_cnt);
+    while (l3[n] != '\0'){ n++; }
+    n += PutStr(&l3[n], " er ");
+    AppFmt_I32(&l3[n], (int32_t)gi_err_cnt);
 
     if (gi_version_ok){
         /* 版本字节 = 高 4bit.低 4bit，如 0x3E → v3.14。 */
-        n = PutStr(l3, "ver ");
-        AppFmt_I32(&l3[n], (int32_t)(gi_version >> 4));
-        while (l3[n] != '\0'){ n++; }
-        n += PutStr(&l3[n], ".");
-        AppFmt_I32(&l3[n], (int32_t)(gi_version & 0x0FU));
+        n = PutStr(l4, "ver ");
+        AppFmt_I32(&l4[n], (int32_t)(gi_version >> 4));
+        while (l4[n] != '\0'){ n++; }
+        n += PutStr(&l4[n], ".");
+        AppFmt_I32(&l4[n], (int32_t)(gi_version & 0x0FU));
     } else {
-        (void)PutStr(l3, "ver --");
-        l3[6] = '\0';
+        (void)PutStr(l4, "ver --");
+        l4[6] = '\0';
     }
 
-    Ui_RenderLines("Chk Gray I2C", bits, l2, l3, "BACK: exit", NULL, NULL);
+    Ui_RenderLines("Chk Gray I2C", bits, l2, l3, l4, "BACK: exit", NULL);
     return APP_TASK_RUNNING;
 }
 
