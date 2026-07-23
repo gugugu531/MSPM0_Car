@@ -406,11 +406,6 @@
               <FilePath>..\..\app\app_mode.c</FilePath>
             </File>
             <File>
-              <FileName>app_tasks.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\app\app_tasks.c</FilePath>
-            </File>
-            <File>
               <FileName>app_checks.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\app\app_checks.c</FilePath>

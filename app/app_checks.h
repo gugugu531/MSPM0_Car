@@ -8,7 +8,7 @@
 #ifndef APP_CHECKS_H
 #define APP_CHECKS_H
 
-#include "app_tasks.h"
+#include "app_task.h"
 
 #ifdef __cplusplus
 extern "C" {

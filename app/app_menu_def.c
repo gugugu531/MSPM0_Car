@@ -2,10 +2,9 @@
  * @file  app_menu_def.c
  * @brief 菜单树实例定义（根菜单 + Device Check 子菜单）。
  *
- * 加菜单项 = 改这两张表。任务描述符来自 app_tasks.h / app_checks.h。
+ * 加菜单项 = 改这两张表。任务描述符来自 app_checks.h（任务类型契约见 app_task.h）。
  */
 #include "app_menu.h"
-#include "app_tasks.h"
 #include "app_checks.h"
 
 /* --- Device Check 子菜单：5 个外设自检 --- */
@@ -25,7 +24,6 @@ static const MENU_NODE device_check_menu = {
 
 /* --- 根菜单 --- */
 static const MENU_ITEM root_items[] = {
-    { .name = "Timer Test",   .kind = MENU_ENTRY_TASK,    .u.task = &APP_TASK_TIMER },
     { .name = "Device Check", .kind = MENU_ENTRY_SUBMENU, .u.submenu = &device_check_menu },
 };
 

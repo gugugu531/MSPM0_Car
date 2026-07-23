@@ -3,7 +3,7 @@
  * @brief 顶层应用状态机实现：菜单委派、任务执行委派、故障处理。
  */
 #include "app_mode.h"
-#include "app_tasks.h"
+#include "app_task.h"
 #include "app_menu.h"
 
 #include "ui.h"

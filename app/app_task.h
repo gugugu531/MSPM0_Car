@@ -1,15 +1,15 @@
 /**
- * @file  app_tasks.h
- * @brief 任务生命周期类型与业务任务描述符。
+ * @file  app_task.h
+ * @brief 任务框架契约：任务生命周期类型与描述符（不含任何具体任务）。
  *
  * 每个任务=一个 APP_TASK_DESC（名字 + on_enter/on_tick/on_exit 三钩子）。钩子契约:
  *   - on_enter: 进入 RUN 一次, 复位本任务全部私有状态; 不驱动执行器、不写模式。
  *   - on_tick : RUN 期每控制周期调用, 非阻塞, 返回 RUNNING/DONE/FAULT。
  *   - on_exit : 正常退出/中止时一次的任务专属收尾(可为 NULL); 通用 Brake 由框架做。
- * 任务通过菜单树(app_menu_def)被引用; 自检任务见 app_checks.h。
+ * 具体任务在别处定义并经菜单树(app_menu_def)引用; 外设自检见 app_checks.h。
  */
-#ifndef APP_TASKS_H
-#define APP_TASKS_H
+#ifndef APP_TASK_H
+#define APP_TASK_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -38,11 +38,8 @@ typedef struct {
     void (*on_exit)(void);
 } APP_TASK_DESC;
 
-/** 业务任务：5s 倒计时自检入口（用作框架自测）。 */
-extern const APP_TASK_DESC APP_TASK_TIMER;
-
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* APP_TASKS_H */
+#endif /* APP_TASK_H */

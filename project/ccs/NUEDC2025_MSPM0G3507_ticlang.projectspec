@@ -17,8 +17,7 @@
     <file path="${REPO_ROOT}/app/app_scheduler.h" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/app/app_mode.c" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/app/app_mode.h" openOnCreation="false" excludeFromBuild="false" action="link" />
-    <file path="${REPO_ROOT}/app/app_tasks.c" openOnCreation="false" excludeFromBuild="false" action="link" />
-    <file path="${REPO_ROOT}/app/app_tasks.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+    <file path="${REPO_ROOT}/app/app_task.h" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/app/app_checks.c" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/app/app_checks.h" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/app/app_menu.c" openOnCreation="false" excludeFromBuild="false" action="link" />
