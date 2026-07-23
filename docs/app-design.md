@@ -33,7 +33,8 @@ Main Menu
 └── Device Check        (submenu)
     ├── Gyro JY61P       (task)   JY61P 陀螺/姿态/温度 + 诊断计数
     ├── Gyro MPU6050     (task)   原始六轴; 与 JY61P 共 I2C0, 进挂起/出恢复
-    ├── Grayscale        (task)   8 路 mask 二进制 + 触发数
+    ├── Grayscale        (task)   数字量 GPIO 版, 8 路 mask 二进制 + 触发数
+    ├── Gray I2C         (task)   感为 I2C 版(0x4F), 8 路数字量 + 在线/固件版本
     ├── TB6612           (task)   短按单次低速脉冲(20%/300ms) + 编码器响应, 抬轮提示
     └── Encoder          (task)   count/speed/distance/dir
 ```

@@ -117,7 +117,8 @@
 
 - 上电后 OLED 显示 `Main Menu`
 - 短按 UP/DOWN 移动选择、ENTER 进入、BACK 返回上级
-- `Device Check` 子菜单内 5 个自检（Gyro JY61P / Gyro MPU6050 / Grayscale / TB6612 / Encoder）可进入并刷新数据
+- `Device Check` 子菜单内 6 个自检（Gyro JY61P / Gyro MPU6050 / Grayscale / Gray I2C / TB6612 / Encoder）可进入并刷新数据
+- `Gray I2C` 进入后显示 8 路数字量二进制与 `online`/固件版本；断开传感器应显示 `OFFLINE`
 - TB6612 自检短按发单次脉冲、编码器计数随之变化
 - `SysTick_Handler` 可按周期扫描按键（菜单响应正常即证明）
 

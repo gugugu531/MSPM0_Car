@@ -11,6 +11,7 @@
 #include "bsp_common.h"
 #include "chassis.h"
 #include "grayscale_sensor.h"
+#include "ganv_gray.h"
 #include "hall_encoder.h"
 #include "wit_sdk.h"
 #include "mpu6050.h"
@@ -67,6 +68,76 @@ static APP_TASK_STATUS ChkGrayscale_Tick(float dt){
     Ui_RenderLines("Chk Grayscale", bits, l2, "BACK: exit",
                    NULL, NULL, NULL);
     return APP_TASK_RUNNING;
+}
+
+/* ============================ 灰度 I2C（感为，I2C0） ============================ */
+/* 与 JY61P/MPU6050 共 I2C0：进入时挂起 JY61P、退出时恢复。 */
+
+static uint32_t gi_last_ui;
+static uint8_t  gi_version;
+static bool     gi_version_ok;
+
+static void ChkGrayI2c_Enter(void){
+    JY61P_I2C_SetSuspended(true);    /* 让出 I2C0 */
+    (void)GanvGray_Init();           /* 上电 ping 同步；失败也进入，Tick 实时反映在线状态 */
+    uint8_t v = 0U;
+    gi_version_ok = (GanvGray_ReadVersion(&v) == BSP_STATUS_OK);
+    gi_version    = gi_version_ok ? v : 0U;
+    gi_last_ui    = 0U;
+}
+
+static APP_TASK_STATUS ChkGrayI2c_Tick(float dt){
+    (void)dt;
+    uint32_t now = BSP_Time_GetMs();
+    if ((now - gi_last_ui) < CHK_UI_PERIOD_MS){
+        return APP_TASK_RUNNING;
+    }
+    gi_last_ui = now;
+
+    uint8_t mask = 0U;
+    BSP_STATUS st = GanvGray_ReadDigital(&mask);
+
+    char bits[GANV_GRAY_CHANNEL_COUNT + 1U];
+    uint8_t active = 0U;
+    for (uint8_t i = 0U; i < GANV_GRAY_CHANNEL_COUNT; i++){
+        bool on = ((mask & (uint8_t)(1U << i)) != 0U);   /* bit0=第1路 */
+        bits[i] = on ? '1' : '0';
+        if (on){
+            active++;
+        }
+    }
+    bits[GANV_GRAY_CHANNEL_COUNT] = '\0';
+
+    char l2[16];
+    char l3[16];
+    uint8_t n;
+
+    if (st == BSP_STATUS_OK){
+        n = PutStr(l2, "online act ");
+        AppFmt_I32(&l2[n], (int32_t)active);
+    } else {
+        (void)PutStr(l2, "OFFLINE");
+        l2[7] = '\0';
+    }
+
+    if (gi_version_ok){
+        /* 版本字节 = 高 4bit.低 4bit，如 0x3E → v3.14。 */
+        n = PutStr(l3, "ver ");
+        AppFmt_I32(&l3[n], (int32_t)(gi_version >> 4));
+        while (l3[n] != '\0'){ n++; }
+        n += PutStr(&l3[n], ".");
+        AppFmt_I32(&l3[n], (int32_t)(gi_version & 0x0FU));
+    } else {
+        (void)PutStr(l3, "ver --");
+        l3[6] = '\0';
+    }
+
+    Ui_RenderLines("Chk Gray I2C", bits, l2, l3, "BACK: exit", NULL, NULL);
+    return APP_TASK_RUNNING;
+}
+
+static void ChkGrayI2c_Exit(void){
+    JY61P_I2C_SetSuspended(false);   /* 归还 I2C0 给 JY61P */
 }
 
 /* ============================ 陀螺仪 JY61P ============================ */
@@ -265,6 +336,9 @@ const APP_TASK_DESC APP_CHK_GYRO_MPU6050 = {
 };
 const APP_TASK_DESC APP_CHK_GRAYSCALE = {
     "Grayscale", ChkGrayscale_Enter, ChkGrayscale_Tick, NULL
+};
+const APP_TASK_DESC APP_CHK_GRAY_I2C = {
+    "Gray I2C", ChkGrayI2c_Enter, ChkGrayI2c_Tick, ChkGrayI2c_Exit
 };
 const APP_TASK_DESC APP_CHK_TB6612 = {
     "TB6612", ChkTb_Enter, ChkTb_Tick, ChkTb_Exit

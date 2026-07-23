@@ -39,3 +39,5 @@ keil/
 /ai/nncase_dump/
 /ai/.ultralytics/
 __pycache__/
+# 器件手册等大体积本地参考资料，不入库（协议要点已固化进 bsp 接口文档）
+docs/datasheets/*.pdf

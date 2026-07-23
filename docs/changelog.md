@@ -2,6 +2,11 @@
 
 ## 未发布
 
+- `Device Check` 接入感为灰度 I2C 自检项 `Gray I2C`：OLED 实时显示 8 路数字量二进制、
+  在线/离线状态与固件版本；与 JY61P/MPU6050 共 I2C0，进入时挂起 JY61P、退出时恢复。
+  同时把传感器手册归档到 `docs/datasheets/`（大体积 PDF 经 `.gitignore` 排除，不入库，
+  协议要点已固化进 `docs/interfaces/bsp_ganv_gray.md`）。
+
 - 新增 `bsp/ganv_gray`：感为(GANV)8 路灰度传感器 I2C 驱动。复用已初始化的 I2C0 总线
   （SysConfig 实例 `MPU6050_JY61P_Tracking`，PA0=SDA/PA1=SCL），作为地址 `0x4F` 的第三个
   从机（与 MPU6050 `0x68`/JY61P `0x50` 不冲突，无需改 SysConfig）。底层为阻塞 I2C，与
