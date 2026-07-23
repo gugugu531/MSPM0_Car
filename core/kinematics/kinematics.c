@@ -1,8 +1,5 @@
 #include "kinematics.h"
 
-#include <math.h>
-#include <stddef.h>
-
 static float Kinematics_Abs(float value){
     return (value < 0.0f) ? -value : value;
 }

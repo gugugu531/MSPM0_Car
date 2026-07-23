@@ -19,7 +19,7 @@
 
 - `pid/pid.h`：位置式和增量式 PID 控制器，详细说明见 `docs/interfaces/core_pid.md`。
 - `common/core_types.h`：core 层基础二维点类型，详细说明见 `docs/interfaces/core_common.md`。
-- `kinematics/kinematics.h`：角度、位姿、差速混控和二维几何计算，详细说明见 `docs/interfaces/core_kinematics.md`。
+- `kinematics/kinematics.h`：限幅、角度归一化和差速混控计算，详细说明见 `docs/interfaces/core_kinematics.md`。
 
 ## middleware
 

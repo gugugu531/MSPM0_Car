@@ -88,12 +88,6 @@ void PID_Reset(PID_CONTROLLER *pid);
 清空运行状态，但保留当前配置。
 
 ```c
-void PID_SetConfig(PID_CONTROLLER *pid, const PID_CONFIG *config);
-```
-
-更新 PID 配置，不主动清空运行状态。如需重新开始控制，应在更新配置后显式调用 `PID_Reset()`。
-
-```c
 float PID_Update(PID_CONTROLLER *pid, float target, float feedback, float dt_s);
 ```
 
@@ -104,13 +98,8 @@ float PID_Update(PID_CONTROLLER *pid, float target, float feedback, float dt_s);
 - 位置式 PID 使用积分限幅和输出限幅。
 - 增量式 PID 根据误差变化计算本次增量，再将增量累加到输出，并执行输出限幅。
 
-```c
-float PID_GetOutput(const PID_CONTROLLER *pid);
-float PID_GetError(const PID_CONTROLLER *pid);
-float PID_GetIncrement(const PID_CONTROLLER *pid);
-```
-
-分别读取最近一次输出、误差和输出变化量。传入空指针时返回 `0.0f`。
+> 说明：`PID_Update()` 返回当前输出；运行结果同时保存在 `PID_CONTROLLER.state`
+> （`output`/`error`/`increment` 等字段），调用方可直接读取该结构，模块暂不提供独立 getter。
 
 ## 使用约束
 

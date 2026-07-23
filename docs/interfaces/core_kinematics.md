@@ -2,11 +2,15 @@
 
 ## 模块职责
 
-`core/kinematics` 提供运动学和二维几何计算能力，属于纯算法模块。
+`core/kinematics` 提供限幅、角度归一化和差速混控等纯算法计算能力，属于纯 `core` 模块。
 
 该模块不读取传感器、不控制电机、不调用 BSP 或 middleware。调用方负责提供输入数据，并根据计算结果调用对应执行接口。
 
-## 基础宏
+> 使用现状：当前唯一消费者是 `middleware/line_tracking`，只用到 `Kinematics_Clamp` 与
+> `Kinematics_DifferentialMix`。本文标注为「预留」的类型/宏/函数已实现并保留，但当前工程
+> 暂无调用者，供后续路径/姿态/动作策略模块复用。
+
+## 基础宏（预留）
 
 ```c
 #define KINEMATICS_PI 3.1415926f
@@ -14,14 +18,7 @@
 #define KINEMATICS_RAD_TO_DEG(rad) ((rad) * (180.0f / KINEMATICS_PI))
 ```
 
-为兼容当前尚未重写的 `app` 代码，模块暂时保留：
-
-```c
-#define DEG_TO_RAD(deg) KINEMATICS_DEG_TO_RAD(deg)
-#define RAD_TO_DEG(rad) KINEMATICS_RAD_TO_DEG(rad)
-```
-
-后续对应模块完成重写后，可评估是否移除兼容宏。
+角度/弧度换算宏。**预留，当前工程暂无调用者。**
 
 ## 数据结构
 
@@ -35,7 +32,7 @@ typedef enum {
 } KINEMATICS_DIR;
 ```
 
-通用方向枚举。当前模块自身不强制使用该枚举，预留给后续路径和动作策略模块表达方向。
+通用方向枚举。**预留，当前工程暂无调用者**，供后续路径和动作策略模块表达方向。
 
 ```c
 typedef struct {
@@ -45,7 +42,7 @@ typedef struct {
 } KINEMATICS_ATTITUDE;
 ```
 
-姿态角，单位为度。
+姿态角，单位为度。**预留，当前工程暂无调用者。**
 
 ```c
 typedef struct {
@@ -55,7 +52,7 @@ typedef struct {
 } KINEMATICS_POSE;
 ```
 
-二维位姿。`x_m` 和 `y_m` 单位为米，`heading_deg` 单位为度。
+二维位姿。`x_m` 和 `y_m` 单位为米，`heading_deg` 单位为度。**预留，当前工程暂无调用者。**
 
 ```c
 typedef struct {
@@ -64,7 +61,7 @@ typedef struct {
 } KINEMATICS_VELOCITY;
 ```
 
-平面运动速度。线速度单位为米每秒，角速度单位为度每秒。
+平面运动速度。线速度单位为米每秒，角速度单位为度每秒。**预留，当前工程暂无调用者。**
 
 ```c
 typedef struct {
@@ -81,17 +78,13 @@ typedef struct {
 
 将 `value` 限制在 `[min_value, max_value]` 范围内。如果最小值大于最大值，函数内部会自动交换二者。
 
-### `float Kinematics_NormalizeAngleDeg(float angle_deg)`
+### `float Kinematics_NormalizeAngleDeg(float angle_deg)`（预留）
 
-将角度归一化到 `[-180, 180)` 范围。
+将角度归一化到 `[-180, 180)` 范围。**预留，当前工程暂无调用者**（仅被 `Kinematics_AngleDiffDeg` 内部使用）。
 
-### `float Kinematics_AngleDiffDeg(float target_deg, float current_deg)`
+### `float Kinematics_AngleDiffDeg(float target_deg, float current_deg)`（预留）
 
-返回从 `current_deg` 到 `target_deg` 的最短角度差，结果范围为 `[-180, 180)`。
-
-### `float Kinematics_Distance2D(float x0_m, float y0_m, float x1_m, float y1_m)`
-
-计算二维平面两点之间的距离，单位与输入坐标一致。
+返回从 `current_deg` 到 `target_deg` 的最短角度差，结果范围为 `[-180, 180)`。**预留，当前工程暂无调用者。**
 
 ### `KINEMATICS_DIFFERENTIAL_OUTPUT Kinematics_DifferentialMix(float forward, float turn, float output_limit)`
 
@@ -103,20 +96,3 @@ right = forward - turn
 ```
 
 当 `output_limit > 0.0f` 且任一侧输出超过限制时，函数按比例缩放左右输出，保持差速比例不变。该函数只计算输出，不调用 `Chassis_SetDuty()`。
-
-### `void Kinematics_PoseInit(KINEMATICS_POSE *pose)`
-
-将二维位姿清零。
-
-### `void Kinematics_PoseUpdate(KINEMATICS_POSE *pose, float linear_mps, float heading_deg, float dt_s)`
-
-根据线速度、航向角和时间间隔积分更新二维位姿。
-
-- `linear_mps`：线速度，单位米每秒。
-- `heading_deg`：当前航向角，单位度。
-- `dt_s`：时间间隔，单位秒。
-- 当 `pose == NULL` 或 `dt_s <= 0.0f` 时不更新。
-
-## 迁移说明
-
-旧接口 `PID_Move()`、`runCircle()`、`Straight()` 和 `track()` 带有任务流程或控制动作语义，不再由 `kinematics` 提供。后续应分别迁移到 `middleware/line_tracking`、具体题目流程或更高层控制策略中。

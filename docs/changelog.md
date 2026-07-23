@@ -2,6 +2,14 @@
 
 ## 未发布
 
+- 梳理 `core`（纯算法层，唯一消费者 `middleware/line_tracking`）：按「保留代码、只标注」
+  方针，对 `kinematics`/`common` 中当前无调用者的类型、宏与函数（`KINEMATICS_DIR/ATTITUDE/
+  POSE/VELOCITY`、角度换算宏、`NormalizeAngleDeg`/`AngleDiffDeg`、`CORE_POINT2F`）统一加
+  「预留」注释；删除 `kinematics.c` 冗余的 `math.h`/`stddef.h` include；修正角度归一化区间
+  口径为 `[-180, 180)`。同步把 `core_kinematics`/`core_common`/`core_pid` 接口文档对齐到
+  真实代码（删除文档中并不存在的 `Kinematics_Distance2D`/`PoseInit`/`PoseUpdate`、
+  `PID_SetConfig`、`PID_Get*` 等接口描述）。
+
 - 拆分 app 任务框架契约：`app_tasks.h` 原混装框架契约与具体 Timer Test 任务，现拆为
   `app_task.h`（仅 `APP_TASK_STATUS` + `APP_TASK_DESC` 生命周期契约，不含具体任务）；删除
   `app_tasks.c` 及 `APP_TASK_TIMER` 测试任务与其根菜单项，具体任务改由 `app_checks` 定义、
