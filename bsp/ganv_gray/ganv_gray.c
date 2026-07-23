@@ -2,9 +2,13 @@
  * @file  ganv_gray.c
  * @brief BSP 感为(GANV)8 路灰度传感器 I2C 驱动实现 (I2C0, 阻塞)。
  *
- * 底层 I2C 事务复用 MSPM0 DriverLib 阻塞 FIFO 模式,与同总线的 mpu6050 阻塞驱动同构:
- *   - 读:写 1 字节命令(抑制 STOP)→ REPEATED START → 读 N 字节;
+ * 底层 I2C 事务用 MSPM0 DriverLib 阻塞 FIFO 模式,采用手册方法 2/3 的「命令与读取分离」:
+ *   - 读:写 1 字节命令(独立事务,带 STOP)+ 独立读 N 字节(START+RX+STOP);
  *   - 写:仅发 1 字节命令 + STOP(用于软件重启 0xC0)。
+ *
+ * 注:早期用 repeated-start(TX 抑制 STOP 后靠 BUSY 捕捉中间态再发 RX)会踩到确定性时序
+ * 竞争,使读取隔次交替失败(RETRY=1 约 50%,RETRY=2 才 err=0)。改为两个各带 STOP 的完整
+ * 独立事务后,每次收尾干净,不再交替;重试仅作真·瞬态兜底。详见 git 历史。
  */
 #include "ganv_gray.h"
 
@@ -20,7 +24,7 @@
 /* 上电同步:每次 ping 间隔 1ms,最多重试 100 次(约 100ms)后判超时。 */
 #define GANV_GRAY_PING_RETRY   100U
 /* 单次读命令的瞬态失败(NACK/上升沿不足/传感器忙)重试次数。 */
-#define GANV_GRAY_RETRY        3U
+#define GANV_GRAY_RETRY        2U
 
 /* ===== 命令符(见手册 7.17)===== */
 #define GANV_GRAY_CMD_DIGITAL  0xDDU   /* 读 8 路数字量,1 字节。 */
@@ -46,35 +50,43 @@ static bool GanvGray_WaitIdle(void)
     return true;
 }
 
-/* 单次读事务: TX CMD(STOP_DISABLE) → REPEATED START → RX DATA[0..len-1]。 */
-static BSP_STATUS GanvGray_ReadCmdOnce(uint8_t cmd, uint8_t *data, uint8_t len)
+/* 写: TX CMD + STOP(完整独立事务,用于命令帧或无数据命令如软件重启)。 */
+static BSP_STATUS GanvGray_WriteCmd(uint8_t cmd)
 {
-    uint8_t i;
     uint32_t timeout;
 
-    if ((data == NULL) || (len == 0U)){ return BSP_STATUS_INVALID_ARG; }
-
-    DL_I2C_flushControllerRXFIFO(GANV_GRAY_I2C_INST);
     DL_I2C_flushControllerTXFIFO(GANV_GRAY_I2C_INST);
     if (!GanvGray_WaitIdle()){ return BSP_STATUS_TIMEOUT; }
 
     DL_I2C_transmitControllerData(GANV_GRAY_I2C_INST, cmd);
-    DL_I2C_startControllerTransferAdvanced(GANV_GRAY_I2C_INST, GANV_GRAY_I2C_ADDR_7BIT,
-        DL_I2C_CONTROLLER_DIRECTION_TX, 1U,
-        DL_I2C_CONTROLLER_START_ENABLE,
-        DL_I2C_CONTROLLER_STOP_DISABLE,   /* 抑制 STOP -> RX 阶段自动 REPEATED START */
-        DL_I2C_CONTROLLER_ACK_DISABLE);
+    DL_I2C_startControllerTransfer(GANV_GRAY_I2C_INST, GANV_GRAY_I2C_ADDR_7BIT,
+        DL_I2C_CONTROLLER_DIRECTION_TX, 1U);
 
     timeout = GANV_GRAY_I2C_TIMEOUT;
     while ((DL_I2C_getControllerStatus(GANV_GRAY_I2C_INST)
             & DL_I2C_CONTROLLER_STATUS_BUSY) != 0U){
-        if (timeout-- == 0U){ return BSP_STATUS_TIMEOUT; }
+        if (timeout-- == 0U){
+            DL_I2C_resetControllerTransfer(GANV_GRAY_I2C_INST);
+            return BSP_STATUS_TIMEOUT;
+        }
     }
     if ((DL_I2C_getControllerStatus(GANV_GRAY_I2C_INST)
          & DL_I2C_CONTROLLER_STATUS_ERROR) != 0U){
         DL_I2C_resetControllerTransfer(GANV_GRAY_I2C_INST);
         return BSP_STATUS_ERROR;
     }
+    return GanvGray_WaitIdle() ? BSP_STATUS_OK : BSP_STATUS_TIMEOUT;
+}
+
+/* 读: START + ADDR(R) + RX DATA[0..len-1] + STOP(完整独立事务)。
+ * 数据帧靠 RXFIFO 非空判定,不依赖 BUSY 捕捉中间态,故无隔次交替问题。 */
+static BSP_STATUS GanvGray_ReadBytes(uint8_t *data, uint8_t len)
+{
+    uint8_t i;
+    uint32_t timeout;
+
+    DL_I2C_flushControllerRXFIFO(GANV_GRAY_I2C_INST);
+    if (!GanvGray_WaitIdle()){ return BSP_STATUS_TIMEOUT; }
 
     DL_I2C_startControllerTransfer(GANV_GRAY_I2C_INST, GANV_GRAY_I2C_ADDR_7BIT,
         DL_I2C_CONTROLLER_DIRECTION_RX, len);
@@ -82,7 +94,7 @@ static BSP_STATUS GanvGray_ReadCmdOnce(uint8_t cmd, uint8_t *data, uint8_t len)
         timeout = GANV_GRAY_I2C_TIMEOUT;
         while (DL_I2C_isControllerRXFIFOEmpty(GANV_GRAY_I2C_INST)){
             if (timeout-- == 0U){
-                DL_I2C_resetControllerTransfer(GANV_GRAY_I2C_INST);   /* RX 卡死: 复位, 让下次重试从干净态开始 */
+                DL_I2C_resetControllerTransfer(GANV_GRAY_I2C_INST);
                 return BSP_STATUS_TIMEOUT;
             }
         }
@@ -91,7 +103,22 @@ static BSP_STATUS GanvGray_ReadCmdOnce(uint8_t cmd, uint8_t *data, uint8_t len)
     return GanvGray_WaitIdle() ? BSP_STATUS_OK : BSP_STATUS_TIMEOUT;
 }
 
-/* 读事务 + 有限重试: 滤掉总线瞬态错误(NACK / 上升沿不足 / 传感器忙)。
+/* 单次读命令 = 写命令(独立事务) + 读数据(独立事务),手册方法 2/3 结构。
+ * 两个各带 STOP 的完整事务,收尾干净,避开 repeated-start 的 BUSY 中间态竞争。
+ * 开机默认命令即 0xDD,但为避免被 version/error/ping 覆盖,每次仍显式先写命令再读。 */
+static BSP_STATUS GanvGray_ReadCmdOnce(uint8_t cmd, uint8_t *data, uint8_t len)
+{
+    BSP_STATUS st;
+
+    if ((data == NULL) || (len == 0U)){ return BSP_STATUS_INVALID_ARG; }
+
+    st = GanvGray_WriteCmd(cmd);
+    if (st != BSP_STATUS_OK){ return st; }
+
+    return GanvGray_ReadBytes(data, len);
+}
+
+/* 读事务 + 有限重试: 滤掉真·瞬态错误(NACK / 上升沿不足 / 传感器忙)。
  * 每次单次事务失败出口均已复位控制器, 故重试从干净态开始。 */
 static BSP_STATUS GanvGray_ReadCmd(uint8_t cmd, uint8_t *data, uint8_t len)
 {
@@ -103,31 +130,6 @@ static BSP_STATUS GanvGray_ReadCmd(uint8_t cmd, uint8_t *data, uint8_t len)
         }
     }
     return st;
-}
-
-/* 写: TX CMD + STOP(用于无数据命令,如软件重启)。 */
-static BSP_STATUS GanvGray_WriteCmd(uint8_t cmd)
-{
-    uint32_t timeout;
-
-    if (!GanvGray_WaitIdle()){ return BSP_STATUS_TIMEOUT; }
-
-    DL_I2C_flushControllerTXFIFO(GANV_GRAY_I2C_INST);
-    DL_I2C_transmitControllerData(GANV_GRAY_I2C_INST, cmd);
-    DL_I2C_startControllerTransfer(GANV_GRAY_I2C_INST, GANV_GRAY_I2C_ADDR_7BIT,
-        DL_I2C_CONTROLLER_DIRECTION_TX, 1U);
-
-    timeout = GANV_GRAY_I2C_TIMEOUT;
-    while ((DL_I2C_getControllerStatus(GANV_GRAY_I2C_INST)
-            & DL_I2C_CONTROLLER_STATUS_BUSY) != 0U){
-        if (timeout-- == 0U){ return BSP_STATUS_TIMEOUT; }
-    }
-    if ((DL_I2C_getControllerStatus(GANV_GRAY_I2C_INST)
-         & DL_I2C_CONTROLLER_STATUS_ERROR) != 0U){
-        DL_I2C_resetControllerTransfer(GANV_GRAY_I2C_INST);
-        return BSP_STATUS_ERROR;
-    }
-    return GanvGray_WaitIdle() ? BSP_STATUS_OK : BSP_STATUS_TIMEOUT;
 }
 
 /* ═══════════════════════════ 公开接口 ═══════════════════════════════════════ */

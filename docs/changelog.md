@@ -2,6 +2,11 @@
 
 ## 未发布
 
+- `ganv_gray` 根治读取隔次交替：上板确认失败是**确定性隔次交替**（RETRY=1 约 50%、RETRY=2
+  时 err=0，非随机瞬态），根因是 repeated-start（TX 抑制 STOP 后靠 BUSY 捕捉中间态再发 RX）
+  的时序竞争。改用手册方法 2/3 的**独立事务**（写命令+STOP、独立读+STOP）后收尾干净、不再
+  交替；重试降级为真·瞬态兜底。Keil rebuild 0/0。
+
 - `ganv_gray` 健壮性加固：读命令（`ReadDigital`/`Ping`/`ReadVersion`/`ReadError`）加 3 次
   瞬态重试，滤掉总线 NACK / 上升沿不足 / 传感器忙导致的偶发失败；修 `ReadCmd` 的 RX 超时
   分支缺失的控制器复位（此前需靠下次事务开头 `WaitIdle` 才自愈，加重了 online/offline
