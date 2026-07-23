@@ -2,6 +2,15 @@
 
 ## 未发布
 
+- 新增 `bsp/ganv_gray`：感为(GANV)8 路灰度传感器 I2C 驱动。复用已初始化的 I2C0 总线
+  （SysConfig 实例 `MPU6050_JY61P_Tracking`，PA0=SDA/PA1=SCL），作为地址 `0x4F` 的第三个
+  从机（与 MPU6050 `0x68`/JY61P `0x50` 不冲突，无需改 SysConfig）。底层为阻塞 I2C，与
+  `mpu6050.c` 同构（写命令 + REPEATED START 读）。公开 `GanvGray_Init`（上电 ping 同步）、
+  `GanvGray_ReadDigital`（0xDD，8 路数字量 mask，bit0=第1路）、`GanvGray_Ping`（0xAA→0x66）、
+  `GanvGray_ReadVersion`（0xC1）、`GanvGray_ReadError`（0xDE）、`GanvGray_Reboot`（0xC0）。
+  地址做成可覆盖宏 `GANV_GRAY_I2C_ADDR_7BIT`（默认 `0x4F`，随 AD1/AD0 跳线帽调整）。校准为
+  设备端按键操作，无 I2C 命令。Keil/CCS 工程同步登记；保留原数字量 GPIO 版 `grayscale_sensor`。
+
 - 梳理 `core`（纯算法层，唯一消费者 `middleware/line_tracking`）：按「保留代码、只标注」
   方针，对 `kinematics`/`common` 中当前无调用者的类型、宏与函数（`KINEMATICS_DIR/ATTITUDE/
   POSE/VELOCITY`、角度换算宏、`NormalizeAngleDeg`/`AngleDiffDeg`、`CORE_POINT2F`）统一加

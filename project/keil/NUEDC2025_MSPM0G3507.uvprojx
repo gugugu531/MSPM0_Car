@@ -516,6 +516,11 @@
               <FilePath>..\..\bsp\grayscale_sensor\grayscale_sensor.c</FilePath>
             </File>
             <File>
+              <FileName>ganv_gray.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\ganv_gray\ganv_gray.c</FilePath>
+            </File>
+            <File>
               <FileName>wit_sdk.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\imu\wit_sdk.c</FilePath>

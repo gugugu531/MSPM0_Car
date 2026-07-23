@@ -76,7 +76,8 @@
 - `key/`
 - `motor/`（TB6612 直流电机 + 霍尔编码器）
 - `oled/`（SSD1306，帧缓冲模型）
-- `grayscale_sensor/`
+- `grayscale_sensor/`（数字量 GPIO 版 8 路灰度）
+- `ganv_gray/`（感为 8 路灰度，I2C0，与 MPU6050/JY61P 共总线）
 - `debug_uart/`
 - `time/`
 

@@ -32,6 +32,8 @@
     <file path="${REPO_ROOT}/bsp/debug_uart/debug_uart.h" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/bsp/grayscale_sensor/grayscale_sensor.c" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/bsp/grayscale_sensor/grayscale_sensor.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+    <file path="${REPO_ROOT}/bsp/ganv_gray/ganv_gray.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+    <file path="${REPO_ROOT}/bsp/ganv_gray/ganv_gray.h" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/bsp/mpu6050/mpu6050.c" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/bsp/mpu6050/mpu6050.h" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/bsp/mpu6050/mpu6050_dmp_fw.c" openOnCreation="false" excludeFromBuild="false" action="link" />
