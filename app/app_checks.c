@@ -248,11 +248,14 @@ static uint32_t tb_pulse_end;
 static bool     tb_active;
 
 static void ChkTb_Render(const char *action){
-    char cnt[16];
-    uint8_t n = PutStr(cnt, "enc ");
-    AppFmt_I32(&cnt[n], HallEncoder_GetCount());
-    Ui_RenderLines("Chk TB6612", "!! WHEELS UP !!", action, cnt,
-                   "UP/DN/EN pulse", "BACK: exit", NULL);
+    char cntL[16];
+    char cntR[16];
+    uint8_t n = PutStr(cntL, "encL ");
+    AppFmt_I32(&cntL[n], HallEncoder_GetCount(HALL_ENCODER_LEFT));
+    n = PutStr(cntR, "encR ");
+    AppFmt_I32(&cntR[n], HallEncoder_GetCount(HALL_ENCODER_RIGHT));
+    Ui_RenderLines("Chk TB6612", "!! WHEELS UP !!", action, cntL,
+                   cntR, "UP/DN/EN pulse", "BACK: exit");
 }
 
 static void ChkTb_Enter(void){
@@ -320,19 +323,28 @@ static APP_TASK_STATUS ChkEnc_Tick(float dt){
     char l1[20];
     char l2[20];
     char l3[20];
+    char l4[20];
+    char l5[20];
     uint8_t n;
 
-    n = PutStr(l1, "cnt ");
-    AppFmt_I32(&l1[n], HallEncoder_GetCount());
-    n = PutStr(l2, "spd ");
-    AppFmt_Fixed(&l2[n], HallEncoder_GetSpeed(), 2);
-    n = PutStr(l3, "dst ");
-    AppFmt_Fixed(&l3[n], HallEncoder_GetDistance(), 2);
+    n = PutStr(l1, "L cnt ");
+    AppFmt_I32(&l1[n], HallEncoder_GetCount(HALL_ENCODER_LEFT));
+    n = PutStr(l2, "L spd ");
+    AppFmt_Fixed(&l2[n], HallEncoder_GetSpeed(HALL_ENCODER_LEFT), 2);
+    n = PutStr(l3, "R cnt ");
+    AppFmt_I32(&l3[n], HallEncoder_GetCount(HALL_ENCODER_RIGHT));
+    n = PutStr(l4, "R spd ");
+    AppFmt_Fixed(&l4[n], HallEncoder_GetSpeed(HALL_ENCODER_RIGHT), 2);
 
-    const char *dir = (HallEncoder_GetDir() == HALL_ENCODER_DIR_FORWARD)
-                          ? "dir FWD" : "dir REV";
+    n = PutStr(l5, "dir L");
+    n += PutStr(&l5[n], (HallEncoder_GetDir(HALL_ENCODER_LEFT) == HALL_ENCODER_DIR_FORWARD)
+                            ? "F" : "R");
+    n += PutStr(&l5[n], " R");
+    n += PutStr(&l5[n], (HallEncoder_GetDir(HALL_ENCODER_RIGHT) == HALL_ENCODER_DIR_FORWARD)
+                            ? "F" : "R");
+    l5[n] = '\0';
 
-    Ui_RenderLines("Chk Encoder", l1, l2, l3, dir, "BACK: exit", NULL);
+    Ui_RenderLines("Chk Encoder", l1, l2, l3, l4, l5, "BACK: exit");
     return APP_TASK_RUNNING;
 }
 

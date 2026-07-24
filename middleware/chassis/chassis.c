@@ -3,6 +3,7 @@
  * @brief Middleware 层底盘组合服务实现。
  */
 #include "chassis.h"
+#include "kinematics/kinematics.h"
 #include <stddef.h>
 
 static CHASSIS_DUTY chassis_duty;
@@ -72,11 +73,28 @@ CHASSIS_DUTY Chassis_GetDuty(void){
 }
 
 float Chassis_GetSpeed(void){
-    return HallEncoder_GetSpeed();
+    /*
+     * 车体线速度 = 左右轮线速度均值(Kinematics_WheelToBody 的 linear 分量)。
+     * 角速度分量需 track_width(暂缺, 见 core/kinematics 约定), 故传 0 只取线速度。
+     */
+    KINEMATICS_VELOCITY body = Kinematics_WheelToBody(
+        HallEncoder_GetSpeed(HALL_ENCODER_LEFT),
+        HallEncoder_GetSpeed(HALL_ENCODER_RIGHT),
+        0.0f);
+    return body.linear_mps;
+}
+
+float Chassis_GetWheelSpeed(HALL_ENCODER_ID wheel){
+    return HallEncoder_GetSpeed(wheel);
 }
 
 float Chassis_GetDistance(void){
-    return HallEncoder_GetDistance();
+    return (HallEncoder_GetDistance(HALL_ENCODER_LEFT) +
+            HallEncoder_GetDistance(HALL_ENCODER_RIGHT)) * 0.5f;
+}
+
+float Chassis_GetWheelDistance(HALL_ENCODER_ID wheel){
+    return HallEncoder_GetDistance(wheel);
 }
 
 void Chassis_ResetDistance(void){

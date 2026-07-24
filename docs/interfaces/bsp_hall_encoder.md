@@ -2,20 +2,28 @@
 
 ## 模块职责
 
-`bsp/motor/hall_encoder` 负责霍尔编码器 A/B 相脉冲计数、采样周期更新、方向判断、速度换算和轮端距离估计。
+`bsp/motor/hall_encoder` 负责**左右双轮**霍尔编码器的 A/B 相脉冲计数、采样周期更新、方向判断、速度换算和轮端距离估计。
 
-当前模块基于固定车体参数提供 `HallEncoder_GetSpeed()` 和 `HallEncoder_GetDistance()`。它不负责底盘运动控制，也不负责速度闭环。
+每轮采用「**A 相上升沿中断计数 + 读 B 相电平定方向**」的软件正交解码。模块基于固定车体参数提供每轮 `HallEncoder_GetSpeed(id)` 与 `HallEncoder_GetDistance(id)`，不负责底盘运动控制，也不负责速度闭环。
 
 ## 硬件映射宏
 
 ```c
-#define HALL_ENCODER_A_PORT Motor_IO_E1A_PORT
-#define HALL_ENCODER_A_PIN  Motor_IO_E1A_PIN
-#define HALL_ENCODER_B_PORT Motor_IO_E1A_PORT
-#define HALL_ENCODER_B_PIN  Motor_IO_E2A_PIN
+/* 右轮: A=ENC_R_A(PB2, 中断), B=ENC_R_B(PA2, 读向) */
+#define HALL_ENCODER_R_A_PORT Motor_IO_ENC_R_A_PORT
+#define HALL_ENCODER_R_A_PIN  Motor_IO_ENC_R_A_PIN
+#define HALL_ENCODER_R_B_PORT Motor_IO_ENC_R_B_PORT
+#define HALL_ENCODER_R_B_PIN  Motor_IO_ENC_R_B_PIN
+/* 左轮: A=ENC_L_A(PA22, 中断), B=ENC_L_B(PA25, 读向) */
+#define HALL_ENCODER_L_A_PORT Motor_IO_ENC_L_A_PORT
+#define HALL_ENCODER_L_A_PIN  Motor_IO_ENC_L_A_PIN
+#define HALL_ENCODER_L_B_PORT Motor_IO_ENC_L_B_PORT
+#define HALL_ENCODER_L_B_PIN  Motor_IO_ENC_L_B_PIN
 ```
 
-当前默认 A/B 相在同一个 GPIO 端口上。`GROUP1_IRQHandler()` 使用 `HALL_ENCODER_A_PORT` 获取并清除中断状态；如果后续 A/B 相拆到不同端口，需要同步调整中断入口策略。
+引脚在 SysConfig 中按轮命名为 `ENC_R_A/ENC_R_B/ENC_L_A/ENC_L_B`（原 `E1A/E1B/E2A/E2B` 语义不清，已改名）。**右轮 A 相在 GPIOB、左轮 A 相在 GPIOA**，两者中断都聚合到 `INT_GROUP1`（`GPIOA_INT_IRQn`）。`GROUP1_IRQHandler()` 会**分别读取两个端口**的使能中断状态、命中则读对应 B 相电平解码、并各自清除。
+
+> 历史坑：旧单轮实现把右轮 B 相错接到 `PB22`（实为一个导航按键脚），导致 B 相恒为高、方向恒判「前进」——仅前进时距离/方向看似正确，倒车会判错。现已修正为右轮 B = `PA2`。
 
 ## 中断和采样宏
 
@@ -25,12 +33,7 @@
 #define HALL_ENCODER_SAMPLE_TIMER_IRQN TIMER_0_INST_INT_IRQN
 ```
 
-当前保留 `GROUP1_IRQHandler()` 和 `TIMER_0_INST_IRQHandler()` 外壳，内部转调：
-
-- `HallEncoder_HandleGpioIrq()`
-- `HallEncoder_UpdateSample()`
-
-后续如果建立统一中断分发模块，可以迁移这两个外壳，保留内部接口。
+`GROUP1_IRQHandler()`（GPIO 边沿）与 `TIMER_0_INST_IRQHandler()`（定周期采样）为中断外壳，后者转调 `HallEncoder_UpdateSample()` 结算两轮。
 
 ## 物理参数宏
 
@@ -43,7 +46,7 @@
 #define HALL_ENCODER_DISTANCE_SCALE   1.05f
 ```
 
-距离换算公式：
+两轮同型号，共用换算参数。距离换算公式：
 
 ```text
 distance_m = count / (PPR * reduction_ratio)
@@ -51,11 +54,26 @@ distance_m = count / (PPR * reduction_ratio)
            * distance_scale
 ```
 
-速度由当前采样周期的距离增量除以 `HALL_ENCODER_SAMPLE_PERIOD_S` 得到，单位为 m/s。
+速度由当前采样周期的距离增量除以 `HALL_ENCODER_SAMPLE_PERIOD_S` 得到，单位 m/s。
+
+## 方向符号宏
+
+```c
+#define HALL_ENCODER_LEFT_DIR_SIGN  (+1)
+#define HALL_ENCODER_RIGHT_DIR_SIGN (+1)
+```
+
+左右轮镜像安装，同样的电气解码在整车前进时符号可能相反。用本符号把两轮统一到「整车前进为正」。**上板验证**：整车前进时两轮 `speed` 应同为正；若某轮相反，翻转对应符号即可。
 
 ## 公开类型
 
 ```c
+typedef enum {
+    HALL_ENCODER_LEFT = 0,
+    HALL_ENCODER_RIGHT,
+    HALL_ENCODER_COUNT
+} HALL_ENCODER_ID;
+
 typedef enum {
     HALL_ENCODER_DIR_FORWARD = 0,
     HALL_ENCODER_DIR_REVERSE
@@ -64,42 +82,40 @@ typedef enum {
 
 ## 公开接口
 
+所有按轮查询接口以 `HALL_ENCODER_ID` 选择左右轮。
+
 ### `BSP_STATUS HallEncoder_Init(void)`
 
-清零内部状态，打开 GPIO 中断和采样定时器中断。
-
-### `void HallEncoder_HandleGpioIrq(uint32_t gpio_status)`
-
-处理 A/B 相 GPIO 中断状态并累计待采样脉冲数。
+清零两轮内部状态，打开 GPIO 中断和采样定时器中断。
 
 ### `void HallEncoder_UpdateSample(void)`
 
-将待采样脉冲数转为当前采样周期计数，更新方向、速度和累计距离。
+将两轮待采样脉冲数转为当前采样周期计数，更新各自方向、速度和累计距离（套用方向符号）。
 
-### `int32_t HallEncoder_GetCount(void)`
+### `int32_t HallEncoder_GetCount(HALL_ENCODER_ID id)`
 
-返回最近一个采样周期的有符号脉冲数。
+返回指定轮最近一个采样周期的有符号脉冲数。
 
-### `HALL_ENCODER_DIR HallEncoder_GetDir(void)`
+### `HALL_ENCODER_DIR HallEncoder_GetDir(HALL_ENCODER_ID id)`
 
-返回最近一个采样周期方向。采样计数大于等于 0 时为 `HALL_ENCODER_DIR_FORWARD`。
+返回指定轮最近一个采样周期方向。采样计数大于等于 0 时为 `HALL_ENCODER_DIR_FORWARD`。
 
-### `float HallEncoder_GetSpeed(void)`
+### `float HallEncoder_GetSpeed(HALL_ENCODER_ID id)`
 
-返回最近一个采样周期换算得到的有符号轮端线速度，单位 m/s。
+返回指定轮最近一个采样周期换算得到的有符号轮端线速度，单位 m/s。
 
-### `float HallEncoder_GetDistance(void)`
+### `float HallEncoder_GetDistance(HALL_ENCODER_ID id)`
 
-返回自上次 `HallEncoder_Reset()` 或 `HallEncoder_ResetDistance()` 以来的有符号轮端距离估计，单位 m。
+返回指定轮自上次复位以来的有符号轮端距离估计，单位 m。
 
 ### `void HallEncoder_Reset(void)`
 
-清空待采样计数、采样计数、累计计数、速度、距离和方向。
+清空两轮全部状态（待采样计数、采样计数、累计计数、速度、距离、方向）。
 
 ### `void HallEncoder_ResetDistance(void)`
 
-只清空累计计数和距离，不影响当前待采样计数、采样计数和速度。
+只清空两轮累计计数和距离，不影响当前待采样/采样计数和速度。
 
 ## 对接说明
 
-旧 `Encoder_*` 接口已不再作为当前应用层入口使用。底盘组合服务通过 `HallEncoder_*` 获取速度和距离估计。
+底盘组合服务 `middleware/chassis` 通过 `HallEncoder_*` 获取每轮速度/距离，并用 `core/kinematics` 的 `Kinematics_WheelToBody` 聚合车体线速度（见 `docs/interfaces/middleware_chassis.md`）。

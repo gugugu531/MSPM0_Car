@@ -67,17 +67,27 @@ BSP_STATUS Chassis_Coast(void);
 CHASSIS_DUTY Chassis_GetDuty(void);
 
 /**
- * @brief 获取编码器估算速度，单位 m/s。
+ * @brief 获取车体估算线速度(左右轮均值)，单位 m/s。
  */
 float Chassis_GetSpeed(void);
 
 /**
- * @brief 获取编码器累计距离，单位 m。
+ * @brief 获取指定轮估算线速度，单位 m/s。
+ */
+float Chassis_GetWheelSpeed(HALL_ENCODER_ID wheel);
+
+/**
+ * @brief 获取车体累计距离(左右轮均值)，单位 m。
  */
 float Chassis_GetDistance(void);
 
 /**
- * @brief 清零编码器累计距离。
+ * @brief 获取指定轮累计距离，单位 m。
+ */
+float Chassis_GetWheelDistance(HALL_ENCODER_ID wheel);
+
+/**
+ * @brief 清零两轮编码器累计距离。
  */
 void Chassis_ResetDistance(void);
 

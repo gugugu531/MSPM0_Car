@@ -218,30 +218,30 @@ extern "C" {
 #define Motor_IO_BIN2_PORT                                               (GPIOB)
 #define Motor_IO_BIN2_PIN                                       (DL_GPIO_PIN_19)
 #define Motor_IO_BIN2_IOMUX                                      (IOMUX_PINCM45)
-/* Defines for E1A: GPIOB.2 with pinCMx 15 on package pin 50 */
-#define Motor_IO_E1A_PORT                                                (GPIOB)
-// pins affected by this interrupt request:["E1A"]
+/* Defines for ENC_R_A: GPIOB.2 with pinCMx 15 on package pin 50 */
+#define Motor_IO_ENC_R_A_PORT                                                (GPIOB)
+// pins affected by this interrupt request:["ENC_R_A"]
 #define Motor_IO_GPIOB_INT_IRQN                                 (GPIOB_INT_IRQn)
 #define Motor_IO_GPIOB_INT_IIDX                 (DL_INTERRUPT_GROUP1_IIDX_GPIOB)
-#define Motor_IO_E1A_IIDX                                    (DL_GPIO_IIDX_DIO2)
-#define Motor_IO_E1A_PIN                                         (DL_GPIO_PIN_2)
-#define Motor_IO_E1A_IOMUX                                       (IOMUX_PINCM15)
-/* Defines for E2A: GPIOA.22 with pinCMx 47 on package pin 18 */
-#define Motor_IO_E2A_PORT                                                (GPIOA)
-// pins affected by this interrupt request:["E2A"]
+#define Motor_IO_ENC_R_A_IIDX                                    (DL_GPIO_IIDX_DIO2)
+#define Motor_IO_ENC_R_A_PIN                                         (DL_GPIO_PIN_2)
+#define Motor_IO_ENC_R_A_IOMUX                                       (IOMUX_PINCM15)
+/* Defines for ENC_L_A: GPIOA.22 with pinCMx 47 on package pin 18 */
+#define Motor_IO_ENC_L_A_PORT                                                (GPIOA)
+// pins affected by this interrupt request:["ENC_L_A"]
 #define Motor_IO_GPIOA_INT_IRQN                                 (GPIOA_INT_IRQn)
 #define Motor_IO_GPIOA_INT_IIDX                 (DL_INTERRUPT_GROUP1_IIDX_GPIOA)
-#define Motor_IO_E2A_IIDX                                   (DL_GPIO_IIDX_DIO22)
-#define Motor_IO_E2A_PIN                                        (DL_GPIO_PIN_22)
-#define Motor_IO_E2A_IOMUX                                       (IOMUX_PINCM47)
-/* Defines for E1B: GPIOA.2 with pinCMx 7 on package pin 42 */
-#define Motor_IO_E1B_PORT                                                (GPIOA)
-#define Motor_IO_E1B_PIN                                         (DL_GPIO_PIN_2)
-#define Motor_IO_E1B_IOMUX                                        (IOMUX_PINCM7)
-/* Defines for E2B: GPIOA.25 with pinCMx 55 on package pin 26 */
-#define Motor_IO_E2B_PORT                                                (GPIOA)
-#define Motor_IO_E2B_PIN                                        (DL_GPIO_PIN_25)
-#define Motor_IO_E2B_IOMUX                                       (IOMUX_PINCM55)
+#define Motor_IO_ENC_L_A_IIDX                                   (DL_GPIO_IIDX_DIO22)
+#define Motor_IO_ENC_L_A_PIN                                        (DL_GPIO_PIN_22)
+#define Motor_IO_ENC_L_A_IOMUX                                       (IOMUX_PINCM47)
+/* Defines for ENC_R_B: GPIOA.2 with pinCMx 7 on package pin 42 */
+#define Motor_IO_ENC_R_B_PORT                                                (GPIOA)
+#define Motor_IO_ENC_R_B_PIN                                         (DL_GPIO_PIN_2)
+#define Motor_IO_ENC_R_B_IOMUX                                        (IOMUX_PINCM7)
+/* Defines for ENC_L_B: GPIOA.25 with pinCMx 55 on package pin 26 */
+#define Motor_IO_ENC_L_B_PORT                                                (GPIOA)
+#define Motor_IO_ENC_L_B_PIN                                        (DL_GPIO_PIN_25)
+#define Motor_IO_ENC_L_B_IOMUX                                       (IOMUX_PINCM55)
 /* Defines for PIN_1: GPIOA.14 with pinCMx 36 on package pin 7 */
 #define Key_PIN_1_PORT                                                   (GPIOA)
 #define Key_PIN_1_PIN                                           (DL_GPIO_PIN_14)

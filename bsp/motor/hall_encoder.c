@@ -1,8 +1,10 @@
 /**
  * @file  hall_encoder.c
- * @brief BSP 霍尔编码器实现。
+ * @brief BSP 霍尔编码器实现(左右双轮)。
  */
 #include "hall_encoder.h"
+
+#include <stdbool.h>
 
 typedef struct {
     volatile int32_t pending_count;
@@ -13,7 +15,13 @@ typedef struct {
     float distance_m;
 } HALL_ENCODER_STATE;
 
-static HALL_ENCODER_STATE hall_encoder;
+static HALL_ENCODER_STATE hall_encoder[HALL_ENCODER_COUNT];
+
+/* 每轮"整车前进为正"的符号(见 hall_encoder.h 说明)。 */
+static const int32_t hall_encoder_dir_sign[HALL_ENCODER_COUNT] = {
+    [HALL_ENCODER_LEFT]  = HALL_ENCODER_LEFT_DIR_SIGN,
+    [HALL_ENCODER_RIGHT] = HALL_ENCODER_RIGHT_DIR_SIGN,
+};
 
 static float HallEncoder_CountToDistance(int32_t count){
     float revolutions = (float)count / (HALL_ENCODER_PPR * HALL_ENCODER_REDUCTION_RATIO);
@@ -31,81 +39,89 @@ BSP_STATUS HallEncoder_Init(void){
     return BSP_STATUS_OK;
 }
 
-void HallEncoder_HandleGpioIrq(uint32_t gpio_status){
-    if ((gpio_status & HALL_ENCODER_A_PIN) == HALL_ENCODER_A_PIN){
-        if (DL_GPIO_readPins(HALL_ENCODER_B_PORT, HALL_ENCODER_B_PIN) == 0U){
-            hall_encoder.pending_count--;
-        } else{
-            hall_encoder.pending_count++;
-        }
-    }
-
-    if ((gpio_status & HALL_ENCODER_B_PIN) == HALL_ENCODER_B_PIN){
-        if (DL_GPIO_readPins(HALL_ENCODER_A_PORT, HALL_ENCODER_A_PIN) == 0U){
-            hall_encoder.pending_count++;
-        } else{
-            hall_encoder.pending_count--;
-        }
+/* A 相上升沿时读 B 相电平定方向: B 高 → 正向(+1), B 低 → 反向(-1)。整车方向符号在结算时套用。 */
+static void HallEncoder_Decode(HALL_ENCODER_ID id, bool b_high){
+    if (b_high){
+        hall_encoder[id].pending_count++;
+    } else{
+        hall_encoder[id].pending_count--;
     }
 }
 
 void HallEncoder_UpdateSample(void){
-    int32_t sample_count = hall_encoder.pending_count;
+    for (uint8_t id = 0U; id < HALL_ENCODER_COUNT; id++){
+        int32_t raw = hall_encoder[id].pending_count;
+        hall_encoder[id].pending_count = 0;
 
-    hall_encoder.pending_count = 0;
-    hall_encoder.sample_count = sample_count;
-    hall_encoder.total_count += sample_count;
-    hall_encoder.dir = (sample_count >= 0) ? HALL_ENCODER_DIR_FORWARD : HALL_ENCODER_DIR_REVERSE;
-    hall_encoder.speed_mps = HallEncoder_CountToDistance(sample_count) / HALL_ENCODER_SAMPLE_PERIOD_S;
-    hall_encoder.distance_m = HallEncoder_CountToDistance(hall_encoder.total_count);
+        int32_t sample = raw * hall_encoder_dir_sign[id];
+        hall_encoder[id].sample_count = sample;
+        hall_encoder[id].total_count += sample;
+        hall_encoder[id].dir = (sample >= 0) ? HALL_ENCODER_DIR_FORWARD : HALL_ENCODER_DIR_REVERSE;
+        hall_encoder[id].speed_mps = HallEncoder_CountToDistance(sample) / HALL_ENCODER_SAMPLE_PERIOD_S;
+        hall_encoder[id].distance_m = HallEncoder_CountToDistance(hall_encoder[id].total_count);
+    }
 }
 
-int32_t HallEncoder_GetCount(void){
-    return hall_encoder.sample_count;
+int32_t HallEncoder_GetCount(HALL_ENCODER_ID id){
+    return hall_encoder[id].sample_count;
 }
 
-HALL_ENCODER_DIR HallEncoder_GetDir(void){
-    return hall_encoder.dir;
+HALL_ENCODER_DIR HallEncoder_GetDir(HALL_ENCODER_ID id){
+    return hall_encoder[id].dir;
 }
 
-float HallEncoder_GetSpeed(void){
-    return hall_encoder.speed_mps;
+float HallEncoder_GetSpeed(HALL_ENCODER_ID id){
+    return hall_encoder[id].speed_mps;
 }
 
-float HallEncoder_GetDistance(void){
-    return hall_encoder.distance_m;
+float HallEncoder_GetDistance(HALL_ENCODER_ID id){
+    return hall_encoder[id].distance_m;
 }
 
 void HallEncoder_Reset(void){
-    hall_encoder.pending_count = 0;
-    hall_encoder.sample_count = 0;
-    hall_encoder.total_count = 0;
-    hall_encoder.dir = HALL_ENCODER_DIR_FORWARD;
-    hall_encoder.speed_mps = 0.0f;
-    hall_encoder.distance_m = 0.0f;
+    for (uint8_t id = 0U; id < HALL_ENCODER_COUNT; id++){
+        hall_encoder[id].pending_count = 0;
+        hall_encoder[id].sample_count = 0;
+        hall_encoder[id].total_count = 0;
+        hall_encoder[id].dir = HALL_ENCODER_DIR_FORWARD;
+        hall_encoder[id].speed_mps = 0.0f;
+        hall_encoder[id].distance_m = 0.0f;
+    }
 }
 
 void HallEncoder_ResetDistance(void){
-    hall_encoder.total_count = 0;
-    hall_encoder.distance_m = 0.0f;
+    for (uint8_t id = 0U; id < HALL_ENCODER_COUNT; id++){
+        hall_encoder[id].total_count = 0;
+        hall_encoder[id].distance_m = 0.0f;
+    }
 }
 
 /*
- * 编码器 A/B 相 GPIO 边沿中断入口 (GPIOA GROUP1)。
- * 读取并清除 A/B 引脚的挂起中断状态, 交由 HandleGpioIrq 做正交解码累加脉冲。
- * A/B 两相共用一个端口的使能中断状态, 故一次读取即可覆盖两相。
+ * 编码器 A 相 GPIO 边沿中断入口 (INT_GROUP1, 聚合 GPIOA/GPIOB)。
+ * 右轮 A 相在 GPIOB、左轮 A 相在 GPIOA: 分别读各自端口的使能中断状态, 命中则读对应 B 相
+ * 电平做正交解码并各自清中断(见 HallEncoder_Decode)。
  */
 void GROUP1_IRQHandler(void){
-    uint32_t gpio_status = DL_GPIO_getEnabledInterruptStatus(HALL_ENCODER_A_PORT,
-        HALL_ENCODER_A_PIN | HALL_ENCODER_B_PIN);
+    uint32_t r_status = DL_GPIO_getEnabledInterruptStatus(HALL_ENCODER_R_A_PORT,
+        HALL_ENCODER_R_A_PIN);
+    if ((r_status & HALL_ENCODER_R_A_PIN) != 0U){
+        bool b_high = (DL_GPIO_readPins(HALL_ENCODER_R_B_PORT, HALL_ENCODER_R_B_PIN) != 0U);
+        HallEncoder_Decode(HALL_ENCODER_RIGHT, b_high);
+        DL_GPIO_clearInterruptStatus(HALL_ENCODER_R_A_PORT, HALL_ENCODER_R_A_PIN);
+    }
 
-    HallEncoder_HandleGpioIrq(gpio_status);
-    DL_GPIO_clearInterruptStatus(HALL_ENCODER_A_PORT, HALL_ENCODER_A_PIN | HALL_ENCODER_B_PIN);
+    uint32_t l_status = DL_GPIO_getEnabledInterruptStatus(HALL_ENCODER_L_A_PORT,
+        HALL_ENCODER_L_A_PIN);
+    if ((l_status & HALL_ENCODER_L_A_PIN) != 0U){
+        bool b_high = (DL_GPIO_readPins(HALL_ENCODER_L_B_PORT, HALL_ENCODER_L_B_PIN) != 0U);
+        HallEncoder_Decode(HALL_ENCODER_LEFT, b_high);
+        DL_GPIO_clearInterruptStatus(HALL_ENCODER_L_A_PORT, HALL_ENCODER_L_A_PIN);
+    }
 }
 
 /*
  * 固定周期采样定时器中断入口 (TIMER_0, 周期 = HALL_ENCODER_SAMPLE_PERIOD_S)。
- * 每次归零溢出时把本周期累加的脉冲结算为速度/方向/里程 (见 UpdateSample)。
+ * 每次归零溢出时把本周期两轮累加的脉冲结算为速度/方向/里程 (见 UpdateSample)。
  */
 void TIMER_0_INST_IRQHandler(void){
     if (DL_TimerA_getPendingInterrupt(HALL_ENCODER_SAMPLE_TIMER) == DL_TIMER_IIDX_ZERO){

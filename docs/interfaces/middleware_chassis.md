@@ -61,7 +61,7 @@ typedef struct {
 
 底盘状态快照。
 
-当前工程只有一个霍尔编码器通道，因此 `speed_mps` 和 `distance_m` 表示当前编码器通道估计值，不表示左右轮独立速度。
+工程现为**左右双轮**霍尔编码器。`Chassis_GetSpeed()`/`Chassis_GetDistance()` 返回**车体量**（左右轮均值），每轮独立值用 `Chassis_GetWheelSpeed(id)`/`Chassis_GetWheelDistance(id)` 获取。
 
 ## 公开接口
 
@@ -102,17 +102,25 @@ Chassis_SetDuty(-30.0f, 30.0f);
 
 ### `float Chassis_GetSpeed(void)`
 
-返回编码器估计速度，单位 m/s。
+返回车体估计线速度（左右轮均值），单位 m/s。内部用 `core/kinematics` 的 `Kinematics_WheelToBody` 取 `linear` 分量（角速度分量需 `track_width`，暂缺，故只取线速度）。
+
+### `float Chassis_GetWheelSpeed(HALL_ENCODER_ID wheel)`
+
+返回指定轮估计线速度，单位 m/s。
 
 ### `float Chassis_GetDistance(void)`
 
-返回编码器估计距离，单位 m。
+返回车体估计距离（左右轮均值），单位 m。
 
-> 编码器采样与 GPIO/定时器中断由 `bsp/motor/hall_encoder.c` 内的 `GROUP1_IRQHandler()` / `TIMER_0_INST_IRQHandler()` 直接处理，middleware 不再转发。
+### `float Chassis_GetWheelDistance(HALL_ENCODER_ID wheel)`
+
+返回指定轮估计距离，单位 m。
+
+> 编码器采样与 GPIO/定时器中断由 `bsp/motor/hall_encoder.c` 内的 `GROUP1_IRQHandler()`（分别服务右轮 GPIOB / 左轮 GPIOA A 相）/ `TIMER_0_INST_IRQHandler()` 直接处理，middleware 不再转发。
 
 ### `void Chassis_ResetDistance(void)`
 
-复位编码器距离累计。
+复位两轮编码器距离累计。
 
 ## 迁移说明
 

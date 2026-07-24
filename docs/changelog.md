@@ -2,6 +2,17 @@
 
 ## 未发布
 
+- 编码器改为**左右双轮**并修正接线隐患。核实原实现非硬件 QEI，而是 GPIO 边沿中断 + 软件正交
+  解码;且原单轮实现把右轮 B 相错接到 `PB22`(实为导航按键脚)→ B 相恒高、方向恒判前进(仅前进
+  时看似正确)。SysConfig 引脚按轮改名 `E1A/E1B/E2A/E2B → ENC_R_A/ENC_R_B/ENC_L_A/ENC_L_B`
+  (物理脚不变;因无法运行 SysConfig 图形工具,同步手改 `.syscfg` 与生成的 `ti_msp_dl_config.c/.h`
+  保持一致)。`bsp/motor/hall_encoder` 重写为双实例:右轮 A=PB2/B=PA2、左轮 A=PA22/B=PA25,
+  `GROUP1_IRQHandler` 分别服务 GPIOB(右)/GPIOA(左) A 相并各自清中断;API 加 `HALL_ENCODER_ID`
+  参数;新增每轮"整车前进为正"符号宏(上板校正)。`middleware/chassis` 暴露 `Chassis_GetWheelSpeed/
+  Distance(id)`,`Chassis_GetSpeed/Distance` 改返回车体量——车体线速度接 `Kinematics_WheelToBody`
+  (差速运动学模型的首个消费者)。`Device Check` 的 Encoder/TB6612 自检显示双轮。文档同步。Keil 0/0。
+  **待上板验证**:两轮计数/方向(尤其右轮真 B 相 PA2 的方向、及左右轮前进符号)。
+
 - `core/kinematics` 建立两轮差速运动学模型（纯函数，车体参数传参，暂无消费者、标注「预留」）：
   正运动学 `WheelToBody`（轮速→车体 v/ω）、逆运动学 `BodyToWheel`（车体 v/ω→轮速，新类型
   `KINEMATICS_WHEEL_SPEED`）、轮线速度↔轮自转角速度换算、瞬时转弯半径 `TurnRadius`、里程推算
