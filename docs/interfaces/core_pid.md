@@ -16,7 +16,7 @@ typedef enum {
 ```
 
 - `PID_MODE_POSITION`：位置式 PID，输出值直接表示当前控制量。
-- `PID_MODE_INCREMENTAL`：增量式 PID，输出值在上一次输出基础上累加本次增量。
+- `PID_MODE_INCREMENTAL`：增量式 PID，输出值在上一次输出基础上累加本次增量。**预留**：当前工程唯一消费者 `middleware/line_tracking` 只用位置式，增量式路径已实现并保留但暂无调用者。
 
 位置式 PID 适合角度、视觉误差、巡线偏差等场景。增量式 PID 适合速度闭环、占空比微调等希望输出连续变化的场景。
 
@@ -36,8 +36,8 @@ typedef struct {
 - `kp`：比例系数。
 - `ki`：积分系数。
 - `kd`：微分系数。
-- `integral_limit`：位置式 PID 的积分限幅。小于等于 `0.0f` 时不启用限幅。
-- `output_limit`：输出限幅。小于等于 `0.0f` 时不启用限幅。
+- `integral_limit`：位置式 PID 的积分限幅。取 `PID_LIMIT_DISABLED`（或任意 `<= 0` 值）时不启用限幅。
+- `output_limit`：输出限幅。取 `PID_LIMIT_DISABLED`（或任意 `<= 0` 值）时不启用限幅。
 - `mode`：控制器模式。
 
 ```c

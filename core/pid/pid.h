@@ -1,6 +1,10 @@
 /**
  * @file  pid.h
  * @brief Core 层通用 PID 控制器，支持位置式和增量式两种更新模式。
+ *
+ * 当前唯一消费者是 middleware/line_tracking，仅用到位置式（PID_MODE_POSITION）。
+ * 增量式（PID_MODE_INCREMENTAL）及其专用状态字段标注为「预留」——已实现并保留，
+ * 但当前工程暂无调用者，供后续速度环/占空比微调等场景复用。
  */
 #ifndef PID_H
 #define PID_H
@@ -10,12 +14,21 @@ extern "C" {
 #endif
 
 /**
+ * @brief 限幅关闭哨兵值。
+ *
+ * 用于 PID_CONFIG.integral_limit / output_limit：取该值（或任意 <= 0 值）表示该项
+ * 不启用限幅。判定沿用「<= 0 关闭」语义，本宏仅令配置点自解释，不改变逻辑。
+ */
+#define PID_LIMIT_DISABLED 0.0f
+
+/**
  * @brief PID 控制器计算模式。
  */
 typedef enum {
     /** 位置式 PID，输出由当前误差、积分项和微分项直接计算得到。 */
     PID_MODE_POSITION = 0,
-    /** 增量式 PID，输出在上一拍基础上叠加本次增量。 */
+    /** 增量式 PID，输出在上一拍基础上叠加本次增量。
+     *  @note 预留：当前工程暂无调用者。 */
     PID_MODE_INCREMENTAL
 } PID_MODE;
 
@@ -29,9 +42,9 @@ typedef struct {
     float ki;
     /** 微分系数。 */
     float kd;
-    /** 积分项绝对值限幅，<= 0 时不启用积分限幅。 */
+    /** 积分项绝对值限幅，取 PID_LIMIT_DISABLED（或任意 <= 0 值）时不启用积分限幅。 */
     float integral_limit;
-    /** 输出绝对值限幅，<= 0 时不启用输出限幅。 */
+    /** 输出绝对值限幅，取 PID_LIMIT_DISABLED（或任意 <= 0 值）时不启用输出限幅。 */
     float output_limit;
     /** PID 计算模式。 */
     PID_MODE mode;
@@ -49,13 +62,13 @@ typedef struct {
     float error;
     /** 上一拍误差。 */
     float last_error;
-    /** 上上拍误差，供增量式 PID 使用。 */
+    /** 上上拍误差，供增量式 PID 使用。@note 预留：随增量式一并保留。 */
     float prev_error;
-    /** 积分累计项。 */
+    /** 积分累计项（位置式使用）。 */
     float integral;
     /** 微分项。 */
     float derivative;
-    /** 本次增量式 PID 计算得到的输出增量。 */
+    /** 最近一次经输出限幅后的实际输出变化量。 */
     float increment;
     /** 当前输出值。 */
     float output;
