@@ -18,6 +18,7 @@
 ## core
 
 - `pid/pid.h`：位置式和增量式 PID 控制器，详细说明见 `docs/interfaces/core_pid.md`。
+- `filter/filter.h`：一阶低通(EMA)与中心死区等通用信号调理算法，详细说明见 `docs/interfaces/core_filter.md`。
 - `common/core_types.h`：core 层基础二维点类型，详细说明见 `docs/interfaces/core_common.md`。
 - `kinematics/kinematics.h`：限幅、角度归一化和差速混控计算，详细说明见 `docs/interfaces/core_kinematics.md`。
 
