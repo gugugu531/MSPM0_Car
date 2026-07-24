@@ -2,6 +2,14 @@
 
 ## 未发布
 
+- `core/kinematics` 建立两轮差速运动学模型（纯函数，车体参数传参，暂无消费者、标注「预留」）：
+  正运动学 `WheelToBody`（轮速→车体 v/ω）、逆运动学 `BodyToWheel`（车体 v/ω→轮速，新类型
+  `KINEMATICS_WHEEL_SPEED`）、轮线速度↔轮自转角速度换算、瞬时转弯半径 `TurnRadius`、里程推算
+  `IntegratePose`（中点欧拉积分位姿）。约定：线速度 m/s、车体航向角速度 deg/s（逆时针为正，配陀螺
+  `gz`）、轮自转 rad/s（配 `v=r·ω`）、位姿 x/y 米、航向 deg。激活原预留的 `KINEMATICS_POSE`/
+  `KINEMATICS_VELOCITY` 类型与角度换算宏。新增 `docs/interfaces/core_kinematics.md` 模型章节
+  （约定表+公式+接口）。Keil 0/0，预留函数经 section GC 零占用（Code size 不变）。
+
 - 新增 `core/filter`：把 `line_tracking` 内联的两段通用信号处理下沉到 core——一阶低通
   `Filter_LowpassEma`（EMA）与中心死区 `Filter_Deadband`，均为无状态自由函数（状态由调用方
   持有，与 `kinematics` 同风格），按内联公式 1:1 实现、行为不变。`line_tracking.c` 改调 core
