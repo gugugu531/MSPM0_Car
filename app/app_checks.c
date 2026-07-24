@@ -9,6 +9,7 @@
 #include "key.h"
 #include "bsp_time.h"
 #include "bsp_common.h"
+#include "debug_uart.h"
 #include "chassis.h"
 #include "grayscale_sensor.h"
 #include "ganv_gray.h"
@@ -365,6 +366,7 @@ static void ChkSpeedPid_Enter(void){
 
 static APP_TASK_STATUS ChkSpeedPid_Tick(float dt){
     (void)dt;
+    uint32_t now = BSP_Time_GetMs();
 
     /* 按键调目标: UP +step, DOWN -step, ENTER 归零。 */
     if (Key_GetEvent(KEY_ID_UP) == KEY_EVENT_SHORT_PRESS){
@@ -379,7 +381,20 @@ static APP_TASK_STATUS ChkSpeedPid_Tick(float dt){
     /* 每拍设目标; 速度环由 App_ControlTick 在本 tick 之后驱动出力。 */
     Chassis_SetSpeed(spd_target);
 
-    uint32_t now = BSP_Time_GetMs();
+    /*
+     * 遥测: 每控制拍(20ms/50Hz)输出一行, 供上位机 tools/speed_pid_viz.py 绘图整定。
+     * 字段: t 设备 ms; tl/tr 目标轮速; l/r 实测轮速(m/s); dl/dr 应用占空比(%,为上一拍值)。
+     * 非阻塞(环形缓冲+TX 中断), 对控制环零阻塞。
+     */
+    CHASSIS_DUTY duty = Chassis_GetDuty();
+    DebugUart_Printf("[SPD] t=%lu tl=%.3f tr=%.3f l=%.3f r=%.3f dl=%.1f dr=%.1f\r\n",
+        (unsigned long)now,
+        (double)Chassis_GetWheelSpeedTarget(HALL_ENCODER_LEFT),
+        (double)Chassis_GetWheelSpeedTarget(HALL_ENCODER_RIGHT),
+        (double)HallEncoder_GetSpeed(HALL_ENCODER_LEFT),
+        (double)HallEncoder_GetSpeed(HALL_ENCODER_RIGHT),
+        (double)duty.left_percent, (double)duty.right_percent);
+
     if ((now - spd_last_ui) < CHK_UI_PERIOD_MS){
         return APP_TASK_RUNNING;
     }

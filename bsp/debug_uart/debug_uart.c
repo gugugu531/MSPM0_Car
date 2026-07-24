@@ -32,6 +32,9 @@ void DebugUart_Init(void){
     /* TX FIFO 降到阈值即触发中断续传; 无数据时 TX 中断保持关闭 (见 DebugUart_Write)。 */
     DL_UART_Main_setTXFIFOThreshold(DEBUG_UART_INST, DL_UART_TX_FIFO_LEVEL_ONE_ENTRY);
     DL_UART_Main_disableInterrupt(DEBUG_UART_INST, DL_UART_MAIN_INTERRUPT_TX);
+    /* 放开 UART 中断线; TX 中断本身按需在 Write/TxIsr 里动态开关。 */
+    NVIC_ClearPendingIRQ(Debug_Ex_INST_INT_IRQN);
+    NVIC_EnableIRQ(Debug_Ex_INST_INT_IRQN);
 }
 
 void DebugUart_TxIsr(void){
@@ -98,4 +101,18 @@ void DebugUart_Printf(const char *fmt, ...){
 
 uint32_t DebugUart_GetDroppedBytes(void){
     return tx_dropped;
+}
+
+/*
+ * Debug 串口 (Debug_Ex/UART1) 中断入口。当前只处理 TX: FIFO 低于阈值时把环形缓冲续入 FIFO
+ * (见 DebugUart_TxIsr), 缓冲空则由 TxIsr 关闭 TX 中断。RX 命令下行如需启用可在此加 RX 分支。
+ */
+void Debug_Ex_INST_IRQHandler(void){
+    switch (DL_UART_Main_getPendingInterrupt(DEBUG_UART_INST)){
+        case DL_UART_MAIN_IIDX_TX:
+            DebugUart_TxIsr();
+            break;
+        default:
+            break;
+    }
 }

@@ -8,6 +8,7 @@
 
 #include "ti_msp_dl_config.h"
 #include "bsp_time.h"
+#include "debug_uart.h"
 #include "ui.h"
 #include "key.h"
 #include "chassis.h"
@@ -20,6 +21,7 @@
 void App_Init(void){
     SYSCFG_DL_init();
     BSP_Time_Init();
+    DebugUart_Init();   /* 非阻塞 debug 串口(Debug_Ex/UART1): Speed PID 等遥测输出用。 */
 
     /*
      * Ui/Chassis 先于任何可能触发 SystemFault 的步骤初始化，

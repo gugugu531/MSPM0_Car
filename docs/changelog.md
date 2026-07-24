@@ -2,6 +2,14 @@
 
 ## 未发布
 
+- Speed PID 自检加 **UART 遥测 + 上位机可视化整定**。补全一直未接的 debug 串口发送链:
+  `DebugUart_Init` 使能 UART 中断线并新增 `Debug_Ex_INST_IRQHandler`(UART1) 排空 TX 环形缓冲、
+  `App_Init` 调 `DebugUart_Init`(此前 debug 串口从未初始化、TX ISR 从未接, 实为不工作)。
+  Device Check「Speed PID」每控制拍(20ms/50Hz)非阻塞输出遥测行
+  `[SPD] t= tl= tr= l= r= dl= dr=`(目标/实测轮速 m/s + 应用占空比%)。新增上位机
+  `tools/speed_pid_viz.py`(pyserial+matplotlib): 实时绘 左右轮 目标 vs 实测 曲线 + 占空比 +
+  跟踪误差 RMS, 供整定 `chassis.h` 的 `CHASSIS_SPEED_*` 增益。Keil 0/0。
+
 - `middleware/chassis` 接入**速度闭环控制**。新增控制模式 `CHASSIS_CONTROL_DUTY`(开环, 默认)/
   `CHASSIS_CONTROL_SPEED`(闭环): 每轮独立位置式速度环 PID(复用 `core/pid`), setpoint=目标轮速
   m/s、feedback=`HallEncoder_GetSpeed(id)`、output=占空比%(±100 限幅, 抗积分饱和)。API:
