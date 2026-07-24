@@ -42,7 +42,7 @@
 #define HALL_ENCODER_PPR              13.0f
 #define HALL_ENCODER_REDUCTION_RATIO  28.0f
 #define HALL_ENCODER_WHEEL_DIAMETER_M 0.065f
-#define HALL_ENCODER_SAMPLE_PERIOD_S  0.01f
+#define HALL_ENCODER_SAMPLE_PERIOD_S  0.02f
 #define HALL_ENCODER_DISTANCE_SCALE   1.05f
 ```
 
@@ -55,6 +55,10 @@ distance_m = count / (PPR * reduction_ratio)
 ```
 
 速度由当前采样周期的距离增量除以 `HALL_ENCODER_SAMPLE_PERIOD_S` 得到，单位 m/s。
+
+> ⚠ `HALL_ENCODER_SAMPLE_PERIOD_S` **必须与 SysConfig 里采样定时器 `TIMER_0`(TIMA1)的实际周期一致**。
+> 二者不符时：距离不含时间仍准，但**速度会按比例算错**（曾出现定时器 100ms、常数 10ms → 速度偏大 10 倍，
+> 且速度仅 10Hz 刷新拖慢速度环）。当前统一为 **20ms**（与 `App_ControlTick` 控制周期对齐，50Hz 刷新）。
 
 ## 方向符号宏
 

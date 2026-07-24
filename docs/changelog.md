@@ -2,6 +2,15 @@
 
 ## 未发布
 
+- 修正编码器**测速采样周期严重不一致**的 bug。采样定时器 `TIMER_0`(TIMA1) SysConfig 实际配的是
+  **100ms**,而固件 `HALL_ENCODER_SAMPLE_PERIOD_S` 假设 **10ms** → 速度 = 脉冲/0.01 被**放大 10 倍**
+  (距离不含时间故不受影响, 正是"距离准/速度错"的成因);且速度仅 10Hz 刷新, 而速度环跑 50Hz(20ms)→
+  连续 5 个控制拍吃同一陈旧值、~100ms 死区滞后, 是之前闭环发飘/难整定的重要推手。**方案 B**: 把
+  `TIMER_0` 周期改到 **20ms**(SysConfig `timerPeriod="20ms"`, 生成 `LOAD=799`), `SAMPLE_PERIOD_S=0.02f`
+  与之对齐——既纠正 10× 比例、又让反馈 50Hz 与控制同拍(滞后 100ms→20ms)。因无法运行 SysConfig 图形
+  工具, 同步手改 `.syscfg` 与生成的 `ti_msp_dl_config.c/.h`。文档加"两者须一致"告诫。Keil 0/0。
+  **注意: 速度数值缩小 10 倍且反馈变快, 之前整定的 `CHASSIS_SPEED_*` 增益须重调。**
+
 - 主菜单新增「Line Track」循迹测试任务(`app/app_line_task.c`, 新建功能任务文件)。用
   `middleware/line_tracking` 完整闭环跑巡线(读 GPIO 数字灰度 → 计算差速 → 驱动底盘),
   on_enter 复位灰度/巡线状态并 Init JY61P、每拍 Poll 使默认配置的陀螺增稳生效; 丢线返回

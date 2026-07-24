@@ -45,7 +45,7 @@ typedef enum {
 #define HALL_ENCODER_PPR                13.0f
 #define HALL_ENCODER_REDUCTION_RATIO    28.0f
 #define HALL_ENCODER_WHEEL_DIAMETER_M   0.065f
-#define HALL_ENCODER_SAMPLE_PERIOD_S    0.01f
+#define HALL_ENCODER_SAMPLE_PERIOD_S    0.02f
 #define HALL_ENCODER_DISTANCE_SCALE     1.05f
 
 /*

@@ -228,7 +228,7 @@ TIMER1.interrupts         = ["ZERO"];
 TIMER1.timerClkDiv        = 8;
 TIMER1.timerStartTimer    = true;
 TIMER1.interruptPriority  = "3";
-TIMER1.timerPeriod        = "100ms";
+TIMER1.timerPeriod        = "20ms";
 TIMER1.peripheral.$assign = "TIMA1";
 
 UART1.targetBaudRate                   = 115200;
