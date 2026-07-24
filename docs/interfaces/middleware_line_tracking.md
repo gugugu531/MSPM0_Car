@@ -72,25 +72,47 @@ typedef struct {
 ## 默认参数
 
 ```c
-#define LINE_TRACKING_DEFAULT_BASE_DUTY 35.0f
+#define LINE_TRACKING_DEFAULT_BASE_DUTY 34.0f
 #define LINE_TRACKING_DEFAULT_OUTPUT_LIMIT 100.0f
 #define LINE_TRACKING_DEFAULT_CORRECTION_LIMIT 60.0f
-#define LINE_TRACKING_DEFAULT_DIFFERENTIAL_LIMIT 10.0f
+#define LINE_TRACKING_DEFAULT_DIFFERENTIAL_LIMIT 16.0f
 #define LINE_TRACKING_DEFAULT_POSITION_SCALE 10.0f
 #define LINE_TRACKING_ACTIVE_SENSOR_MASK 0xFFU
+
+/* 陀螺增稳串级默认参数（默认启用）。 */
+#define LINE_TRACKING_DEFAULT_GYRO_STAB_ENABLED true
+#define LINE_TRACKING_DEFAULT_GYRO_LINE_KP 3.0f
+#define LINE_TRACKING_DEFAULT_GYRO_STAB_KP 0.20f
+#define LINE_TRACKING_DEFAULT_OMEGA_REF_LIMIT 60.0f
+#define LINE_TRACKING_DEFAULT_GYRO_Z_SIGN (1.0f)
 ```
 
-默认 PID 为位置式 PID：
+> **默认走陀螺增稳串级**（`gyro_stab_enabled = true`），下面的 PID 参数仅在**关闭增稳**的退化路径生效，因此默认取近乎中性的值：
 
 ```text
-kp = 30.0
+kp = 1.0
 ki = 0.0
-kd = 1.5
+kd = 0.0   （不对量化质心求导，避免尖峰；靠死区 + 低通抑制微修蛇形）
 integral_limit = 500.0
-output_limit = 60.0
+output_limit = 60.0   （LINE_TRACKING_DEFAULT_CORRECTION_LIMIT）
+mode = PID_MODE_POSITION
 ```
 
 `LINE_TRACKING_ACTIVE_SENSOR_MASK` 用于选择参与巡线控制的灰度通道。当前值 `0xFF` 启用 0 到 7 的全部 8 路灰度传感器。
+
+## 误差预处理（低通 + 死区）
+
+`LineTracking_Compute()` 在把巡线偏差喂给控制律前，先做两级信号调理（算法委托给 `core/filter`，见 `docs/interfaces/core_filter.md`），以抑制数字灰度量化跳变引起的转向尖峰与极限环蛇形：
+
+```c
+#define LINE_TRACKING_ERROR_LPF_ALPHA 0.5f   /* 一阶低通(EMA)平滑系数 */
+#define LINE_TRACKING_ERROR_DEADBAND 10.0f   /* 中心死区半宽，scale=10 时约 ±1 格偏心内不修 */
+```
+
+- **一阶低通**：`Filter_LowpassEma()` 平滑离散跳变，掐掉微分在跳变上的尖峰；`alpha` 越小越平滑越滞后。
+- **中心死区**：`Filter_Deadband()` 对小偏心（`|error| <= LINE_TRACKING_ERROR_DEADBAND`）置零，让车提交直线运动，消掉绕中心的微修蛇形。
+
+两个整定宏定义在 `line_tracking.c` 内部（属本模块语义），`out->error` 仍保留未处理的原始偏差。
 
 ## 接口
 
@@ -110,7 +132,7 @@ output_limit = 60.0
 2. 调用 `LineTracking_Compute()` 计算左右轮占空比，只统计 `LINE_TRACKING_ACTIVE_SENSOR_MASK` 启用的通道。
 3. 若未丢线，则调用 `Chassis_SetDuty()` 输出到底盘。
 
-循迹输出会先限制 PID 转向修正量，使左右轮占空比差值不超过 `differential_limit`，再执行最终输出限幅。当前默认差值上限为 `10%`。该限制只影响 `LineTracking_Update()` 路径，不影响 `middleware/motion` 的直行、倒车或原地转向动作。
+循迹输出会先限制转向修正量，使左右轮占空比差值不超过 `differential_limit`，再执行最终输出限幅。当前默认差值上限为 `16%`。该限制只影响 `LineTracking_Update()` 路径，不影响 `middleware/motion` 的直行、倒车或原地转向动作。
 
 如果当前未检测到线，函数返回 `BSP_STATUS_NOT_READY`，不主动输出底盘占空比。题目流程可根据自身策略决定刹车、继续搜索或切换状态。
 

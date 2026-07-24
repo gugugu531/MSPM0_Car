@@ -5,6 +5,7 @@
 #include "line_tracking.h"
 
 #include "chassis.h"
+#include "filter/filter.h"
 #include "kinematics/kinematics.h"
 #include "wit_sdk.h"
 
@@ -26,7 +27,6 @@ static const float sensor_position[LINE_FOLLOW_SENSOR_COUNT] = {
  * 放宽 -> 更不抖但容许偏心更大(过大可能贴近传感器阵列边缘才纠、转弯入口判断变晚);
  * 收窄 -> 循迹更贴线但微修蛇形回来。现场按"直线不抖 & 不跑偏丢线"折中(可试 6~15)。 */
 #define LINE_TRACKING_ERROR_DEADBAND 10.0f
-static float line_tracking_filtered_error;
 
 static bool LineTracking_IsSensorEnabled(uint8_t index){
     return ((LINE_TRACKING_ACTIVE_SENSOR_MASK & (1U << index)) != 0U);
@@ -36,11 +36,12 @@ static LINE_TRACKING_CONFIG line_tracking_config;
 static LINE_TRACKING_OUTPUT line_tracking_output;
 static PID_CONTROLLER line_tracking_pid;
 static bool line_tracking_initialized;
+static float line_tracking_filtered_error;   /* EMA 低通状态(见上方 LPF/死区补丁)。 */
 
-static LINE_TRACKING_CONFIG LineTracking_DefaultConfig(void){
+LINE_TRACKING_CONFIG LineTracking_GetDefaultConfig(void){
     /*
-     * 默认参数偏向低速稳定巡线：
-     * base_duty 负责持续前进，PID 输出只作为左右轮差速修正。
+     * 默认参数偏向低速稳定巡线：base_duty 负责持续前进；默认走陀螺增稳串级，
+     * PID 仅为关增稳时的退化路径，故其输出只作为左右轮差速修正。
      */
     LINE_TRACKING_CONFIG config = {
         .base_duty = LINE_TRACKING_DEFAULT_BASE_DUTY,
@@ -72,13 +73,9 @@ static void LineTracking_EnsureInitialized(void){
     }
 }
 
-LINE_TRACKING_CONFIG LineTracking_GetDefaultConfig(void){
-    return LineTracking_DefaultConfig();
-}
-
 void LineTracking_Init(const LINE_TRACKING_CONFIG *config){
     if (config == NULL){
-        line_tracking_config = LineTracking_DefaultConfig();
+        line_tracking_config = LineTracking_GetDefaultConfig();
     } else{
         line_tracking_config = *config;
     }
@@ -188,16 +185,13 @@ BSP_STATUS LineTracking_Compute(const LINE_FOLLOW_SENSOR_STATE *sensor,
     out->error = average_position * line_tracking_config.sensor_position_scale;
 
     /*
-     * error 一阶低通 + 中心死区: 把喂给 PID 的误差平滑并对小偏心置零,
-     * 消除数字灰度量化跳变导致的转向尖峰/极限环蛇形。out->error 仍保留原始值。
+     * error 一阶低通 + 中心死区(算法见 core/filter): 把喂给 PID 的误差平滑并对小偏心
+     * 置零, 消除数字灰度量化跳变导致的转向尖峰/极限环蛇形。out->error 仍保留原始值。
      */
-    line_tracking_filtered_error += LINE_TRACKING_ERROR_LPF_ALPHA *
-        (out->error - line_tracking_filtered_error);
-    float pid_error = line_tracking_filtered_error;
-    if ((pid_error > -LINE_TRACKING_ERROR_DEADBAND) &&
-        (pid_error < LINE_TRACKING_ERROR_DEADBAND)){
-        pid_error = 0.0f;
-    }
+    line_tracking_filtered_error = Filter_LowpassEma(line_tracking_filtered_error,
+        out->error, LINE_TRACKING_ERROR_LPF_ALPHA);
+    float pid_error = Filter_Deadband(line_tracking_filtered_error,
+        LINE_TRACKING_ERROR_DEADBAND);
 
     /*
      * 陀螺增稳串级 (补偿"等占空比不直行"的硬件不对称 + 阻尼蛇形):

@@ -2,6 +2,17 @@
 
 ## 未发布
 
+- 新增 `core/filter`：把 `line_tracking` 内联的两段通用信号处理下沉到 core——一阶低通
+  `Filter_LowpassEma`（EMA）与中心死区 `Filter_Deadband`，均为无状态自由函数（状态由调用方
+  持有，与 `kinematics` 同风格），按内联公式 1:1 实现、行为不变。`line_tracking.c` 改调 core
+  函数，误差预处理六行塌成两行；同时合并冗余的 `LineTracking_DefaultConfig`/`GetDefaultConfig`
+  为单一公开函数。配套新增 `docs/interfaces/core_filter.md`、更新接口索引与 Keil/CCS 工程登记。
+  顺带修正 `middleware_line_tracking.md` 的默认参数漂移（`base_duty 34`、`differential_limit 16`、
+  PID `kp=1.0`/`kd=0.0`、差值上限 16%），补齐陀螺增稳默认宏与低通/死区说明。Keil 0/0，Code size 不变。
+
+- `core/pid` 增加 `PID_LIMIT_DISABLED` 哨兵宏（令限幅关闭的配置点自解释，沿用「<=0 关闭」
+  语义、逻辑不变），并把当前无调用者的增量式路径标注「预留」，与 core 其余模块口径统一。
+
 - `ganv_gray` 修复读取间歇失败（上板 + 诊断计数定位根因）：现象为 online/offline 约各半、
   RETRY=2 时 err=0（确定性隔次交替，非随机瞬态）。加写/读分阶段诊断计数后定位到失败**全在
   写命令阶段且为 NACK**、读阶段从不失败，根因是**每次读都重发命令 `0xDD`**——违背手册方法
