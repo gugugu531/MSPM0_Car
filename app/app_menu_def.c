@@ -7,7 +7,7 @@
 #include "app_menu.h"
 #include "app_checks.h"
 
-/* --- Device Check 子菜单：5 个外设自检 --- */
+/* --- Device Check 子菜单：7 个外设自检 --- */
 static const MENU_ITEM device_check_items[] = {
     { .name = "Gyro JY61P",   .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GYRO_JY61P },
     { .name = "Gyro MPU6050", .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GYRO_MPU6050 },
@@ -15,6 +15,7 @@ static const MENU_ITEM device_check_items[] = {
     { .name = "Gray I2C",     .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GRAY_I2C },
     { .name = "TB6612",       .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_TB6612 },
     { .name = "Encoder",      .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_ENCODER },
+    { .name = "Speed PID",    .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_SPEED_PID },
 };
 
 static const MENU_NODE device_check_menu = {

@@ -105,7 +105,8 @@ void App_ControlTick(void){
     } else if (status == APP_TASK_FAULT){
         App_RaiseFault(SYSTEM_FAULT_STATE_ERROR, current_task->name);
     } else {
-        /* RUNNING：继续。 */
+        /* RUNNING：任务已设定本拍目标, 跑一步底盘速度环(仅闭环模式实际出力)。 */
+        (void)Chassis_UpdateSpeedControl(APP_CONTROL_DT);
     }
 }
 

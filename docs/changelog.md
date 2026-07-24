@@ -2,6 +2,16 @@
 
 ## 未发布
 
+- `middleware/chassis` 接入**速度闭环控制**。新增控制模式 `CHASSIS_CONTROL_DUTY`(开环, 默认)/
+  `CHASSIS_CONTROL_SPEED`(闭环): 每轮独立位置式速度环 PID(复用 `core/pid`), setpoint=目标轮速
+  m/s、feedback=`HallEncoder_GetSpeed(id)`、output=占空比%(±100 限幅, 抗积分饱和)。API:
+  `Chassis_SetWheelSpeed(l,r)`/`Chassis_SetSpeed(v)`(进闭环、设目标)、`Chassis_UpdateSpeedControl(dt)`
+  (周期驱动出力)、`Chassis_GetControlMode`/`GetWheelSpeedTarget`;`SetDuty/Stop/Brake/Coast` 切回开环
+  并清目标。tick 接在 `App_ControlTick`(RUN 态 20ms), 退出 RUN 时 `App_ExitRun` 自动 `Chassis_Brake`
+  停环。默认增益在 `chassis.h`(须上板整定)。新增 Device Check「Speed PID」自检(按键给目标速度,
+  OLED 显示两轮 目标 vs 实测, 供整定)。差速转向(车体 v/ω)待 `track_width`, 届时在 SetWheelSpeed
+  之上加 `Kinematics_BodyToWheel` 即可。文档同步。Keil 0/0。**待上板整定增益并验证跟踪**。
+
 - 编码器改为**左右双轮**并修正接线隐患。核实原实现非硬件 QEI，而是 GPIO 边沿中断 + 软件正交
   解码;且原单轮实现把右轮 B 相错接到 `PB22`(实为导航按键脚)→ B 相恒高、方向恒判前进(仅前进
   时看似正确)。SysConfig 引脚按轮改名 `E1A/E1B/E2A/E2B → ENC_R_A/ENC_R_B/ENC_L_A/ENC_L_B`

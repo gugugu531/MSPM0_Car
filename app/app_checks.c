@@ -348,6 +348,60 @@ static APP_TASK_STATUS ChkEnc_Tick(float dt){
     return APP_TASK_RUNNING;
 }
 
+/* ============================ 速度闭环 ============================ */
+
+#define SPD_STEP 0.05f   /* 每次按键调整的目标速度步进, m/s */
+#define SPD_MAX  0.60f   /* 目标速度上下限, m/s */
+
+static float spd_target;
+static uint32_t spd_last_ui;
+
+static void ChkSpeedPid_Enter(void){
+    HallEncoder_Reset();
+    spd_target = 0.0f;
+    Chassis_SetSpeed(0.0f);   /* 进入速度闭环, 目标 0。 */
+    spd_last_ui = 0U;
+}
+
+static APP_TASK_STATUS ChkSpeedPid_Tick(float dt){
+    (void)dt;
+
+    /* 按键调目标: UP +step, DOWN -step, ENTER 归零。 */
+    if (Key_GetEvent(KEY_ID_UP) == KEY_EVENT_SHORT_PRESS){
+        spd_target += SPD_STEP;
+        if (spd_target > SPD_MAX){ spd_target = SPD_MAX; }
+    } else if (Key_GetEvent(KEY_ID_DOWN) == KEY_EVENT_SHORT_PRESS){
+        spd_target -= SPD_STEP;
+        if (spd_target < -SPD_MAX){ spd_target = -SPD_MAX; }
+    } else if (Key_GetEvent(KEY_ID_ENTER) == KEY_EVENT_SHORT_PRESS){
+        spd_target = 0.0f;
+    }
+    /* 每拍设目标; 速度环由 App_ControlTick 在本 tick 之后驱动出力。 */
+    Chassis_SetSpeed(spd_target);
+
+    uint32_t now = BSP_Time_GetMs();
+    if ((now - spd_last_ui) < CHK_UI_PERIOD_MS){
+        return APP_TASK_RUNNING;
+    }
+    spd_last_ui = now;
+
+    char l1[20];
+    char l2[20];
+    char l3[20];
+    uint8_t n;
+
+    n = PutStr(l1, "tgt ");
+    AppFmt_Fixed(&l1[n], spd_target, 2);
+    n = PutStr(l2, "L spd ");
+    AppFmt_Fixed(&l2[n], HallEncoder_GetSpeed(HALL_ENCODER_LEFT), 2);
+    n = PutStr(l3, "R spd ");
+    AppFmt_Fixed(&l3[n], HallEncoder_GetSpeed(HALL_ENCODER_RIGHT), 2);
+
+    Ui_RenderLines("Chk Speed PID", "!! WHEELS UP !!", l1, l2, l3,
+                   "UP/DN/EN adj", "BACK: exit");
+    return APP_TASK_RUNNING;
+}
+
 /* ============================ 描述符 ============================ */
 
 const APP_TASK_DESC APP_CHK_GYRO_JY61P = {
@@ -367,4 +421,7 @@ const APP_TASK_DESC APP_CHK_TB6612 = {
 };
 const APP_TASK_DESC APP_CHK_ENCODER = {
     "Encoder", ChkEnc_Enter, ChkEnc_Tick, NULL
+};
+const APP_TASK_DESC APP_CHK_SPEED_PID = {
+    "Speed PID", ChkSpeedPid_Enter, ChkSpeedPid_Tick, NULL
 };

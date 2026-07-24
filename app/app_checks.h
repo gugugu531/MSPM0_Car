@@ -20,6 +20,7 @@ extern const APP_TASK_DESC APP_CHK_GRAYSCALE;     /**< 8 路灰度数字量（GP
 extern const APP_TASK_DESC APP_CHK_GRAY_I2C;      /**< 感为 8 路灰度 I2C（I2C0，0x4F）。 */
 extern const APP_TASK_DESC APP_CHK_TB6612;        /**< TB6612 电机通道脉冲（主动）。 */
 extern const APP_TASK_DESC APP_CHK_ENCODER;       /**< 霍尔编码器计数/速度/里程。 */
+extern const APP_TASK_DESC APP_CHK_SPEED_PID;     /**< 双轮速度闭环 PID（主动，整定用）。 */
 
 #ifdef __cplusplus
 }

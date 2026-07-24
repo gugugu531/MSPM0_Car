@@ -36,7 +36,8 @@ Main Menu
     ├── Grayscale        (task)   数字量 GPIO 版, 8 路 mask 二进制 + 触发数
     ├── Gray I2C         (task)   感为 I2C 版(0x4F), 8 路数字量 + 在线/固件版本
     ├── TB6612           (task)   短按单次低速脉冲(20%/300ms) + 编码器响应, 抬轮提示
-    └── Encoder          (task)   count/speed/distance/dir
+    ├── Encoder          (task)   双轮 count/speed/dir
+    └── Speed PID        (task)   双轮速度闭环, 按键给目标 + 目标/实测对比, 整定用, 抬轮提示
 ```
 
 导航按键（仍仅短按）：`UP/DOWN` 移动、`ENTER` 进入子菜单/任务、`BACK` 返回上级。
@@ -110,7 +111,7 @@ Main Menu
 9. **UI**：RUN 运行页由任务 `on_tick` 低频自渲染；MENU/FAULT 页归框架。
 
 ### 参考实现
-`app_checks.c` 的 5 个外设自检（`APP_CHK_*`）演示了 enter 复位、tick 非阻塞采样、按变化节流刷屏、
+`app_checks.c` 的 7 个外设自检（`APP_CHK_*`）演示了 enter 复位、tick 非阻塞采样、按变化节流刷屏、
 仅靠 BACK 短按退出；两个陀螺仪自检还示范了 on_enter/on_exit 挂起/恢复分时共用 I2C0。
 
 ### 公共支持
