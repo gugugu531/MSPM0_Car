@@ -417,6 +417,69 @@ static APP_TASK_STATUS ChkSpeedPid_Tick(float dt){
     return APP_TASK_RUNNING;
 }
 
+/* ======================= 占空比-速度 扫描(开环诊断)======================= */
+
+#define DSW_STEP 2.0f    /* 每次按键调整的占空比步进, % */
+#define DSW_MAX  80.0f   /* 占空比上下限, %(安全起见不到满) */
+
+static float dsw_duty;
+static uint32_t dsw_last_ui;
+
+static void ChkDutySweep_Enter(void){
+    HallEncoder_Reset();
+    dsw_duty = 0.0f;
+    (void)Chassis_SetDuty(0.0f, 0.0f);   /* 开环, 双轮同占空比, 不走速度环。 */
+    dsw_last_ui = 0U;
+}
+
+static APP_TASK_STATUS ChkDutySweep_Tick(float dt){
+    (void)dt;
+    uint32_t now = BSP_Time_GetMs();
+
+    /* 按键调占空比: UP +step, DOWN -step, ENTER 归零。 */
+    if (Key_GetEvent(KEY_ID_UP) == KEY_EVENT_SHORT_PRESS){
+        dsw_duty += DSW_STEP;
+        if (dsw_duty > DSW_MAX){ dsw_duty = DSW_MAX; }
+    } else if (Key_GetEvent(KEY_ID_DOWN) == KEY_EVENT_SHORT_PRESS){
+        dsw_duty -= DSW_STEP;
+        if (dsw_duty < -DSW_MAX){ dsw_duty = -DSW_MAX; }
+    } else if (Key_GetEvent(KEY_ID_ENTER) == KEY_EVENT_SHORT_PRESS){
+        dsw_duty = 0.0f;
+    }
+    (void)Chassis_SetDuty(dsw_duty, dsw_duty);   /* 开环固定占空比。 */
+
+    /*
+     * 遥测: 复用 [SPD] 行格式(tl/tr=0 无目标, l/r=实测轮速, dl/dr=应用占空比),
+     * 直接用 tools/speed_pid_viz.py 看"占空比阶梯 vs 实测速度", 定位死区与噪声拐点。
+     */
+    DebugUart_Printf("[SPD] t=%lu tl=0.000 tr=0.000 l=%.3f r=%.3f dl=%.1f dr=%.1f\r\n",
+        (unsigned long)now,
+        (double)HallEncoder_GetSpeed(HALL_ENCODER_LEFT),
+        (double)HallEncoder_GetSpeed(HALL_ENCODER_RIGHT),
+        (double)dsw_duty, (double)dsw_duty);
+
+    if ((now - dsw_last_ui) < CHK_UI_PERIOD_MS){
+        return APP_TASK_RUNNING;
+    }
+    dsw_last_ui = now;
+
+    char l1[20];
+    char l2[20];
+    char l3[20];
+    uint8_t n;
+
+    n = PutStr(l1, "duty ");
+    AppFmt_Fixed(&l1[n], dsw_duty, 1);
+    n = PutStr(l2, "L spd ");
+    AppFmt_Fixed(&l2[n], HallEncoder_GetSpeed(HALL_ENCODER_LEFT), 2);
+    n = PutStr(l3, "R spd ");
+    AppFmt_Fixed(&l3[n], HallEncoder_GetSpeed(HALL_ENCODER_RIGHT), 2);
+
+    Ui_RenderLines("Chk Duty Sweep", "!! WHEELS UP !!", l1, l2, l3,
+                   "UP/DN/EN adj", "BACK: exit");
+    return APP_TASK_RUNNING;
+}
+
 /* ============================ 描述符 ============================ */
 
 const APP_TASK_DESC APP_CHK_GYRO_JY61P = {
@@ -439,4 +502,7 @@ const APP_TASK_DESC APP_CHK_ENCODER = {
 };
 const APP_TASK_DESC APP_CHK_SPEED_PID = {
     "Speed PID", ChkSpeedPid_Enter, ChkSpeedPid_Tick, NULL
+};
+const APP_TASK_DESC APP_CHK_DUTY_SWEEP = {
+    "Duty Sweep", ChkDutySweep_Enter, ChkDutySweep_Tick, NULL
 };

@@ -13,7 +13,7 @@
 - `app_mode.h`：状态机 `APP_MODE`（INIT/MENU/RUN/FAULT）与 `App_Mode_Init/Get`、`App_ControlTick/UiTick`。
 - `app_task.h`：任务生命周期契约——`APP_TASK_STATUS` 与 `APP_TASK_DESC`（`on_enter/on_tick/on_exit`），不含具体任务。
 - `app_menu.h`：菜单树类型 `MENU_NODE`/`MENU_ITEM` 与 `Menu_Tick` 导航；`app_menu_def.c` 定义菜单树实例 `APP_ROOT_MENU`。
-- `app_checks.h`：外设自检任务描述符 `APP_CHK_*`（JY61P / MPU6050 / Grayscale / Gray I2C / TB6612 / Encoder / Speed PID）。
+- `app_checks.h`：外设自检任务描述符 `APP_CHK_*`（JY61P / MPU6050 / Grayscale / Gray I2C / TB6612 / Encoder / Speed PID / Duty Sweep）。
 
 ## core
 
