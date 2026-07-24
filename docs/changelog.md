@@ -2,6 +2,12 @@
 
 ## 未发布
 
+- 主菜单新增「Line Track」循迹测试任务(`app/app_line_task.c`, 新建功能任务文件)。用
+  `middleware/line_tracking` 完整闭环跑巡线(读 GPIO 数字灰度 → 计算差速 → 驱动底盘),
+  on_enter 复位灰度/巡线状态并 Init JY61P、每拍 Poll 使默认配置的陀螺增稳生效; 丢线返回
+  NOT_READY 时刹停(测试期安全)。OLED 显示 8 路命中图/误差/双轮占空比/track|LINE LOST。
+  Keil/CCS 工程登记新文件。Keil 0/0。抬轮或置于线场运行。
+
 - 新增 Device Check「Duty Sweep」自检: **开环**固定占空比(按键 ±2% 阶梯, 双轮同值)读回两轮
   编码器速度, OLED 显示 + 复用 `[SPD]` 遥测格式(tl/tr=0, dl/dr=占空比)供 `tools/speed_pid_viz.py`
   直接绘图。用于诊断电机死区与"占空比升高→编码器噪声爆表"的拐点(不走速度环, 排除闭环干扰)。Keil 0/0。

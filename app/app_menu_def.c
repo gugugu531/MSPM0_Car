@@ -6,6 +6,7 @@
  */
 #include "app_menu.h"
 #include "app_checks.h"
+#include "app_line_task.h"
 
 /* --- Device Check 子菜单：8 个外设自检 --- */
 static const MENU_ITEM device_check_items[] = {
@@ -27,6 +28,7 @@ static const MENU_NODE device_check_menu = {
 
 /* --- 根菜单 --- */
 static const MENU_ITEM root_items[] = {
+    { .name = "Line Track",   .kind = MENU_ENTRY_TASK,    .u.task = &APP_LINE_TRACK_TEST },
     { .name = "Device Check", .kind = MENU_ENTRY_SUBMENU, .u.submenu = &device_check_menu },
 };
 

@@ -30,6 +30,7 @@ run-to-completion 任务。
 
 ```
 Main Menu
+├── Line Track          (task)   循迹测试: line_tracking 完整闭环巡线 + 陀螺增稳, 命中图/误差/双轮占空比, 丢线刹停
 └── Device Check        (submenu)
     ├── Gyro JY61P       (task)   JY61P 陀螺/姿态/温度 + 诊断计数
     ├── Gyro MPU6050     (task)   原始六轴; 与 JY61P 共 I2C0, 进挂起/出恢复

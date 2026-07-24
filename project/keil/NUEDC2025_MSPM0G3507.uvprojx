@@ -411,6 +411,11 @@
               <FilePath>..\..\app\app_checks.c</FilePath>
             </File>
             <File>
+              <FileName>app_line_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_line_task.c</FilePath>
+            </File>
+            <File>
               <FileName>app_menu.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\app\app_menu.c</FilePath>
