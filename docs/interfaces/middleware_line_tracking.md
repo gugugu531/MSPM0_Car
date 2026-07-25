@@ -48,9 +48,10 @@ typedef struct {
 居中时 `ω_ref = 0`，内环把实际 `gz` 压向 0，自动补偿硬件不对称直行；同时 `gz` 反馈是
 航向的阻尼项，直接抑制蛇形。`gz` 反馈符号错会变成正反馈（自旋/更抖），需实机验证 `gyro_z_sign`。
 
-IMU（JY61P/I2C0）在 `main.c` 开机全局初始化、SysTick ISR 持续轮询，`WitGetData` 随时可取，
-因此 **所有走 `Motion_Apply(LINE_FOLLOW) → LineTracking_Update` 的巡线任务（E1/F1/F2）自动接入**，
-无需各任务改动。增稳关闭或 IMU 读失败时 `omega` 传 0，退化为纯位置 PID 旧行为。
+当前 `app/app_line_task.c` 的 `Line Track` 任务在 `on_enter` 初始化 JY61P，并在每个 20ms
+控制拍调用 `JY61P_I2C_Poll()` 推进异步状态机；`LineTracking_Update()` 随后通过
+`WitGetData()` 读取缓存中的 `gz`。增稳关闭或 IMU 读取失败时 `omega` 取 0，退化为纯位置
+PID 路径。JY61P 并非由 SysTick 全局轮询；新增巡线任务若启用增稳，也必须负责初始化和轮询它。
 
 ```c
 typedef struct {
@@ -132,7 +133,7 @@ mode = PID_MODE_POSITION
 2. 调用 `LineTracking_Compute()` 计算左右轮占空比，只统计 `LINE_TRACKING_ACTIVE_SENSOR_MASK` 启用的通道。
 3. 若未丢线，则调用 `Chassis_SetDuty()` 输出到底盘。
 
-循迹输出会先限制转向修正量，使左右轮占空比差值不超过 `differential_limit`，再执行最终输出限幅。当前默认差值上限为 `16%`。该限制只影响 `LineTracking_Update()` 路径，不影响 `middleware/motion` 的直行、倒车或原地转向动作。
+循迹输出会先限制转向修正量，使左右轮占空比差值不超过 `differential_limit`，再执行最终输出限幅。当前默认差值上限为 `16%`。该限制只影响 `LineTracking_Update()` 路径，不影响上层直接调用 `Chassis_SetDuty()` 或速度闭环接口。
 
 如果当前未检测到线，函数返回 `BSP_STATUS_NOT_READY`，不主动输出底盘占空比。题目流程可根据自身策略决定刹车、继续搜索或切换状态。
 
@@ -148,6 +149,6 @@ mode = PID_MODE_POSITION
 ## 边界说明
 
 - 空线、半线、十字、边线计数等流程判断不在本模块公开，后续应在 `middleware/line_follow` 或 app 任务流程中按实际需要设计。
-- 直角弯识别和转弯动作编排不在本模块中实现；当前 E1 在 `app/app_e_task` 中通过任务状态机组合 `middleware/motion` 原语完成。
+- 直角弯识别、丢线搜索和赛题动作编排不在本模块中实现；当前 `Line Track` 仅在丢线时刹停。
 - 旧 `sInedge` 和 `UpdateSInedge()` 不迁入本模块。
 - 旧 `Motion_Car_Control()` 的职责已经拆分为 `Kinematics_DifferentialMix()` 和 `Chassis_SetDuty()`。

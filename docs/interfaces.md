@@ -1,8 +1,8 @@
 # 接口说明
 
 > 二维云台/瞄准子系统（gimbal / gimbal_tracking / auto_aim / aim_solver / aim_fusion /
-> localization / bldc / step_motor）已整体移除，原任务框架的 app 亦已清空。下表仅列出当前
-> 仍存在的模块。
+> localization / bldc / step_motor）已整体移除。`app` 已重建为菜单驱动的协作式调度框架；
+> 下表仅列出当前仍存在并参与构建的模块。
 
 ## app
 

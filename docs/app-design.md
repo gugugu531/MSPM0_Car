@@ -69,7 +69,7 @@ Main Menu
 |---|---|---|
 | `SysTick_Handler` (1ms) | app/app_scheduler | 时基递增 + 按键扫描 |
 | `GROUP1_IRQHandler` | bsp/hall_encoder | 编码器边沿 |
-| `TIMER_0_INST_IRQHandler` (100ms) | bsp/hall_encoder | 编码器测速 |
+| `TIMER_0_INST_IRQHandler` (20ms) | bsp/hall_encoder | 编码器测速 |
 | `I2C0_IRQHandler` | bsp/imu | JY61P I2C 状态机 |
 
 ## 按键交互（仅短按）

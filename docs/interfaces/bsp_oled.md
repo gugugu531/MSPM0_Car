@@ -11,7 +11,7 @@
 I2C 外设实例、总线速率和 PA10/PA11 引脚复用由 SysConfig 生成文件提供。当前生成配置中存在：
 
 ```c
-#define OLED_INST         I2C0
+#define OLED_INST         I2C1
 #define OLED_BUS_SPEED_HZ 400000
 #define GPIO_OLED_SDA_PIN DL_GPIO_PIN_10
 #define GPIO_OLED_SCL_PIN DL_GPIO_PIN_11

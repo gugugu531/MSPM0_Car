@@ -5,8 +5,8 @@
 - **平台**: MSPM0G3507 (LQFP-64) 车载固件
 - **IDE**: Keil MDK (ARMCLANG V6.22) / CCS (TICLANG)
 - **SDK**: mspm0_sdk_2_10_00_04
-- **当前状态**: 原 2025E 二维云台/瞄准任务框架已移除，`app` 为极简启动骨架，新任务待定；
-  下层 bsp / middleware / core 能力保留待重建 app 时复用。
+- **当前状态**: 原 2025E 二维云台/瞄准子系统已移除；`app` 已重建为菜单驱动的裸机协作式
+  调度框架，现有循迹测试、双轮速度闭环和 9 项设备检查。当前重点为底盘闭环整定与上板验证。
 
 > **注意**: 外部工具路径 (Keil、SysConfig、SDK) 需向用户确认实际安装位置。
 
@@ -18,18 +18,20 @@
 | 姿态 | JY61P (WIT 协议) | I2C0 | `bsp/imu` (wit_sdk, 中断驱动) |
 | 姿态 | MPU6050 (DMP) | I2C0（与 JY61P 共总线） | `bsp/mpu6050` |
 | 循迹 | 8 路灰度 | GPIO | `bsp/grayscale_sensor` |
+| 循迹 | 感为 8 路灰度 | I2C0（与两种 IMU 共总线） | `bsp/ganv_gray` |
 | 显示/输入 | OLED / 按键 | I2C1/GPIO | `bsp/oled`, `bsp/key` |
+| 通信 | 蓝牙 / 调试遥测 | UART0/UART1 | `bsp/bluetooth`, `bsp/debug_uart` |
 
 ## 目录结构
 
 ```
 MSPM0_Car/
-├── app/                  # 应用层 (当前仅 main.c 启动骨架)
-├── bsp/                  # 板级驱动 (motor, imu, mpu6050, grayscale, oled, key, debug_uart, time, common)
+├── app/                  # 初始化、调度、状态机、菜单与测试任务
+├── bsp/                  # 板级驱动 (motor, imu, grayscale, uart, oled, key, time...)
 ├── board/
 │   ├── startup/          # 启动文件, 链接脚本
 │   └── sys_config/       # SysConfig 源文件及生成代码
-├── core/                 # 控制算法 (pid, kinematics, common)
+├── core/                 # 纯计算算法 (pid, filter, kinematics, common)
 ├── middleware/           # 中间件 (chassis, line_follow, line_tracking, ui, fault)
 ├── project/{keil,ccs}/   # IDE 工程
 ├── docs/                 # 架构/接口/构建文档
@@ -65,7 +67,7 @@ app ─► middleware ─► {core (纯计算), bsp}
 3. 检查生成代码（勿手改生成文件）
 
 > I2C0 实例在 syscfg 中名为 `MPU6050_JY61P_Tracking`（历史命名，未重命名以免牵连重生成），
-> 现由 JY61P / MPU6050 共用。SR04 的 GPIO 定义为历史残留，未使用。
+> 现由 JY61P / MPU6050 / 感为灰度共用。SR04 的 GPIO 定义为历史残留，未使用。
 
 ### 编译
 ```
@@ -76,6 +78,8 @@ app ─► middleware ─► {core (纯计算), bsp}
 ### Keil 工程维护
 - `.uvprojx` 是 XML，可手编增删 `<File>` 条目；漏加会在链接阶段报 `L6218E`。
 - 已删文件引用须同步移除（Keil 与 CCS 两套工程都要维护）。
+- 当前 CCS projectspec 仍引用不存在的 `empty.syscfg`，且缺少 `bsp/debug_uart` include path；
+  修复并验证前不要宣称 CCS 与 Keil 已完全同步（详见 `docs/build-guide.md`）。
 
 ### 提交
 - 格式: `type: 中文描述`（`feat` | `fix` | `docs` | `refactor`）

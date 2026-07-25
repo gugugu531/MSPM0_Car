@@ -21,7 +21,11 @@
 
 构建时必须同时包含这些 include path。按照当前重写流程，新增源码先完成分层框架和接口收敛；整体框架确认后，再统一维护 `project/ccs/NUEDC2025_MSPM0G3507_ticlang.projectspec` 和 `project/keil/NUEDC2025_MSPM0G3507.uvprojx`。
 
-当前两套工程文件已同步到分层源码树。
+Keil 工程已同步到当前分层源码树。CCS projectspec 的大部分源码条目已同步，但仍有两项
+已知元数据问题，修复并重新构建前不能视为可用：
+
+- 仍链接不存在的 `board/sys_config/empty.syscfg`，实际 SysConfig 输入是 `G3507.syscfg`。
+- 已登记 `bsp/debug_uart/debug_uart.c/.h`，但编译选项缺少 `-I${REPO_ROOT}/bsp/debug_uart`。
 
 ## CCS 构建
 
@@ -37,11 +41,13 @@
 - SysConfig 输入和生成文件位于 `board/sys_config/`
 - CCS 构建输出目录视为可再生本地产物
 
-本地已验证的直接交叉编译命令使用：
+历史上已验证的直接交叉编译环境使用：
 
 - 编译器：TI ARM Clang（`ti_cgt_arm_llvm` 4.0.2 LTS）的 `bin/tiarmclang.exe`
 - SDK：MSPM0 SDK 2.10.00.04
 - 产物：`build/ccs/NUEDC2025_MSPM0G3507.out`
+
+该历史结果早于上述 projectspec 漂移；当前版本应先修正元数据，再重新执行 CCS/ticlang 构建。
 
 > 工具链与 SDK 的安装路径因机器而异，本文不写死绝对路径；下文命令中的 `<...>` 均为占位符，
 > 请替换为本机实际安装位置。

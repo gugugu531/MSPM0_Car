@@ -93,7 +93,8 @@ typedef enum {
 
 ### `void Key_Scan(void)`
 
-扫描并推进按键状态机。当前由 `SysTick_Handler()` 每 10 ms 调用。
+扫描并推进按键状态机。当前由 `SysTick_Handler()` 每 1 ms 调用；消抖和长短按时限仍按
+`BSP_Time_GetMs()` 的毫秒时间差判断。
 
 ### `KEY_EVENT Key_GetEvent(KEY_ID key_id)`
 

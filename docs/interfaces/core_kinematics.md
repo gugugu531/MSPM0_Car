@@ -6,9 +6,10 @@
 
 该模块不读取传感器、不控制电机、不调用 BSP 或 middleware。调用方负责提供输入数据，并根据计算结果调用对应执行接口。
 
-> 使用现状：当前唯一消费者是 `middleware/line_tracking`，只用到 `Kinematics_Clamp` 与
-> `Kinematics_DifferentialMix`。本文标注为「预留」的类型/宏/函数已实现并保留，但当前工程
-> 暂无调用者，供后续路径/姿态/动作策略模块复用。
+> 使用现状：`middleware/line_tracking` 使用 `Kinematics_Clamp` 与
+> `Kinematics_DifferentialMix`；`middleware/chassis` 使用 `Kinematics_WheelToBody`
+> 将左右轮速度聚合为车体线速度。本文其余标注为「预留」的类型/宏/函数已实现并保留，
+> 但当前工程暂无调用者，供后续路径/姿态/动作策略模块复用。
 
 ## 基础宏
 
@@ -64,7 +65,7 @@ typedef struct {
 } KINEMATICS_VELOCITY;
 ```
 
-平面运动速度，`Kinematics_WheelToBody`/`Kinematics_IntegratePose` 的车体速度类型。线速度单位为米每秒，角速度单位为度每秒（逆时针为正）。**预留，当前工程暂无调用者。**
+平面运动速度，`Kinematics_WheelToBody`/`Kinematics_IntegratePose` 的车体速度类型。线速度单位为米每秒，角速度单位为度每秒（逆时针为正）。当前由 `middleware/chassis` 使用其 `linear_mps` 字段。
 
 ```c
 typedef struct {
@@ -109,9 +110,11 @@ right = forward - turn
 
 当 `output_limit > 0.0f` 且任一侧输出超过限制时，函数按比例缩放左右输出，保持差速比例不变。该函数只计算输出，不调用 `Chassis_SetDuty()`。
 
-## 两轮差速运动学模型（预留）
+## 两轮差速运动学模型
 
-建立 **轮速 ↔ 车体 `(v, ω)` ↔ 位姿** 的速度层几何关系，全部为纯函数，车体参数（轮距 `L`、轮半径 `r`）一律传参、不在本模块固化。当前工程巡线走占空比空间，整节**预留，暂无调用者**，供后续物理量速度控制 / 里程推算复用。
+建立 **轮速 ↔ 车体 `(v, ω)` ↔ 位姿** 的速度层几何关系，全部为纯函数，车体参数（轮距 `L`、轮半径 `r`）一律传参、不在本模块固化。当前 `middleware/chassis` 已用
+`Kinematics_WheelToBody(..., track_width_m=0)` 计算双轮平均线速度；角速度、逆运动学和位姿积分
+仍为预留能力，待获得真实轮距并建立物理量运动控制后使用。
 
 ### 约定
 

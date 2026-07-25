@@ -2,9 +2,11 @@
 
 ## 模块职责
 
-`bsp/imu/wit_sdk` 是 WitMotion IMU 厂家驱动与当前工程 JY61P 数据解析入口。该模块保留厂家 SDK 的命名、协议解析、寄存器定义和已有全局变量，不按工程自维护代码的命名规则强制重写。
+`bsp/imu/wit_sdk` 是 WitMotion IMU 厂家驱动与当前工程 JY61P 数据采集入口。该模块保留厂家
+SDK 的命名、串口协议解析、寄存器定义和已有全局变量，同时追加当前实际使用的 I2C0 异步驱动，
+不按工程自维护代码的命名规则强制重写。
 
-本轮只追加少量读取接口，目的是让后续上层逐步从直接访问 `GyroscopeChannelData[]` 迁移到明确的数据结构接口。
+上层通过结构化 getter 读取 `GyroscopeChannelData[]` 缓存，不应继续直接访问该数组。
 
 ## 保留的厂家接口
 
@@ -22,7 +24,25 @@
 - `sReg[]`
 - `GyroscopeChannelData[]`
 
-## 新增公开类型
+上述串口解析接口为厂家兼容路径，当前 app 不调用；UART0 已分配给蓝牙。
+
+## 当前 I2C0 接口
+
+当前 JY61P 使用 `MPU6050_JY61P_Tracking_INST`（I2C0，PA0/PA1，400kHz），7 位地址
+`0x50`。采集采用非阻塞状态机：线程上下文调用 `JY61P_I2C_Poll()` 发起
+“读 angle → 读 gyro”链，`I2C0_IRQHandler()` 分阶段完成 TX/RX 和数据发布。
+
+- `JY61P_I2C_Init()`：清零诊断和状态机，打开 I2C0 NVIC。
+- `JY61P_I2C_Poll()`：空闲时发起一轮姿态角与角速度读取；忙或总线未空闲时立即返回。
+- `JY61P_I2C_SetSuspended(bool)`：挂起/恢复 JY61P 事务和 I2C0 中断，供 MPU6050、感为灰度
+  等同总线阻塞驱动分时。
+- `JY61P_I2C_GetPollCount()` / `GetErrorCount()` / `GetNackCount()` /
+  `GetTimeoutCount()`：读取诊断计数。
+
+当前由 `app/app_line_task.c` 和 JY61P 自检任务在每个 20ms 控制拍调用 `JY61P_I2C_Poll()`；
+SysTick ISR 不轮询 JY61P。
+
+## 结构化读取类型
 
 ### `WIT_VECTOR3F`
 
@@ -61,13 +81,14 @@ typedef struct {
 
 用于一次性读取当前缓存中的 IMU 数据。
 
-## 新增读取接口
+## 结构化读取接口
 
 ### `int32_t WitGetAcc(WIT_VECTOR3F *out)`
 
 读取加速度缓存。`out == NULL` 时返回 `WIT_HAL_INVAL`，成功返回 `WIT_HAL_OK`。
 
-当前数据来源为 `GyroscopeChannelData[0..2]`。
+当前数据来源为 `GyroscopeChannelData[0..2]`。现用 I2C 路径不读取加速度寄存器，因此这些字段
+不会在 I2C 采集过程中更新；仅旧串口解析路径会填充它们。
 
 ### `int32_t WitGetGyro(WIT_VECTOR3F *out)`
 
@@ -85,16 +106,14 @@ typedef struct {
 
 一次性读取加速度、角速度、姿态角和温度缓存。`out == NULL` 时返回 `WIT_HAL_INVAL`，成功返回 `WIT_HAL_OK`。
 
-当前数据来源为 `GyroscopeChannelData[0..9]`。
+当前数据来源为 `GyroscopeChannelData[0..9]`。现用 I2C 路径只更新角速度 `[3..5]` 和姿态角
+`[6..8]`；加速度 `[0..2]` 与温度 `[9]` 不在当前 I2C 采集链内更新。
 
 ## 数据来源说明
 
-当前应用自检路径通过 `GYROSCOPE_DATA_Decoder()` 解析 JY61P 标准串口子帧，并写入 `GyroscopeChannelData[]`。每个子帧固定 11 字节，以 `0x55` 开头，第二字节表示数据类型：
+当前 I2C0 状态机直接读取角度寄存器 `0x3D` 和角速度寄存器 `0x37`，各 6 字节，并发布到
+`GyroscopeChannelData[6..8]` 与 `[3..5]`。结构化 getter 只是复制这份缓存，不主动访问总线。
 
-- `0x51`：加速度和温度。
-- `0x52`：角速度，单位换算为 `deg/s`。
-- `0x53`：姿态角，单位换算为度。
-
-`GYROSCOPE_DATA_Decoder()` 当前解析单个 11 字节子帧；旧 `IT_JY61P()` 仍可处理 33 字节三帧连续缓存。应用层 UART0 中断当前按 11 字节子帧校验和解析，因此启用或关闭某类 JY61P 回传数据后，不再要求加速度、角速度、姿态角必须以固定 33 字节组合出现。
-
-如果后续统一改为厂家 `WitSerialDataIn()` 和 `sReg[]` 路径，再评估是否将 getter 的数据来源切换到 `sReg[]`。
+厂家串口兼容路径仍可通过 `GYROSCOPE_DATA_Decoder()` 解析 `0x51/0x52/0x53` 三类 11 字节
+子帧，旧 `IT_JY61P()` 也仍能处理 33 字节组合帧；但当前固件没有 UART ISR 或 app 调用者接入
+这条路径。

@@ -2,6 +2,11 @@
 
 ## 未发布
 
+- 校准当前文档到真实代码状态：README/AGENTS 改为菜单调度框架、循迹与 9 项设备检查；
+  修正编码器 20ms 与按键 1ms 周期、JY61P 由 Line Track 任务轮询、PID/运动学消费者、
+  OLED=I2C1，并移除接口文档中已删除的 E1/motion/UART0 IMU 路径。构建说明明确记录 CCS
+  projectspec 的 `empty.syscfg` 和 `bsp/debug_uart` include path 两项待修问题。
+
 - 修复蓝牙**冷上电后 RX 收不到、按复位键才正常**。现象: 冷上电 TX 正常(说明时钟/波特率/引脚
   复用/UART 使能都对)、RX 死; 复位后一切正常——差异在于复位不会给蓝牙模块重新上电, 复位时模块
   已稳定、TX 空闲为高。根因链: ① 蓝牙 RX(PB1)**无内部上拉**, 模块自身上电期 TX 为高阻时引脚悬空,
