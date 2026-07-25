@@ -46,7 +46,7 @@ SRAM 32KB(仅用 ~8.5KB)。OLED 传输是 I2C 带宽瓶颈, 非 CPU 瓶颈; DMA 
 
 Step 2 待办 (让 Flush 全异步、CPU 近零):
 1. **SysConfig**: 新增 DMA 模块 + 1 个通道, 配 I2C1(OLED) 的 TX DMA 触发事件; 给
-   I2C1 加 STOP 中断(intController); 用 SysConfig CLI (`C:/ti/sysconfig_1.26.2`) 重生成
+   I2C1 加 STOP 中断(intController); 用 SysConfig CLI 重生成
    `ti_msp_dl_config` (仅确认新增 DMA/中断配置, 勿污染其它)。
 2. **oled.c**: OLED_Flush 改为——设窗口(阻塞小命令) → 配 DMA(src=oled_fb, dst=I2C1 TX
    FIFO, 1025 字节, 8bit) → 启动 I2C 传输 → 立即返回; 加 busy 标志防重入(DMA 未完时新

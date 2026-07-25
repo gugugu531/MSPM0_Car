@@ -15,7 +15,7 @@
 
 - 新增蓝牙串口收发测试。`bsp/bluetooth`(BlueTooth/UART0)完成收发: RX/TX 均环形缓冲 + 中断
   (共用 UART0 中断入口分派 RX/TX), 对控制链路零阻塞; 波特率经 SysConfig 改为 **9600**
-  (`.syscfg` 加 `targetBaudRate=9600`, 用 `C:\ti\sysconfig_1.26.2` CLI 从 `.syscfg` 重新生成
+  (`.syscfg` 加 `targetBaudRate=9600`, 用 SysConfig CLI 从 `.syscfg` 重新生成
   `ti_msp_dl_config.c/.h`)。Device Check 新增「BlueTooth」任务(`app/app_bt_task.c`): 滚动显示
   收到的 ASCII(非可见字符显示为 `.`)+ rx/tx 计数, ENTER 键发送 "hello\r\n"。Keil/CCS 工程登记。
   Keil 0/0。上板用手机蓝牙串口助手对连验证。

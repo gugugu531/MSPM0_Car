@@ -39,9 +39,12 @@
 
 本地已验证的直接交叉编译命令使用：
 
-- 编译器：`C:\ti\ti_cgt_arm_llvm_4.0.2.LTS\bin\tiarmclang.exe`
-- SDK：`C:\ti\mspm0_sdk_2_10_00_04`
+- 编译器：TI ARM Clang（`ti_cgt_arm_llvm` 4.0.2 LTS）的 `bin/tiarmclang.exe`
+- SDK：MSPM0 SDK 2.10.00.04
 - 产物：`build/ccs/NUEDC2025_MSPM0G3507.out`
+
+> 工具链与 SDK 的安装路径因机器而异，本文不写死绝对路径；下文命令中的 `<...>` 均为占位符，
+> 请替换为本机实际安装位置。
 
 ## Keil 构建
 
@@ -56,10 +59,10 @@
 - Scatter 文件位于 `board/startup/mspm0g3507.sct`
 - `uvoptx`、`uvguix.*` 属于本地会话文件，不作为稳定源码依赖
 
-本地已验证的 Keil 命令：
+本地已验证的 Keil 命令（`<KEIL>` = Keil MDK 安装目录）：
 
 ```powershell
-& 'D:\Keil_v5\UV4\UV4.exe' -r 'NUEDC2025_MSPM0G3507.uvprojx' -o 'keil_build.log'
+& '<KEIL>/UV4/UV4.exe' -r 'NUEDC2025_MSPM0G3507.uvprojx' -o 'keil_build.log'
 ```
 
 运行目录为 `project/keil/`，构建结果为 `Objects/NUEDC2025_MSPM0G3507.axf` 和对应 hex，最近一次 rebuild 为 `0 Error(s), 0 Warning(s)`。
@@ -67,7 +70,7 @@
 命令行烧录（调试器已连接）：
 
 ```bash
-"D:/Keil_v5/UV4/UV4.exe" -f "NUEDC2025_MSPM0G3507.uvprojx" -o "flash_log.txt"
+"<KEIL>/UV4/UV4.exe" -f "NUEDC2025_MSPM0G3507.uvprojx" -o "flash_log.txt"
 ```
 
 成功日志应含 `Programming Done. Verify OK.`。
@@ -103,11 +106,30 @@
 
 ## SysConfig 和生成文件
 
-以下文件由工具或配置生成，业务逻辑不要写入其中：
+输入文件是 `board/sys_config/G3507.syscfg`（唯一真值源）；以下文件**由工具生成，禁止手改**
+（手改会在下次再生成时丢失，且易与 `.syscfg` 不一致）：
 
-- `board/sys_config/empty.syscfg`
 - `board/sys_config/ti_msp_dl_config.c`
 - `board/sys_config/ti_msp_dl_config.h`
+
+### 修改外设配置的正确流程
+
+1. 改 `board/sys_config/G3507.syscfg`（纯配置行，**不要在其中写注释**——再生成会丢失）。
+2. 用 SysConfig CLI 重新生成（`<SYSCONFIG>` = SysConfig 安装目录，`<SDK>` = MSPM0 SDK 目录，
+   版本需与工程一致；`<OUT>` = 输出目录，`<REPO>` = 本仓库根目录）：
+
+```powershell
+& "<SYSCONFIG>/sysconfig_cli.bat" `
+    --product "<SDK>/.metadata/product.json" `
+    --compiler ticlang --output "<OUT>" `
+    "<REPO>/board/sys_config/G3507.syscfg"
+```
+
+3. 建议先生成到临时目录，`git diff` 核对只有预期变化后再拷回 `board/sys_config/`。
+
+> 坑：外设引脚的 `internalResistor`（如给 UART RX 加上拉）必须**同时**设 `xxxPinConfig.enableConfig = true`，
+> 否则该属性**静默无效**（`enableConfig` 默认 false，且 CLI 不报警告）。生成结果应从
+> `DL_GPIO_initPeripheralInputFunction` 变为 `...InputFunctionFeatures` 并带 `DL_GPIO_RESISTOR_*` 才算生效。
 
 如重生成后产生差异，优先判断是否来自工具版本或配置变更。
 
@@ -115,11 +137,16 @@
 
 编译通过后仍需上板验证（当前 app 框架，详见 `docs/app-design.md`）：
 
-- 上电后 OLED 显示 `Main Menu`
+- 上电后 OLED 显示 `Main Menu`，含 `Line Track`（循迹测试）与 `Device Check` 两项
 - 短按 UP/DOWN 移动选择、ENTER 进入、BACK 返回上级
-- `Device Check` 子菜单内 6 个自检（Gyro JY61P / Gyro MPU6050 / Grayscale / Gray I2C / TB6612 / Encoder）可进入并刷新数据
-- `Gray I2C` 进入后显示 8 路数字量二进制与 `online`/固件版本；断开传感器应显示 `OFFLINE`
-- TB6612 自检短按发单次脉冲、编码器计数随之变化
+- `Device Check` 子菜单内 9 个自检（Gyro JY61P / Gyro MPU6050 / Grayscale / Gray I2C /
+  TB6612 / Encoder / Speed PID / Duty Sweep / BlueTooth）可进入并刷新数据
+- `Gray I2C` 进入后显示 8 路数字量二进制、`act` 触发数与 `ok/er`、`W/R/s` 诊断计数；
+  断开传感器应显示 `READ FAIL` 且 `er` 递增
+- TB6612 自检短按发单次脉冲、左右轮编码器计数（`encL`/`encR`）随之变化
+- `Encoder` 自检整车前进时两轮 `spd` 应同为正（方向符号见 `bsp/motor/hall_encoder.h`）
+- `Speed PID` / `Duty Sweep` 须**抬起车轮**运行；可配合 `tools/speed_pid_viz.py` 看曲线
+- `BlueTooth` 与手机串口助手（9600 8N1）对连：收到字符滚动显示且回显，ENTER 键发 `hello`
 - `SysTick_Handler` 可按周期扫描按键（菜单响应正常即证明）
 
 ## 本地产物边界

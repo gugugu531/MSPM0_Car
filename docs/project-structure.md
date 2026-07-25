@@ -37,7 +37,11 @@
 - `app_task.h`：任务生命周期契约（`APP_TASK_STATUS` + `APP_TASK_DESC` 三钩子），不含具体任务。
 - `app_menu.c/.h` 与 `app_menu_def.c`：菜单树（`MENU_NODE`/`MENU_ITEM`）导航与菜单树实例定义。
 - `app_checks.c/.h`：外设自检任务描述符，挂在 Device Check 子菜单。
+- `app_line_task.c/.h`：循迹测试任务（完整巡线闭环 + 陀螺增稳），挂在根菜单。
+- `app_bt_task.c/.h`：蓝牙串口收发测试任务，挂在 Device Check 子菜单。
 - `app_fmt.c/.h`：定点数字格式化（不引浮点 printf），供自检显示。
+
+> 外设自检集中在 `app_checks`；功能性任务各占一个 `app_*_task.c/.h`，避免自检文件无限膨胀。
 
 新增任务只需实现三个钩子（`on_enter/on_tick/on_exit`）并在 `app_menu_def.c` 的菜单树挂一项，
 调度/进出清理自动接入。该层可直接调用下层公开接口，但不应把纯算法或底层驱动细节塞入应用流程。
@@ -48,7 +52,8 @@
 
 - `common/`：core 层基础数据类型。
 - `pid/`：位置式和增量式 PID 控制器。
-- `kinematics/`：角度、位姿、差速混控和二维几何计算。
+- `filter/`：一阶低通（EMA）与中心死区等通用信号调理算法。
+- `kinematics/`：角度、位姿、差速混控与两轮差速运动学模型（车体参数一律传参，不在层内固化）。
 
 该层保持硬件无关，不包含 `app`、`middleware` 或 `bsp` 头文件。
 
@@ -56,7 +61,7 @@
 
 `middleware` 放置多个 BSP 外设组合后的系统能力：
 
-- `chassis/`：底盘组合服务
+- `chassis/`：底盘组合服务（开环占空比 + 每轮速度闭环 PID）
 - `line_follow/`：巡线运行状态服务
 - `line_tracking/`：巡线偏差计算、PID 修正和底盘输出
 - `ui/`：轻量 OLED UI 渲染层
@@ -74,11 +79,12 @@
 - `imu/`（JY61P，WIT 协议，I2C0 中断驱动）
 - `mpu6050/`（MPU6050 DMP 姿态，I2C0，与 JY61P 共总线）
 - `key/`
-- `motor/`（TB6612 直流电机 + 霍尔编码器）
+- `motor/`（TB6612 直流电机 + 左右双轮霍尔编码器）
 - `oled/`（SSD1306，帧缓冲模型）
 - `grayscale_sensor/`（数字量 GPIO 版 8 路灰度）
 - `ganv_gray/`（感为 8 路灰度，I2C0，与 MPU6050/JY61P 共总线）
-- `debug_uart/`
+- `debug_uart/`（Debug_Ex/UART1，非阻塞遥测输出）
+- `bluetooth/`（BlueTooth/UART0，9600 8N1 收发）
 - `time/`
 
 该层禁止包含 `app`、`core`、`middleware` 头文件。需要基础时间或阻塞延时能力时，统一调用 `bsp/time`。

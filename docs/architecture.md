@@ -20,10 +20,12 @@ app ─► middleware ─► bsp
 
 - `app`：固件入口与应用框架——上电初始化(`app_init`)、时间触发调度器(`app_scheduler`)、
   顶层状态机 INIT/MENU/RUN/FAULT(`app_mode`)、菜单树(`app_menu`)与任务契约(`app_task`)、
-  外设自检任务(`app_checks`)。
-- `core`：PID、运动学等纯计算能力。
-- `middleware`：组合 core 与 BSP，包括底盘、巡线（line_follow/line_tracking）、UI 和故障处理。
-- `bsp`：直接面向板级外设的驱动，包括直流电机(TB6612)、霍尔编码器、OLED、按键、JY61P IMU、MPU6050 和灰度巡线传感器。
+  外设自检任务(`app_checks`)与功能任务(`app_line_task` 循迹 / `app_bt_task` 蓝牙)。
+- `core`：PID、信号调理(filter)、运动学等纯计算能力。
+- `middleware`：组合 core 与 BSP，包括底盘（开环占空比 + 每轮速度闭环）、巡线
+  （line_follow/line_tracking）、UI 和故障处理。
+- `bsp`：直接面向板级外设的驱动，包括直流电机(TB6612)、双轮霍尔编码器、OLED、按键、
+  JY61P IMU、MPU6050、灰度巡线传感器、调试串口与蓝牙串口。
 
 ## 支撑目录
 
@@ -45,11 +47,16 @@ app ─► middleware ─► bsp
 中断入口按"谁拥有该外设/职责，谁定义 ISR"划分，`middleware` 不做中断转发：
 
 - **BSP 驱动自持其专属外设中断**：
-  - `bsp/motor/hall_encoder.c` → `GROUP1_IRQHandler`（编码器 GPIO）、`TIMER_0_INST_IRQHandler`（编码器采样定时器）
+  - `bsp/motor/hall_encoder.c` → `GROUP1_IRQHandler`（编码器 A 相 GPIO，分派 GPIOB 右轮 /
+    GPIOA 左轮）、`TIMER_0_INST_IRQHandler`（编码器采样定时器，20ms）
   - `bsp/imu/wit_sdk.c` → `I2C0_IRQHandler`（JY61P I2C 中断驱动状态机）
+  - `bsp/debug_uart/debug_uart.c` → `Debug_Ex_INST_IRQHandler`（UART1，TX 环形缓冲排空）
+  - `bsp/bluetooth/bluetooth.c` → `BlueTooth_INST_IRQHandler`（UART0，RX 收入环形缓冲 + RX 错误恢复）
 - **`app` 持有需跨子系统分发或属应用调度的中断**：
   - `app/app_scheduler.c` → `SysTick_Handler`（1ms：`BSP_Time_TickInc` 时基递增 + `Key_Scan`
     按键消抖）。`tick_active` 门控确保初始化完成前不误触发。调度器时基即取自此。
-  - 后续接入 UART 命令路由（蓝牙/调试上位机）时，同样将其 `UARTx_IRQHandler` 放在 app 层。
+
+> UART 中断按同一原则归属：串口当前各由**单一 BSP 驱动**独占（UART1=调试遥测、UART0=蓝牙），
+> 故其 ISR 放在对应 BSP 源文件内。若将来某串口需向多个上层子系统分发命令，再上移到 app 层。
 
 > 新增外设时遵循同一原则：仅该驱动使用的中断放进对应 BSP 源文件；需要唤醒多个上层子系统或承担应用级调度的中断放进 `app`。不要在 `middleware` 里写"转发到下层驱动"的空壳 ISR 入口。
