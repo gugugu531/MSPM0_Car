@@ -7,8 +7,9 @@
 #include "app_menu.h"
 #include "app_checks.h"
 #include "app_line_task.h"
+#include "app_bt_task.h"
 
-/* --- Device Check 子菜单：8 个外设自检 --- */
+/* --- Device Check 子菜单：9 个外设自检 --- */
 static const MENU_ITEM device_check_items[] = {
     { .name = "Gyro JY61P",   .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GYRO_JY61P },
     { .name = "Gyro MPU6050", .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GYRO_MPU6050 },
@@ -18,6 +19,7 @@ static const MENU_ITEM device_check_items[] = {
     { .name = "Encoder",      .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_ENCODER },
     { .name = "Speed PID",    .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_SPEED_PID },
     { .name = "Duty Sweep",   .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_DUTY_SWEEP },
+    { .name = "BlueTooth",    .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_BLUETOOTH },
 };
 
 static const MENU_NODE device_check_menu = {

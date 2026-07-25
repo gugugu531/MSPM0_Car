@@ -233,6 +233,7 @@ TIMER1.peripheral.$assign = "TIMA1";
 
 UART1.targetBaudRate                   = 115200;
 UART1.$name                            = "BlueTooth";
+UART1.targetBaudRate                   = 9600;
 UART1.peripheral.$assign               = "UART0";
 UART1.peripheral.rxPin.$assign         = "PB1";
 UART1.peripheral.txPin.$assign         = "PB0";

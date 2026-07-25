@@ -39,7 +39,8 @@ Main Menu
     ├── TB6612           (task)   短按单次低速脉冲(20%/300ms) + 编码器响应, 抬轮提示
     ├── Encoder          (task)   双轮 count/speed/dir
     ├── Speed PID        (task)   双轮速度闭环, 按键给目标 + 目标/实测对比, 整定用, 抬轮提示
-    └── Duty Sweep       (task)   开环占空比阶梯, 查各占空比下编码器读速(死区/噪声诊断), 抬轮提示
+    ├── Duty Sweep       (task)   开环占空比阶梯, 查各占空比下编码器读速(死区/噪声诊断), 抬轮提示
+    └── BlueTooth        (task)   蓝牙串口(UART0,9600)收发测试: 显示收到 ASCII, EN 键发 "hello"
 ```
 
 导航按键（仍仅短按）：`UP/DOWN` 移动、`ENTER` 进入子菜单/任务、`BACK` 返回上级。
@@ -113,7 +114,7 @@ Main Menu
 9. **UI**：RUN 运行页由任务 `on_tick` 低频自渲染；MENU/FAULT 页归框架。
 
 ### 参考实现
-`app_checks.c` 的 8 个外设自检（`APP_CHK_*`）演示了 enter 复位、tick 非阻塞采样、按变化节流刷屏、
+Device Check 共 9 项(`app_checks.c` 8 项外设自检 + `app_bt_task.c` 蓝牙收发)演示了 enter 复位、tick 非阻塞采样、按变化节流刷屏、
 仅靠 BACK 短按退出；两个陀螺仪自检还示范了 on_enter/on_exit 挂起/恢复分时共用 I2C0。
 
 ### 公共支持

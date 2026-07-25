@@ -12,8 +12,8 @@
 
 /* 导航栈深度上限（根 + 若干级子菜单）。 */
 #define MENU_STACK_MAX 4U
-/* 单页最多显示的项数，用于组装渲染指针数组。 */
-#define MENU_ITEMS_MAX 8U
+/* 单个菜单最多容纳的项数，用于组装渲染指针数组(须 >= 最大子菜单项数)。 */
+#define MENU_ITEMS_MAX 12U
 
 static const MENU_NODE *node_stack[MENU_STACK_MAX];
 static uint8_t          sel_stack[MENU_STACK_MAX];   /* 各级选中项，返回时恢复 */

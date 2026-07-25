@@ -2,6 +2,13 @@
 
 ## 未发布
 
+- 新增蓝牙串口收发测试。`bsp/bluetooth`(BlueTooth/UART0)完成收发: RX/TX 均环形缓冲 + 中断
+  (共用 UART0 中断入口分派 RX/TX), 对控制链路零阻塞; 波特率经 SysConfig 改为 **9600**
+  (`.syscfg` 加 `targetBaudRate=9600`, 用 `C:\ti\sysconfig_1.26.2` CLI 从 `.syscfg` 重新生成
+  `ti_msp_dl_config.c/.h`)。Device Check 新增「BlueTooth」任务(`app/app_bt_task.c`): 滚动显示
+  收到的 ASCII(非可见字符显示为 `.`)+ rx/tx 计数, ENTER 键发送 "hello\r\n"。Keil/CCS 工程登记。
+  Keil 0/0。上板用手机蓝牙串口助手对连验证。
+
 - 修正编码器**测速采样周期严重不一致**的 bug。采样定时器 `TIMER_0`(TIMA1) SysConfig 实际配的是
   **100ms**,而固件 `HALL_ENCODER_SAMPLE_PERIOD_S` 假设 **10ms** → 速度 = 脉冲/0.01 被**放大 10 倍**
   (距离不含时间故不受影响, 正是"距离准/速度错"的成因);且速度仅 10Hz 刷新, 而速度环跑 50Hz(20ms)→
