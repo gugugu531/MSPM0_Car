@@ -2,6 +2,17 @@
 
 ## 未发布
 
+- 修复蓝牙**冷上电后 RX 收不到、按复位键才正常**。现象: 冷上电 TX 正常(说明时钟/波特率/引脚
+  复用/UART 使能都对)、RX 死; 复位后一切正常——差异在于复位不会给蓝牙模块重新上电, 复位时模块
+  已稳定、TX 空闲为高。根因链: ① 蓝牙 RX(PB1)**无内部上拉**, 模块自身上电期 TX 为高阻时引脚悬空,
+  噪声被当成起始位; ② UART0 在 `SYSCFG_DL_init()` 就已使能接收, 而 `BlueTooth_Init()` 要等进入
+  菜单任务才调用, 这期间**无人读取 RX FIFO**; ③ TI 文档明确 FIFO 满后新数据被硬件直接丢弃、
+  必须 CPU 读走才恢复(`OVRERR` 亦需清除), 于是 RX 永久失效。修复: **(a)** `BlueTooth_Init()`
+  主动排空 RX FIFO + 清错误/中断标志再使能中断(不依赖"中断自举冲走积压"), 并把 `NVIC_ClearPendingIRQ`
+  移到使能之前; **(b)** SysConfig 给蓝牙 RX 加内部上拉(`.syscfg` 设 `rxPinConfig.enableConfig=true`
+  + `internalResistor="PULL_UP"`, 经 CLI 重新生成); **(c)** 中断入口增加 溢出/break/帧/校验 错误
+  分支——排空 FIFO 恢复接收并计数, 自检界面显示 `er` 计数便于诊断。Keil 0/0。**待冷上电验证。**
+
 - 新增蓝牙串口收发测试。`bsp/bluetooth`(BlueTooth/UART0)完成收发: RX/TX 均环形缓冲 + 中断
   (共用 UART0 中断入口分派 RX/TX), 对控制链路零阻塞; 波特率经 SysConfig 改为 **9600**
   (`.syscfg` 加 `targetBaudRate=9600`, 用 `C:\ti\sysconfig_1.26.2` CLI 从 `.syscfg` 重新生成

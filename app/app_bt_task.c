@@ -90,6 +90,9 @@ static APP_TASK_STATUS ChkBt_Tick(float dt){
 
     k = BtPutStr(l2, "rx ");
     AppFmt_I32(&l2[k], (int32_t)BlueTooth_GetRxCount());
+    while (l2[k] != '\0'){ k++; }
+    k += BtPutStr(&l2[k], " er ");
+    AppFmt_I32(&l2[k], (int32_t)BlueTooth_GetRxErrors());   /* UART RX 错误数 */
     k = BtPutStr(l3, "tx ");
     AppFmt_I32(&l3[k], (int32_t)bt_tx_sends);
 

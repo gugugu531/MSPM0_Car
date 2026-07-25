@@ -52,6 +52,11 @@ uint32_t BlueTooth_GetRxCount(void);
  */
 uint32_t BlueTooth_GetDroppedBytes(void);
 
+/**
+ * @brief UART RX 错误(溢出/break/帧/校验)累计次数。上电期线路噪声会使其非零, 属正常。
+ */
+uint32_t BlueTooth_GetRxErrors(void);
+
 #ifdef __cplusplus
 }
 #endif

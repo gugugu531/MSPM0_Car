@@ -245,6 +245,8 @@ UART1.txPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric12";
 UART1.rxPinConfig.hideOutputInversion  = scripting.forceWrite(false);
 UART1.rxPinConfig.onlyInternalResistor = scripting.forceWrite(false);
 UART1.rxPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
+UART1.rxPinConfig.enableConfig         = true;
+UART1.rxPinConfig.internalResistor     = "PULL_UP";
 UART1.rxPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric13";
 
 UART4.$name                            = "Debug_Ex";
