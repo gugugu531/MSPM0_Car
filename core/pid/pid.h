@@ -2,8 +2,8 @@
  * @file  pid.h
  * @brief Core 层通用 PID 控制器，支持位置式和增量式两种更新模式。
  *
- * 当前消费者为 middleware/chassis 的双轮速度环，以及 middleware/line_follow 在关闭
- * 陀螺增稳时使用的退化巡线控制；二者均采用位置式（PID_MODE_POSITION）。
+ * 当前消费者为 middleware/chassis 的双轮速度环、middleware/line_follow 的退化巡线
+ * 控制，以及 middleware/straight_drive 的陀螺直行控制；均采用位置式（PID_MODE_POSITION）。
  * 增量式（PID_MODE_INCREMENTAL）及其专用状态字段已实现并保留，但当前暂无调用者。
  */
 #ifndef PID_H

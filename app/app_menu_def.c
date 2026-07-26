@@ -1,12 +1,13 @@
 /**
  * @file  app_menu_def.c
- * @brief 菜单树实例定义（根菜单 + Device Check 子菜单）。
+ * @brief 菜单树实例定义（根菜单 + 功能测试子菜单）。
  *
  * 加菜单项 = 改这两张表。任务描述符来自 app_checks.h（任务类型契约见 app_task.h）。
  */
 #include "app_menu.h"
 #include "app_checks.h"
 #include "app_line_task.h"
+#include "app_straight_task.h"
 #include "app_bt_task.h"
 
 /* --- Device Check 子菜单：9 个外设自检 --- */
@@ -28,10 +29,25 @@ static const MENU_NODE device_check_menu = {
     (uint8_t)(sizeof(device_check_items) / sizeof(device_check_items[0])),
 };
 
+/* --- 直行测试子菜单：四种底盘控制方式 --- */
+static const MENU_ITEM straight_test_items[] = {
+    { .name = "Duty Open",      .kind = MENU_ENTRY_TASK, .u.task = &APP_STRAIGHT_DUTY_OPEN_TEST },
+    { .name = "Speed Closed",   .kind = MENU_ENTRY_TASK, .u.task = &APP_STRAIGHT_SPEED_TEST },
+    { .name = "Duty+Gyro Rate", .kind = MENU_ENTRY_TASK, .u.task = &APP_STRAIGHT_GYRO_RATE_TEST },
+    { .name = "Duty+Yaw Hold",  .kind = MENU_ENTRY_TASK, .u.task = &APP_STRAIGHT_GYRO_HEADING_TEST },
+};
+
+static const MENU_NODE straight_test_menu = {
+    "Straight Test",
+    straight_test_items,
+    (uint8_t)(sizeof(straight_test_items) / sizeof(straight_test_items[0])),
+};
+
 /* --- 根菜单 --- */
 static const MENU_ITEM root_items[] = {
-    { .name = "Line Follow",  .kind = MENU_ENTRY_TASK,    .u.task = &APP_LINE_FOLLOW_TEST },
-    { .name = "Device Check", .kind = MENU_ENTRY_SUBMENU, .u.submenu = &device_check_menu },
+    { .name = "Line Follow",   .kind = MENU_ENTRY_TASK,    .u.task = &APP_LINE_FOLLOW_TEST },
+    { .name = "Straight Test", .kind = MENU_ENTRY_SUBMENU, .u.submenu = &straight_test_menu },
+    { .name = "Device Check",  .kind = MENU_ENTRY_SUBMENU, .u.submenu = &device_check_menu },
 };
 
 const MENU_NODE APP_ROOT_MENU = {

@@ -16,8 +16,8 @@ extern "C" {
 
 /*
  * 每轮速度环 PID 默认增益(位置式: setpoint=目标轮速 m/s, feedback=实测轮速, output=占空比 %)。
- * 起始值, 必须上板整定(用 Device Check「Speed PID」)。integral_limit 使 ki*积分饱和值≈输出上限,
- * 提供抗积分饱和; output_limit=100 即满占空比。
+ * 当前数值为上板整定值，可用 Device Check「Speed PID」继续验证。integral_limit 限制
+ * 积分累计值本身，output_limit=100 把最终 PID 输出限制为满占空比。
  */
 #define CHASSIS_SPEED_KP             200.00f
 #define CHASSIS_SPEED_KI             17.0f
