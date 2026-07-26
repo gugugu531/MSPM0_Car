@@ -650,7 +650,7 @@ int32_t WitGetData(WIT_IMU_DATA *out)
  *       MSPM0 SDK data_sensor_aggregator (多 I2C 传感器采集)
  *
  * 外设: I2C0 (SysConfig), PA0=SDA, PA1=SCL, 400kHz, 设备地址 0x50
- * 轮询: SysTick ISR 中每 5ms 调用一次 JY61P_I2C_Poll()
+ * 轮询: 当前由使用 JY61P 的 app 任务在每个 20ms 控制拍调用 JY61P_I2C_Poll()
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 #include "bsp_time.h"
@@ -666,6 +666,8 @@ int32_t WitGetData(WIT_IMU_DATA *out)
 static volatile uint32_t s_jy61p_i2c_poll_count;
 static volatile uint32_t s_jy61p_i2c_error_count;
 static volatile uint32_t s_jy61p_i2c_nack_count;
+static volatile uint32_t s_jy61p_i2c_sample_count;
+static volatile uint32_t s_jy61p_i2c_last_sample_ms;
 
 /*
  * 中断驱动异步读状态机: Poll 只 kick 一次"读angle→读gyro"链并立即返回,
@@ -781,6 +783,8 @@ void JY61P_I2C_Init(void)
     s_jy61p_i2c_poll_count  = 0U;
     s_jy61p_i2c_error_count = 0U;
     s_jy61p_i2c_nack_count  = 0U;
+    s_jy61p_i2c_sample_count = 0U;
+    s_jy61p_i2c_last_sample_ms = 0U;
     s_jy61p_state           = JY61P_I2C_IDLE;
     s_jy61p_suspended       = false;
     /* 校准已固化在 JY61P flash 中, 上电无需重复执行 */
@@ -793,7 +797,7 @@ void JY61P_I2C_Init(void)
 }
 
 /*
- * 非阻塞 kick + 看门狗 (由 SysTick ISR 每 5ms 调用一次):
+ * 非阻塞 kick + 看门狗 (当前由 app 任务每 20ms 调用一次):
  *   - 上一轮事务仍在进行且未超时 -> 本拍不动 (让中断继续推进);
  *   - 事务卡死超过看门狗阈值 -> 复位控制器回 IDLE, 防 IMU 数据永久冻结;
  *   - 空闲则启动新一轮 "读angle -> 读gyro" 链, 立即返回。
@@ -854,6 +858,8 @@ void I2C0_IRQHandler(void)
             JY61P_I2C_StartRegRead(JY61P_I2C_REG_GYRO, JY61P_I2C_GYRO_TX);
         } else if (s_jy61p_state == JY61P_I2C_GYRO_RX){
             JY61P_I2C_PublishGyro(s_jy61p_rx);
+            s_jy61p_i2c_last_sample_ms = BSP_Time_GetMs();
+            s_jy61p_i2c_sample_count++;
             s_jy61p_state = JY61P_I2C_IDLE;
         }
         break;
@@ -873,4 +879,13 @@ void I2C0_IRQHandler(void)
 uint32_t JY61P_I2C_GetPollCount(void)    { return s_jy61p_i2c_poll_count; }
 uint32_t JY61P_I2C_GetErrorCount(void)   { return s_jy61p_i2c_error_count; }
 uint32_t JY61P_I2C_GetNackCount(void)    { return s_jy61p_i2c_nack_count; }
-uint32_t JY61P_I2C_GetTimeoutCount(void) { return s_jy61p_i2c_nack_count; }
+uint32_t JY61P_I2C_GetTimeoutCount(void) { return s_jy61p_i2c_error_count; }
+uint32_t JY61P_I2C_GetSampleCount(void)  { return s_jy61p_i2c_sample_count; }
+
+bool JY61P_I2C_IsDataFresh(uint32_t max_age_ms)
+{
+    if (s_jy61p_i2c_sample_count == 0U){
+        return false;
+    }
+    return (uint32_t)(BSP_Time_GetMs() - s_jy61p_i2c_last_sample_ms) <= max_age_ms;
+}

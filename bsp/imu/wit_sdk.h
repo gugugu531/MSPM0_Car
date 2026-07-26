@@ -151,6 +151,10 @@ uint32_t JY61P_I2C_GetPollCount(void);
 uint32_t JY61P_I2C_GetErrorCount(void);
 uint32_t JY61P_I2C_GetNackCount(void);
 uint32_t JY61P_I2C_GetTimeoutCount(void);
+/** 获取完整发布的 angle + gyro 样本数。 */
+uint32_t JY61P_I2C_GetSampleCount(void);
+/** 最近一次完整样本是否存在且未超过 max_age_ms。 */
+bool JY61P_I2C_IsDataFresh(uint32_t max_age_ms);
 
 typedef struct {
     float x;
