@@ -66,7 +66,7 @@
 
 - `chassis/`：底盘组合服务（开环占空比 + 每轮速度闭环 PID）
 - `line_follow/`：GPIO 灰度读取、巡线偏差计算、PID/陀螺修正和底盘输出
-- `straight_drive/`：四种直行模式的指令、姿态反馈、PID 与底盘输出
+- `straight_drive/`：九种直行模式的指令、启动阶段切换、姿态反馈、PID 与底盘输出
 - `ui/`：轻量 OLED UI 渲染层
 - `fault/`：系统故障处理服务
 
@@ -123,4 +123,4 @@ SysConfig CLI 重新生成。
 - `speed_pid_viz.py`：可视化 Device Check 的 `[SPD]` 速度 PID 遥测。
 - `check_keil_project_sync.py`：比较 MDK 5/6 的 C、汇编与库输入列表。
 - `straight_test_viz.py`：可视化 Straight Test 的 `[STR]` 左右轮占空比、速度、
-  距离、yaw 与 gz，支持原始日志和 CSV 导出。
+  距离、融合 yaw、积分 yaw 与 gz，支持原始日志和 CSV 导出。

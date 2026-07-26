@@ -35,12 +35,19 @@ Main Menu
 │   ├── Duty Open       (task)   左右轮同占空比开环
 │   ├── Speed Closed    (task)   左右轮独立速度 PID 直行
 │   ├── Duty+Gyro Rate  (task)   基础占空比 + gz=0 角速度闭环
-│   └── Duty+Yaw Hold   (task)   基础占空比 + 启动航向锁定
+│   ├── Duty+Yaw Hold   (task)   基础占空比 + 启动航向锁定
+│   ├── Ramp Yaw Hold   (task)   占空比斜坡，全程启动航向闭环
+│   ├── 80 Rate->Yaw    (task)   1 s 角速度闭环后切换航向闭环
+│   ├── 80 Enc->Yaw     (task)   1 s 双轮累计路程差闭环后切换航向闭环
+│   ├── 80 Int->Yaw     (task)   500 ms 固定周期积分航向对照版
+│   └── 100 Int->Yaw    (task)   500 ms 新样本积分 + 融合角修正，速度优先
 └── Device Check        (submenu)
     ├── Gyro JY61P       (task)   JY61P 陀螺/姿态/温度 + 诊断计数
+    ├── Yaw A/B          (task)   无电机对比 gz 积分角 A 与融合角 B
     ├── Gyro MPU6050     (task)   物理六轴/温度/静态倾角双页; 进挂起/出恢复 JY61P
     ├── Grayscale        (task)   数字量 GPIO 版, 8 路 mask 二进制 + 触发数
     ├── Gray I2C         (task)   感为 I2C 版(0x4F), 8 路数字量 + 在线/固件版本
+    ├── Yahboom I2C      (task)   Yahboom I2C 版(0x12), X1→X8 位图 + 诊断计数
     ├── TB6612           (task)   短按单次低速脉冲(20%/300ms) + 编码器响应, 抬轮提示
     ├── Encoder          (task)   双轮 count/speed/dir
     ├── Speed PID        (task)   双轮速度闭环, 按键给目标 + 目标/实测对比, 整定用, 抬轮提示
@@ -119,7 +126,7 @@ Main Menu
 9. **UI**：RUN 运行页由任务 `on_tick` 低频自渲染；MENU/FAULT 页归框架。
 
 ### 参考实现
-Device Check 共 10 项(`app_checks.c` 9 项外设自检 + `app_bt_task.c` 蓝牙收发)演示了 enter 复位、tick 非阻塞采样、按变化节流刷屏、
+Device Check 共 11 项（`app_checks.c` 10 项诊断 + `app_bt_task.c` 蓝牙收发），演示了 enter 复位、tick 非阻塞采样、按变化节流刷屏、
 仅靠 BACK 短按退出；MPU6050、感为灰度与 Yahboom 检查页还示范了 on_enter/on_exit
 挂起/恢复 JY61P，以分时共用 I2C0。
 

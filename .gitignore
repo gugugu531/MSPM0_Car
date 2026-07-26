@@ -45,6 +45,8 @@ docs/datasheets/*.pdf
 # 本地底盘整定原始采样与导出数据
 /raw.txt
 /spd.csv
+/straight_raw.txt
+/straight.csv
 
 # CMSIS Solution / MDK 6 本地生成文件（工程输入 YAML 与工具清单保留）
 /project/keil/out/

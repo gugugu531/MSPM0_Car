@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """直行测试 Debug_Ex 遥测实时可视化。
 
-固件在 Main Menu -> Straight Test 的四种任务中，通过 UART1/Debug_Ex
+固件在 Main Menu -> Straight Test 的九种任务中，通过 UART1/Debug_Ex
 (115200 8N1) 每 20 ms 输出：
 
-  [STR] t=<ms> m=<0..3> imu=<0|1> cmd=<value> dl=<%> dr=<%>
-        vl=<m/s> vr=<m/s> xl=<m> xr=<m> yaw=<deg> gz=<deg/s> corr=<%>
+  [STR] t=<ms> m=<0..8> imu=<0|1> cmd=<target> act=<applied> phase=<0|1>
+        dl=<%> dr=<%>
+        vl=<m/s> vr=<m/s> xl=<m> xr=<m> yaw=<deg> gz=<deg/s>
+        iyaw=<deg> corr=<%>
 
-图表从上到下依次是左右轮占空比、速度、距离、yaw/gz。IMU 未就绪时
-yaw/gz 不画入曲线，避免把占位零值当成真实姿态。
+图表从上到下依次是左右轮占空比、速度、距离、yaw/积分yaw/gz。IMU 未就绪时
+姿态数据不画入曲线，避免把占位零值当成真实姿态。
 
 用法：
   python tools/straight_test_viz.py --list
@@ -40,13 +42,18 @@ from matplotlib.animation import FuncAnimation
 DEFAULT_BAUD = 115200
 DEFAULT_WINDOW_S = 15.0
 MAX_SAMPLES = 6000
-FLOAT_FIELDS = ("cmd", "dl", "dr", "vl", "vr", "xl", "xr", "yaw", "gz", "corr")
-CSV_COLUMNS = ("pc_time", "t", "m", "imu", *FLOAT_FIELDS)
+FLOAT_FIELDS = ("cmd", "act", "dl", "dr", "vl", "vr", "xl", "xr", "yaw", "gz", "iyaw", "corr")
+CSV_COLUMNS = ("pc_time", "t", "m", "imu", "phase", *FLOAT_FIELDS)
 MODE_NAMES = {
     0: "Duty Open",
     1: "Speed Closed",
     2: "Duty+Gyro Rate",
     3: "Duty+Yaw Hold",
+    4: "Ramp Yaw Hold",
+    5: "80 Rate->Yaw",
+    6: "80 Enc->Yaw",
+    7: "80 Int->Yaw",
+    8: "100 Int->Yaw",
 }
 
 # 选择已安装的中文字体，避免 Matplotlib 标签显示成方块。
@@ -112,6 +119,7 @@ class StraightTelemetry:
             timestamp = int(fields["t"])
             mode = int(fields["m"])
             imu_valid = int(fields["imu"])
+            phase = int(fields["phase"])
             values = {key: float(fields[key]) for key in FLOAT_FIELDS}
         except (KeyError, ValueError):
             self.bad_lines += 1
@@ -121,6 +129,7 @@ class StraightTelemetry:
             "t": timestamp,
             "m": mode,
             "imu": imu_valid,
+            "phase": phase,
             **values,
         }
         with self._lock:
@@ -137,6 +146,7 @@ class StraightTelemetry:
                 str(timestamp),
                 str(mode),
                 str(imu_valid),
+                str(phase),
                 *(f"{values[key]:.5f}" for key in FLOAT_FIELDS),
             ]
             self._csv_file.write(",".join(row) + "\n")
@@ -224,6 +234,8 @@ def build_figure():
     axis_distance.set_ylabel("距离 (m)")
 
     lines["yaw"], = axis_yaw.plot([], [], color="#2ca02c", label="yaw")
+    lines["iyaw"], = axis_yaw.plot(
+        [], [], color="#ff7f0e", linestyle="--", label="integrated yaw")
     lines["gz"], = axis_rate.plot([], [], color="#9467bd", label="gz")
     axis_yaw.set_ylabel("yaw (deg)", color="#2ca02c")
     axis_rate.set_ylabel("gz (deg/s)", color="#9467bd")
@@ -303,10 +315,13 @@ def main(argv=None) -> int:
             count = min(len(timeline), len(data[field]))
             lines[field].set_data(timeline[:count], data[field][:count])
 
-        imu_count = min(len(timeline), len(imu_valid), len(data["yaw"]), len(data["gz"]))
+        imu_count = min(len(timeline), len(imu_valid), len(data["yaw"]),
+                        len(data["iyaw"]), len(data["gz"]))
         yaw = [data["yaw"][i] if imu_valid[i] else math.nan for i in range(imu_count)]
+        iyaw = [data["iyaw"][i] if imu_valid[i] else math.nan for i in range(imu_count)]
         gz = [data["gz"][i] if imu_valid[i] else math.nan for i in range(imu_count)]
         lines["yaw"].set_data(timeline[:imu_count], yaw)
+        lines["iyaw"].set_data(timeline[:imu_count], iyaw)
         lines["gz"].set_data(timeline[:imu_count], gz)
 
         if timeline:
@@ -322,11 +337,22 @@ def main(argv=None) -> int:
         if latest:
             mode_name = MODE_NAMES.get(latest["m"], f"Unknown({latest['m']})")
             imu_text = "IMU OK" if latest["imu"] else "IMU WAIT/ERR"
+            phase_text = ""
+            if latest["m"] == 4:
+                phase_text = " | CRUISE" if latest["phase"] else " | RAMP"
+            elif latest["m"] == 5:
+                phase_text = " | YAW" if latest["phase"] else " | RATE"
+            elif latest["m"] == 6:
+                phase_text = " | YAW" if latest["phase"] else " | ENCODER"
+            elif latest["m"] == 7:
+                phase_text = " | FUSED YAW" if latest["phase"] else " | INTEGRATED YAW"
+            elif latest["m"] == 8:
+                phase_text = " | FUSED YAW" if latest["phase"] else " | INTEGRATED YAW"
             figure.suptitle(
-                f"{mode_name} | cmd={latest['cmd']:+.3f} | "
+                f"{mode_name} | cmd/act={latest['cmd']:+.3f}/{latest['act']:+.3f} | "
                 f"duty L/R={latest['dl']:+.1f}/{latest['dr']:+.1f}% | "
                 f"speed L/R={latest['vl']:+.3f}/{latest['vr']:+.3f} m/s | "
-                f"corr={latest['corr']:+.2f}% | {imu_text}",
+                f"corr={latest['corr']:+.2f}% | {imu_text}{phase_text}",
                 fontsize=9,
             )
         else:

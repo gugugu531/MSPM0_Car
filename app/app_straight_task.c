@@ -37,7 +37,12 @@ static uint8_t Straight_AppendStr(char *buf, uint8_t offset, const char *text)
 static bool Straight_UsesGyro(STRAIGHT_DRIVE_MODE mode)
 {
     return (mode == STRAIGHT_DRIVE_MODE_GYRO_RATE) ||
-           (mode == STRAIGHT_DRIVE_MODE_GYRO_HEADING);
+           (mode == STRAIGHT_DRIVE_MODE_GYRO_HEADING) ||
+           (mode == STRAIGHT_DRIVE_MODE_RAMP_HEADING) ||
+           (mode == STRAIGHT_DRIVE_MODE_RATE_THEN_HEADING) ||
+           (mode == STRAIGHT_DRIVE_MODE_ENCODER_THEN_HEADING) ||
+           (mode == STRAIGHT_DRIVE_MODE_INTEGRATED_THEN_HEADING) ||
+           (mode == STRAIGHT_DRIVE_MODE_FULL_INTEGRATED_THEN_HEADING);
 }
 
 static float Straight_Abs(float value)
@@ -59,6 +64,16 @@ static const char *Straight_Title(STRAIGHT_DRIVE_MODE mode)
         case STRAIGHT_DRIVE_MODE_SPEED:        return "Speed Closed";
         case STRAIGHT_DRIVE_MODE_GYRO_RATE:    return "Duty+Gyro Rate";
         case STRAIGHT_DRIVE_MODE_GYRO_HEADING: return "Duty+Yaw Hold";
+        case STRAIGHT_DRIVE_MODE_RAMP_HEADING:
+            return "Ramp Yaw Hold";
+        case STRAIGHT_DRIVE_MODE_RATE_THEN_HEADING:
+            return "80 Rate->Yaw";
+        case STRAIGHT_DRIVE_MODE_ENCODER_THEN_HEADING:
+            return "80 Enc->Yaw";
+        case STRAIGHT_DRIVE_MODE_INTEGRATED_THEN_HEADING:
+            return "80 Int->Yaw";
+        case STRAIGHT_DRIVE_MODE_FULL_INTEGRATED_THEN_HEADING:
+            return "100 Int->Yaw";
         default:                               return "Straight";
     }
 }
@@ -93,6 +108,31 @@ static void StraightHeading_Enter(void)
     Straight_Enter(STRAIGHT_DRIVE_MODE_GYRO_HEADING);
 }
 
+static void StraightRampHeading_Enter(void)
+{
+    Straight_Enter(STRAIGHT_DRIVE_MODE_RAMP_HEADING);
+}
+
+static void StraightRateThenHeading_Enter(void)
+{
+    Straight_Enter(STRAIGHT_DRIVE_MODE_RATE_THEN_HEADING);
+}
+
+static void StraightEncoderThenHeading_Enter(void)
+{
+    Straight_Enter(STRAIGHT_DRIVE_MODE_ENCODER_THEN_HEADING);
+}
+
+static void StraightIntegratedThenHeading_Enter(void)
+{
+    Straight_Enter(STRAIGHT_DRIVE_MODE_INTEGRATED_THEN_HEADING);
+}
+
+static void StraightFullIntegratedThenHeading_Enter(void)
+{
+    Straight_Enter(STRAIGHT_DRIVE_MODE_FULL_INTEGRATED_THEN_HEADING);
+}
+
 static void Straight_HandleKeys(void)
 {
     if (Key_GetEvent(KEY_ID_UP) == KEY_EVENT_SHORT_PRESS){
@@ -115,9 +155,14 @@ static void Straight_Render(const STRAIGHT_DRIVE_OUTPUT *output)
 
     n = Straight_PutStr(l0,
         (output->mode == STRAIGHT_DRIVE_MODE_SPEED) ? "tgt " : "duty ");
-    AppFmt_Fixed(&l0[n], output->command,
+    AppFmt_Fixed(&l0[n], output->applied_command,
         (output->mode == STRAIGHT_DRIVE_MODE_SPEED) ? 2U : 1U);
     while (l0[n] != '\0'){ n++; }
+    if (output->mode == STRAIGHT_DRIVE_MODE_RAMP_HEADING){
+        n = Straight_AppendStr(l0, n, ">");
+        AppFmt_Fixed(&l0[n], output->command, 0U);
+        while (l0[n] != '\0'){ n++; }
+    }
     n = Straight_AppendStr(l0, n, " x");
     AppFmt_Fixed(&l0[n], Straight_GetTravelDistance(output), 2U);
     while (l0[n] != '\0'){ n++; }
@@ -142,13 +187,42 @@ static void Straight_Render(const STRAIGHT_DRIVE_OUTPUT *output)
             l3[n] = '\0';
             n = Straight_PutStr(l4, "motor held zero");
             l4[n] = '\0';
-        } else if (output->mode == STRAIGHT_DRIVE_MODE_GYRO_RATE){
-            n = Straight_PutStr(l3, "gz ");
+        } else if ((output->mode == STRAIGHT_DRIVE_MODE_GYRO_RATE) ||
+                   ((output->mode == STRAIGHT_DRIVE_MODE_RATE_THEN_HEADING) &&
+                    !output->startup_complete)){
+            n = Straight_PutStr(l3,
+                (output->mode == STRAIGHT_DRIVE_MODE_GYRO_RATE)
+                    ? "gz "
+                    : "RATE gz ");
             AppFmt_Fixed(&l3[n], output->gyro_z_deg_s, 1U);
             n = Straight_PutStr(l4, "corr ");
             AppFmt_Fixed(&l4[n], output->correction_percent, 1U);
+        } else if ((output->mode == STRAIGHT_DRIVE_MODE_ENCODER_THEN_HEADING) &&
+                   !output->startup_complete){
+            n = Straight_PutStr(l3, "ENC dx ");
+            AppFmt_Fixed(&l3[n],
+                output->distance_left_m - output->distance_right_m, 3U);
+            n = Straight_PutStr(l4, "corr ");
+            AppFmt_Fixed(&l4[n], output->correction_percent, 1U);
+        } else if (((output->mode == STRAIGHT_DRIVE_MODE_INTEGRATED_THEN_HEADING) ||
+                    (output->mode == STRAIGHT_DRIVE_MODE_FULL_INTEGRATED_THEN_HEADING)) &&
+                   !output->startup_complete){
+            n = Straight_PutStr(l3, "INT yaw ");
+            AppFmt_Fixed(&l3[n], output->integrated_heading_deg, 1U);
+            n = Straight_PutStr(l4, "corr ");
+            AppFmt_Fixed(&l4[n], output->correction_percent, 1U);
         } else{
-            n = Straight_PutStr(l3, "yaw ");
+            n = Straight_PutStr(l3,
+                (output->mode != STRAIGHT_DRIVE_MODE_RAMP_HEADING)
+                    ? ((output->mode == STRAIGHT_DRIVE_MODE_RATE_THEN_HEADING)
+                           ? "CRUISE yaw "
+                           : ((output->mode == STRAIGHT_DRIVE_MODE_ENCODER_THEN_HEADING)
+                                  ? "CRUISE yaw "
+                                  : (((output->mode == STRAIGHT_DRIVE_MODE_INTEGRATED_THEN_HEADING) ||
+                                      (output->mode == STRAIGHT_DRIVE_MODE_FULL_INTEGRATED_THEN_HEADING))
+                                         ? "CRUISE yaw "
+                                         : "yaw ")))
+                    : (output->startup_complete ? "CRUISE yaw " : "RAMP yaw "));
             AppFmt_Fixed(&l3[n], output->yaw_deg, 1U);
             n = Straight_PutStr(l4, "ref ");
             if (output->heading_reference_valid){
@@ -175,12 +249,14 @@ static void Straight_SendTelemetry(uint32_t now_ms,
 #if STRAIGHT_TELEMETRY_ENABLED
     /* Speed Closed 的 duty 是上一控制拍已应用的速度 PID 输出。 */
     DebugUart_Printf(
-        "[STR] t=%lu m=%u imu=%u cmd=%.3f dl=%.1f dr=%.1f "
-        "vl=%.3f vr=%.3f xl=%.4f xr=%.4f yaw=%.2f gz=%.2f corr=%.2f\r\n",
+        "[STR] t=%lu m=%u imu=%u cmd=%.3f act=%.3f phase=%u dl=%.1f dr=%.1f "
+        "vl=%.3f vr=%.3f xl=%.4f xr=%.4f yaw=%.2f gz=%.2f iyaw=%.2f corr=%.2f\r\n",
         (unsigned long)now_ms,
         (unsigned int)output->mode,
         output->imu_ready ? 1U : 0U,
         (double)output->command,
+        (double)output->applied_command,
+        output->startup_complete ? 1U : 0U,
         (double)output->duty_left_percent,
         (double)output->duty_right_percent,
         (double)output->speed_left_mps,
@@ -189,6 +265,7 @@ static void Straight_SendTelemetry(uint32_t now_ms,
         (double)output->distance_right_m,
         (double)output->yaw_deg,
         (double)output->gyro_z_deg_s,
+        (double)output->integrated_heading_deg,
         (double)output->correction_percent);
 #else
     (void)now_ms;
@@ -237,4 +314,24 @@ const APP_TASK_DESC APP_STRAIGHT_GYRO_RATE_TEST = {
 
 const APP_TASK_DESC APP_STRAIGHT_GYRO_HEADING_TEST = {
     "Duty+Yaw Hold", StraightHeading_Enter, Straight_Tick, NULL
+};
+
+const APP_TASK_DESC APP_STRAIGHT_RAMP_HEADING_TEST = {
+    "Ramp Yaw Hold", StraightRampHeading_Enter, Straight_Tick, NULL
+};
+
+const APP_TASK_DESC APP_STRAIGHT_RATE_THEN_HEADING_TEST = {
+    "80 Rate->Yaw", StraightRateThenHeading_Enter, Straight_Tick, NULL
+};
+
+const APP_TASK_DESC APP_STRAIGHT_ENCODER_THEN_HEADING_TEST = {
+    "80 Enc->Yaw", StraightEncoderThenHeading_Enter, Straight_Tick, NULL
+};
+
+const APP_TASK_DESC APP_STRAIGHT_INTEGRATED_THEN_HEADING_TEST = {
+    "80 Int->Yaw", StraightIntegratedThenHeading_Enter, Straight_Tick, NULL
+};
+
+const APP_TASK_DESC APP_STRAIGHT_FULL_INTEGRATED_THEN_HEADING_TEST = {
+    "100 Int->Yaw", StraightFullIntegratedThenHeading_Enter, Straight_Tick, NULL
 };

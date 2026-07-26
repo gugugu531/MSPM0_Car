@@ -1,6 +1,6 @@
 /**
  * @file  app_checks.c
- * @brief 外设自检任务实现：JY61P / MPU6050 / 灰度 / TB6612 / 编码器。
+ * @brief 外设自检任务实现：姿态、灰度、驱动与编码器诊断。
  */
 #include "app_checks.h"
 #include "app_fmt.h"
@@ -17,6 +17,8 @@
 #include "hall_encoder.h"
 #include "wit_sdk.h"
 #include "mpu6050.h"
+#include "straight_drive.h"
+#include "kinematics/kinematics.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -291,6 +293,113 @@ static APP_TASK_STATUS ChkGyroJy_Tick(float dt){
     AppFmt_I32(&l3[n], (int32_t)JY61P_I2C_GetErrorCount());
 
     Ui_RenderLines("Chk Gyro JY61P", l1, l2, l3, "BACK: exit", NULL, NULL);
+    return APP_TASK_RUNNING;
+}
+
+/* ======================== 航向 A/B 对比（无电机） ======================== */
+
+#define YAW_AB_IMU_MAX_AGE_MS 60U
+
+static uint32_t yab_last_ui_ms;
+static uint32_t yab_last_sample_ms;
+static uint32_t yab_last_sample_count;
+static float yab_integrated_deg;
+static float yab_fused_deg;
+static float yab_gyro_z_deg_s;
+static bool yab_valid;
+
+static void ChkYawAb_Enter(void){
+    /* 本任务不调用任何 Chassis/Motor 接口，只观察共享 I2C0 上的 JY61P。 */
+    JY61P_I2C_SetSuspended(false);
+    JY61P_I2C_Init();
+    yab_last_ui_ms = 0U;
+    yab_last_sample_ms = 0U;
+    yab_last_sample_count = JY61P_I2C_GetSampleCount();
+    yab_integrated_deg = 0.0f;
+    yab_fused_deg = 0.0f;
+    yab_gyro_z_deg_s = 0.0f;
+    yab_valid = false;
+}
+
+static APP_TASK_STATUS ChkYawAb_Tick(float dt){
+    (void)dt;
+    JY61P_I2C_Poll();
+
+    uint32_t now_ms = BSP_Time_GetMs();
+    uint32_t sample_count = JY61P_I2C_GetSampleCount();
+
+    if (sample_count != yab_last_sample_count){
+        WIT_IMU_DATA imu;
+        yab_last_sample_count = sample_count;
+
+        if (JY61P_I2C_IsDataFresh(YAW_AB_IMU_MAX_AGE_MS) &&
+            (WitGetData(&imu) == WIT_HAL_OK)){
+            float fused_deg = Kinematics_NormalizeAngleDeg(
+                STRAIGHT_DRIVE_HEADING_YAW_SIGN * imu.attitude_deg.yaw);
+            float gyro_z_deg_s =
+                STRAIGHT_DRIVE_RATE_GYRO_SIGN * imu.gyro_deg_s.z;
+
+            if (!yab_valid){
+                /* A0 = B0：首次完整样本只负责建立公共角度原点。 */
+                yab_integrated_deg = fused_deg;
+                yab_valid = true;
+            } else{
+                float sample_dt_s =
+                    (float)(now_ms - yab_last_sample_ms) * 0.001f;
+                yab_integrated_deg = Kinematics_NormalizeAngleDeg(
+                    yab_integrated_deg + gyro_z_deg_s * sample_dt_s);
+            }
+
+            yab_last_sample_ms = now_ms;
+            yab_fused_deg = fused_deg;
+            yab_gyro_z_deg_s = gyro_z_deg_s;
+
+            float delta_ba_deg = Kinematics_AngleDiffDeg(
+                yab_fused_deg, yab_integrated_deg);
+            DebugUart_Printf(
+                "[YAB] t=%lu n=%lu a=%.3f b=%.3f ba=%.3f gz=%.3f\r\n",
+                (unsigned long)now_ms,
+                (unsigned long)sample_count,
+                (double)yab_integrated_deg,
+                (double)yab_fused_deg,
+                (double)delta_ba_deg,
+                (double)yab_gyro_z_deg_s);
+        } else{
+            /* 样本链中断后无法补积分；下一帧重新令 A0=B0。 */
+            yab_valid = false;
+        }
+    } else if (!JY61P_I2C_IsDataFresh(YAW_AB_IMU_MAX_AGE_MS)){
+        yab_valid = false;
+    }
+
+    if ((now_ms - yab_last_ui_ms) < CHK_UI_PERIOD_MS){
+        return APP_TASK_RUNNING;
+    }
+    yab_last_ui_ms = now_ms;
+
+    if (!yab_valid){
+        Ui_RenderLines("Yaw A/B No Motor", "IMU waiting", "motor untouched",
+                       "BACK: exit", NULL, NULL, NULL);
+        return APP_TASK_RUNNING;
+    }
+
+    char l1[20];
+    char l2[20];
+    char l3[20];
+    char l4[20];
+    char l5[20];
+    uint8_t n;
+
+    n = PutStr(l1, "A "); AppFmt_Fixed(&l1[n], yab_integrated_deg, 2U);
+    n = PutStr(l2, "B "); AppFmt_Fixed(&l2[n], yab_fused_deg, 2U);
+    n = PutStr(l3, "B-A ");
+    AppFmt_Fixed(&l3[n],
+        Kinematics_AngleDiffDeg(yab_fused_deg, yab_integrated_deg), 2U);
+    n = PutStr(l4, "gz "); AppFmt_Fixed(&l4[n], yab_gyro_z_deg_s, 2U);
+    n = PutStr(l5, "sample ");
+    AppFmt_I32(&l5[n], (int32_t)yab_last_sample_count);
+
+    Ui_RenderLines("Yaw A/B No Motor", l1, l2, l3, l4, l5, "BACK: exit");
     return APP_TASK_RUNNING;
 }
 
@@ -614,6 +723,9 @@ static APP_TASK_STATUS ChkDutySweep_Tick(float dt){
 
 const APP_TASK_DESC APP_CHK_GYRO_JY61P = {
     "Gyro JY61P", ChkGyroJy_Enter, ChkGyroJy_Tick, NULL
+};
+const APP_TASK_DESC APP_CHK_YAW_AB = {
+    "Yaw A/B", ChkYawAb_Enter, ChkYawAb_Tick, NULL
 };
 const APP_TASK_DESC APP_CHK_GYRO_MPU6050 = {
     "Gyro MPU6050", ChkGyroMpu_Enter, ChkGyroMpu_Tick, ChkGyroMpu_Exit

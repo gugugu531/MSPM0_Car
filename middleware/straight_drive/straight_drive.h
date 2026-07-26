@@ -17,7 +17,7 @@ extern "C" {
 /* ============================ 指令范围 ============================ */
 
 /** 开环及姿态闭环模式的默认基础占空比，单位 %。 */
-#define STRAIGHT_DRIVE_DEFAULT_DUTY                 50.0f
+#define STRAIGHT_DRIVE_DEFAULT_DUTY                 80.0f
 /** 占空比模式每次调整量，单位 %。 */
 #define STRAIGHT_DRIVE_DUTY_STEP                    2.0f
 /** 基础占空比指令绝对值上限，单位 %。 */
@@ -33,6 +33,21 @@ extern "C" {
 /** 姿态样本最大允许时延；超时后姿态闭环立即停止电机。 */
 #define STRAIGHT_DRIVE_IMU_MAX_AGE_MS               60U
 
+/* ======================== 启动与闭环切换测试 ======================== */
+
+/** 航向闭环斜坡模式的占空比变化率，单位 %/s；默认约 1.6 s 升至 80%。 */
+#define STRAIGHT_DRIVE_RAMP_RATE_PERCENT_S          50.0f
+/** 定时切换测试启动时直接使用的基础占空比，单位 %。 */
+#define STRAIGHT_DRIVE_SWITCH_HEADING_DUTY_PERCENT  80.0f
+/** 极限速度积分/融合切换测试的基础占空比，单位 %。 */
+#define STRAIGHT_DRIVE_FULL_HEADING_DUTY_PERCENT    100.0f
+/** 定时切换测试使用角速度闭环的启动阶段时长，单位 s。 */
+#define STRAIGHT_DRIVE_RATE_PHASE_DURATION_S        1.0f
+/** 定时切换测试使用编码器等路径闭环的启动阶段时长，单位 s。 */
+#define STRAIGHT_DRIVE_ENCODER_PHASE_DURATION_S     1.0f
+/** 纯角速度积分航向阶段持续时间，单位 ms。 */
+#define STRAIGHT_DRIVE_INTEGRATED_PHASE_DURATION_MS 500U
+
 /* ========================= 角速度闭环 PID ========================= */
 
 /** 目标 gz 固定为 0 deg/s；PID 输出为左右轮差速修正量。 */
@@ -42,6 +57,15 @@ extern "C" {
 #define STRAIGHT_DRIVE_RATE_PID_INTEGRAL_LIMIT      100.0f
 #define STRAIGHT_DRIVE_RATE_PID_OUTPUT_LIMIT        20.0f
 
+/* ======================== 编码器等路径闭环 PID ======================= */
+
+/** 目标为左右轮累计路程差 0 m；PID 输出为左右轮差速修正量。 */
+#define STRAIGHT_DRIVE_ENCODER_PID_KP               200.0f
+#define STRAIGHT_DRIVE_ENCODER_PID_KI               0.0f
+#define STRAIGHT_DRIVE_ENCODER_PID_KD               0.0f
+#define STRAIGHT_DRIVE_ENCODER_PID_INTEGRAL_LIMIT   0.1f
+#define STRAIGHT_DRIVE_ENCODER_PID_OUTPUT_LIMIT     20.0f
+
 /* ========================== 巡航角闭环 PID ========================= */
 
 /** 目标角为每次从停车启动时的 yaw，误差按 [-180, 180) 取最短角。 */
@@ -50,6 +74,8 @@ extern "C" {
 #define STRAIGHT_DRIVE_HEADING_PID_KD               0.0f
 #define STRAIGHT_DRIVE_HEADING_PID_INTEGRAL_LIMIT   100.0f
 #define STRAIGHT_DRIVE_HEADING_PID_OUTPUT_LIMIT     20.0f
+/** 100%模式的差速修正上限；速度优先混控下快侧 100%、最慢侧 80%。 */
+#define STRAIGHT_DRIVE_FULL_HEADING_OUTPUT_LIMIT    10.0f
 
 /** JY61P z 轴角速度反馈符号；实车验证应保持原始方向。 */
 #define STRAIGHT_DRIVE_RATE_GYRO_SIGN               (1.0f)
@@ -60,13 +86,26 @@ typedef enum {
     STRAIGHT_DRIVE_MODE_DUTY_OPEN = 0,
     STRAIGHT_DRIVE_MODE_SPEED,
     STRAIGHT_DRIVE_MODE_GYRO_RATE,
-    STRAIGHT_DRIVE_MODE_GYRO_HEADING
+    STRAIGHT_DRIVE_MODE_GYRO_HEADING,
+    /** 占空比斜坡与巡航阶段全程使用启动角闭环。 */
+    STRAIGHT_DRIVE_MODE_RAMP_HEADING,
+    /** 直接输出 80%，前 1 s 角速度闭环，随后保持切换时刻的航向角。 */
+    STRAIGHT_DRIVE_MODE_RATE_THEN_HEADING,
+    /** 直接输出 80%，前 1 s 编码器等路径闭环，随后保持切换时刻的航向角。 */
+    STRAIGHT_DRIVE_MODE_ENCODER_THEN_HEADING,
+    /** 80% 对照版：前 500 ms 按控制周期积分 gz，随后以 B0+(B1-A1) 为参考角。 */
+    STRAIGHT_DRIVE_MODE_INTEGRATED_THEN_HEADING,
+    /** 100%速度优先版：按 IMU 新样本实际间隔积分，随后以 B0+(B1-A1) 为参考角。 */
+    STRAIGHT_DRIVE_MODE_FULL_INTEGRATED_THEN_HEADING
 } STRAIGHT_DRIVE_MODE;
 
 /** 控制器状态快照，供 app 显示和遥测使用。 */
 typedef struct {
     STRAIGHT_DRIVE_MODE mode;
+    /** 用户设定的最终占空比或速度目标。 */
     float command;
+    /** 本拍实际使用的指令；仅斜坡航向模式与 command 不同。 */
+    float applied_command;
     float duty_left_percent;
     float duty_right_percent;
     float speed_left_mps;
@@ -75,8 +114,12 @@ typedef struct {
     float distance_right_m;
     float yaw_deg;
     float gyro_z_deg_s;
+    /** 启动阶段由 B0 起算、再对 gz 纯积分得到的绝对航向角 A，单位 deg。 */
+    float integrated_heading_deg;
     float correction_percent;
     float heading_reference_deg;
+    /** 启动阶段已完成：斜坡已到目标，或定时切换模式已进入巡航阶段。 */
+    bool startup_complete;
     bool heading_reference_valid;
     bool imu_ready;
 } STRAIGHT_DRIVE_OUTPUT;

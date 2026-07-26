@@ -3,7 +3,7 @@
 基于 `TI MSPM0G3507` 的分层车载固件工程。
 
 > **当前状态**：原 2025E 二维云台/瞄准子系统已整体移除；`app` 已重建为菜单驱动的裸机
-> 协作式调度框架。当前可从 OLED 菜单运行 GPIO 灰度循迹测试、四种直行控制测试，
+> 协作式调度框架。当前可从 OLED 菜单运行 GPIO 灰度循迹测试、九种直行控制/启动实验，
 > 以及 JY61P、MPU6050、GPIO/感为/Yahboom 三种灰度传感器、TB6612、双轮编码器、
 > 速度 PID、占空比扫描和蓝牙串口等设备检查任务。
 > 现阶段重点是底盘测速/速度闭环整定与各外设上板验证。
@@ -138,8 +138,9 @@ Pop-Location
 
 首次上板请先架空驱动轮并准备随时断电。`Straight Test` 的具体任务在进入后会立即运行：
 
-- `Duty Open`、`Duty+Gyro Rate`、`Duty+Yaw Hold` 以 `50%` 基础占空比启动。
-- `Speed Closed` 以约 `0.65 m/s` 目标速度启动。
+- 常规占空比模式默认以 `80%` 启动；`Speed Closed` 默认目标为 `1.06 m/s`。
+- `100 Int->Yaw` 会立即以 `100%` 输出，前 500 ms 使用纯角速度积分航向，随后切换到
+  经启动误差修正的 JY61P 航向闭环。所有直行模式达到 3 m 后自动停车并返回菜单。
 - `Speed PID`、`Duty Sweep` 和 `TB6612` 同样属于电机测试，必须先架空车轮。
 
 上电初始化成功后，OLED 显示 `Main Menu`。四个按键均使用短按：
@@ -155,8 +156,8 @@ Pop-Location
 | 入口 | 用途 |
 |---|---|
 | `Line Follow` | GPIO 八路灰度循迹与陀螺增稳 |
-| `Straight Test` | 开环占空比、速度闭环、角速度闭环和巡航角闭环直行测试 |
-| `Device Check` | JY61P、MPU6050、三种灰度、TB6612、编码器、速度 PID、占空比扫描和蓝牙检查 |
+| `Straight Test` | 4 种基础直行控制与 5 种斜坡/启动阶段切换实验 |
+| `Device Check` | JY61P、Yaw A/B、MPU6050、三种灰度、TB6612、编码器、速度 PID、占空比扫描和蓝牙检查 |
 
 八路 GPIO 灰度在 OLED 上按位显示：`0` 表示该路检测到黑线，`1` 表示未检测到黑线。
 
@@ -175,7 +176,7 @@ python tools/straight_test_viz.py --list
 python tools/straight_test_viz.py --port COM7
 ```
 
-界面同时显示两轮占空比、速度、距离以及 yaw/角速度。需要保存采样时可运行：
+界面同时显示两轮占空比、速度、距离以及融合 yaw、积分 yaw 和角速度。需要保存采样时可运行：
 
 ```powershell
 python tools/straight_test_viz.py --port COM7 --csv straight.csv --log straight_raw.txt
@@ -187,8 +188,8 @@ python tools/straight_test_viz.py --port COM7 --csv straight.csv --log straight_
 python tools/speed_pid_viz.py --port COM7 --csv spd.csv --log raw.txt
 ```
 
-`raw.txt` 和 `spd.csv` 已默认忽略。蓝牙测试使用 UART0，参数为 `9600 8N1`；它与 UART1
-调试遥测是两条不同通道。
+`raw.txt`、`spd.csv`、`straight_raw.txt` 和 `straight.csv` 已默认忽略。蓝牙测试使用
+UART0，参数为 `9600 8N1`；它与 UART1 调试遥测是两条不同通道。
 
 ## 修改工程
 

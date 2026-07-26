@@ -10,9 +10,10 @@
 #include "app_straight_task.h"
 #include "app_bt_task.h"
 
-/* --- Device Check 子菜单：10 个外设自检 --- */
+/* --- Device Check 子菜单：11 个外设自检 --- */
 static const MENU_ITEM device_check_items[] = {
     { .name = "Gyro JY61P",   .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GYRO_JY61P },
+    { .name = "Yaw A/B",       .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_YAW_AB },
     { .name = "Gyro MPU6050", .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GYRO_MPU6050 },
     { .name = "Grayscale",    .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GRAYSCALE },
     { .name = "Gray I2C",     .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GRAY_I2C },
@@ -30,12 +31,17 @@ static const MENU_NODE device_check_menu = {
     (uint8_t)(sizeof(device_check_items) / sizeof(device_check_items[0])),
 };
 
-/* --- 直行测试子菜单：四种底盘控制方式 --- */
+/* --- 直行测试子菜单：4 种基础方式 + 5 种启动/切换实验 --- */
 static const MENU_ITEM straight_test_items[] = {
     { .name = "Duty Open",      .kind = MENU_ENTRY_TASK, .u.task = &APP_STRAIGHT_DUTY_OPEN_TEST },
     { .name = "Speed Closed",   .kind = MENU_ENTRY_TASK, .u.task = &APP_STRAIGHT_SPEED_TEST },
     { .name = "Duty+Gyro Rate", .kind = MENU_ENTRY_TASK, .u.task = &APP_STRAIGHT_GYRO_RATE_TEST },
     { .name = "Duty+Yaw Hold",  .kind = MENU_ENTRY_TASK, .u.task = &APP_STRAIGHT_GYRO_HEADING_TEST },
+    { .name = "Ramp Yaw Hold",  .kind = MENU_ENTRY_TASK, .u.task = &APP_STRAIGHT_RAMP_HEADING_TEST },
+    { .name = "80 Rate->Yaw",   .kind = MENU_ENTRY_TASK, .u.task = &APP_STRAIGHT_RATE_THEN_HEADING_TEST },
+    { .name = "80 Enc->Yaw",    .kind = MENU_ENTRY_TASK, .u.task = &APP_STRAIGHT_ENCODER_THEN_HEADING_TEST },
+    { .name = "80 Int->Yaw",    .kind = MENU_ENTRY_TASK, .u.task = &APP_STRAIGHT_INTEGRATED_THEN_HEADING_TEST },
+    { .name = "100 Int->Yaw",   .kind = MENU_ENTRY_TASK, .u.task = &APP_STRAIGHT_FULL_INTEGRATED_THEN_HEADING_TEST },
 };
 
 static const MENU_NODE straight_test_menu = {

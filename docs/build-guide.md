@@ -188,10 +188,12 @@ armasm 语法，因此 MDK 6 有一条 `A1950W` 弃用警告；这是兼容性�
 编译通过后仍需上板验证（当前 app 框架，详见 `docs/app-design.md`）：
 
 - 上电后 OLED 显示 `Main Menu`，含 `Line Follow`、`Straight Test` 与
-  `Device Check`；`Straight Test` 下有四种直行测试
+  `Device Check`；`Straight Test` 下有九种直行测试，所有模式到 3 m 后自动停车
 - 短按 UP/DOWN 移动选择、ENTER 进入、BACK 返回上级
-- `Device Check` 子菜单内 10 个自检（Gyro JY61P / Gyro MPU6050 / Grayscale / Gray I2C /
-  Yahboom I2C / TB6612 / Encoder / Speed PID / Duty Sweep / BlueTooth）可进入并刷新数据
+- `Device Check` 子菜单内 11 个自检（Gyro JY61P / Yaw A/B / Gyro MPU6050 / Grayscale /
+  Gray I2C / Yahboom I2C / TB6612 / Encoder / Speed PID / Duty Sweep / BlueTooth）可进入并刷新数据
+- `Yaw A/B` 不驱动电机；转动车体时 A（gz 积分）、B（JY61P 融合）方向应一致，并显示
+  最短角差 `B-A`，UART1 同步输出 `[YAB]` 遥测
 - `Gyro MPU6050` 第 1 页显示三轴加速度、合加速度与温度，第 2 页显示三轴角速度及仅由
   重力方向估算的 pitch/roll；短按 UP/DOWN 切页。静止平放时合加速度应接近 `9.81 m/s²`，
   角速度应接近零；进入/退出页面后 JY61P 应分别暂停/恢复更新

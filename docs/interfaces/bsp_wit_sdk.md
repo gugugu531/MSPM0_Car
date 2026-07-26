@@ -43,8 +43,8 @@ SDK 的命名、串口协议解析、寄存器定义和已有全局变量，同�
   指定阈值时返回 `true`。上层控制器应使用此接口判断数据有效性，不应根据 poll/error
   计数反推事务是否成功。
 
-当前由 `app/app_line_task.c`、`app/app_straight_task.c` 的四种直行测试和
-JY61P 自检任务在每个 20ms 控制拍调用 `JY61P_I2C_Poll()`；
+当前由 `app/app_line_task.c`、`app/app_straight_task.c` 的九种直行测试、JY61P 自检和
+Yaw A/B 无电机对比任务在每个 20ms 控制拍调用 `JY61P_I2C_Poll()`；
 SysTick ISR 不轮询 JY61P。
 
 ## 结构化读取类型

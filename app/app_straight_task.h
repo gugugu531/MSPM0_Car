@@ -13,13 +13,18 @@ extern "C" {
 
 /** 是否每个 20ms 控制拍通过 Debug_Ex/UART1 输出 [STR] 遥测。 */
 #define STRAIGHT_TELEMETRY_ENABLED                 1U
-/** 首页 Straight Test 四种模式的单次目标行驶距离，单位 m。 */
+/** 首页 Straight Test 各模式的单次目标行驶距离，单位 m。 */
 #define STRAIGHT_TEST_TARGET_DISTANCE_M            3.0f
 
 extern const APP_TASK_DESC APP_STRAIGHT_DUTY_OPEN_TEST;
 extern const APP_TASK_DESC APP_STRAIGHT_SPEED_TEST;
 extern const APP_TASK_DESC APP_STRAIGHT_GYRO_RATE_TEST;
 extern const APP_TASK_DESC APP_STRAIGHT_GYRO_HEADING_TEST;
+extern const APP_TASK_DESC APP_STRAIGHT_RAMP_HEADING_TEST;
+extern const APP_TASK_DESC APP_STRAIGHT_RATE_THEN_HEADING_TEST;
+extern const APP_TASK_DESC APP_STRAIGHT_ENCODER_THEN_HEADING_TEST;
+extern const APP_TASK_DESC APP_STRAIGHT_INTEGRATED_THEN_HEADING_TEST;
+extern const APP_TASK_DESC APP_STRAIGHT_FULL_INTEGRATED_THEN_HEADING_TEST;
 
 #ifdef __cplusplus
 }
