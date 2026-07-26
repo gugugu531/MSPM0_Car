@@ -39,12 +39,176 @@ app ─► middleware ─► bsp
 
 依赖单向：`core` 不读硬件、不调用 middleware；`app` 只编排、不重复实现算法。
 
-## 说明
+## 快速开始
+
+### 1. 获取源码与 SDK
+
+首次克隆建议同时初始化子模块：
+
+```powershell
+git clone --recurse-submodules <仓库地址> MSPM0_Car
+cd MSPM0_Car
+```
+
+若已经克隆过仓库，执行：
+
+```powershell
+git submodule update --init --depth 1 third_party/mspm0-sdk
+```
+
+SDK 固定为 `mspm0_sdk_2_10_00_04`，位于 `third_party/mspm0-sdk`。Keil 与 CCS 工程均通过
+仓库相对路径引用它，不需要另外配置 SDK 绝对路径。
+
+### 2. 选择开发环境
+
+推荐工具组合：
+
+- Keil MDK 5：uVision + Arm Compiler 6.22。
+- Keil MDK 6：VS Code + Keil Studio Pack + CMSIS Toolbox + Arm Compiler 6.22。
+- CCS：保留 projectspec，但当前版本尚未完成重新导入后的编译回归。
+- Python 3：仅运行遥测可视化工具时需要。
+
+## 编译
+
+### Keil MDK 6 / VS Code
+
+1. 用 VS Code 打开仓库根目录。
+2. 打开 `project/keil/NUEDC2025_MSPM0G3507.csolution.yml`，将其设为活动 Solution。
+3. 等待 Keil Studio Pack 完成 CMSIS Pack 和工具环境解析。
+4. 在 CMSIS 侧栏选择当前 context，执行 **Build Solution** 或 **Rebuild Solution**。
+
+`project/keil/vcpkg-configuration.json` 可让 Arm Tools Environment Manager 获取匹配版本的
+AC6、CMSIS Toolbox、CMake 与 Ninja；需要时可右键该文件并执行 **Activate Environment**。
+若希望复用本机 Keil 已安装的 AC6，在 VS Code 设置中搜索
+`CMSIS Solution: Environment Variables`，向工作区 `settings.json` 加入：
+
+```json
+"cmsis-csolution.environmentVariables": {
+  "AC6_TOOLCHAIN_6_22_0": "<KEIL>\\ARM\\ARMCLANG\\bin"
+}
+```
+
+本机 Keil 安装在 D 盘时，`<KEIL>` 例如 `D:\Keil_v5`。修改后执行
+`Developer: Reload Window`，再重新构建。成功日志应包含：
+
+```text
+Using AC6 V6.22.0 compiler
+Build summary: 1 succeeded, 0 failed
+```
+
+命令行等价构建方式：
+
+```powershell
+$env:AC6_TOOLCHAIN_6_22_0 = "<KEIL>\ARM\ARMCLANG\bin"
+cbuild project/keil/NUEDC2025_MSPM0G3507.csolution.yml --rebuild --toolchain AC6
+```
+
+输出位于 `project/keil/out/`。TI 启动文件使用 legacy armasm 语法，当前会出现一条 `A1950W`
+弃用警告，不影响链接产物生成。
+
+### Keil MDK 5 / uVision
+
+打开：
+
+```text
+project/keil/NUEDC2025_MSPM0G3507.uvprojx
+```
+
+选择 Arm Compiler 6.22 后执行 Build/Rebuild。也可以在 PowerShell 中运行：
+
+```powershell
+Push-Location project/keil
+& "<KEIL>\UV4\UV4.exe" -r "NUEDC2025_MSPM0G3507.uvprojx" -o "keil_build.log"
+Pop-Location
+```
+
+输出位于 `project/keil/Objects/`。当前工程已使用 D 盘 Keil 5.41 / AC6 6.22 验证为
+`0 Error(s), 0 Warning(s)`。
+
+更完整的 CCS、SysConfig、命令行构建和 Flash 对齐说明见
+[`docs/build-guide.md`](docs/build-guide.md)。
+
+## 烧录与首次运行
+
+连接调试器并确认目标器件为 `MSPM0G3507`：
+
+- MDK 5：在 uVision 中执行 Download，或使用工程已配置的下载按钮。
+- MDK 6：在 CMSIS 视图中选择正确调试适配器后执行 Load/Run。
+
+首次上板请先架空驱动轮并准备随时断电。`Straight Test` 的具体任务在进入后会立即运行：
+
+- `Duty Open`、`Duty+Gyro Rate`、`Duty+Yaw Hold` 以 `50%` 基础占空比启动。
+- `Speed Closed` 以约 `0.65 m/s` 目标速度启动。
+- `Speed PID`、`Duty Sweep` 和 `TB6612` 同样属于电机测试，必须先架空车轮。
+
+上电初始化成功后，OLED 显示 `Main Menu`。四个按键均使用短按：
+
+| 按键 | 菜单中 | 任务中 |
+|---|---|---|
+| `UP` / `DOWN` | 移动选择 | 调整支持该操作的速度或占空比指令 |
+| `ENTER` | 进入子菜单或启动任务 | 按任务定义执行，直行/速度测试中通常将指令归零 |
+| `BACK` | 返回上级 | 中止任务、主动刹车并返回菜单 |
+
+主菜单功能：
+
+| 入口 | 用途 |
+|---|---|
+| `Line Follow` | GPIO 八路灰度循迹与陀螺增稳 |
+| `Straight Test` | 开环占空比、速度闭环、角速度闭环和巡航角闭环直行测试 |
+| `Device Check` | JY61P、MPU6050、两种灰度、TB6612、编码器、速度 PID、占空比扫描和蓝牙检查 |
+
+八路 GPIO 灰度在 OLED 上按位显示：`0` 表示该路检测到黑线，`1` 表示未检测到黑线。
+
+## 串口遥测与可视化
+
+调试遥测使用 `Debug_Ex/UART1`，参数为 `115200 8N1`。先安装 Python 依赖：
+
+```powershell
+python -m pip install pyserial matplotlib
+```
+
+列出串口并启动直行测试可视化：
+
+```powershell
+python tools/straight_test_viz.py --list
+python tools/straight_test_viz.py --port COM7
+```
+
+界面同时显示两轮占空比、速度、距离以及 yaw/角速度。需要保存采样时可运行：
+
+```powershell
+python tools/straight_test_viz.py --port COM7 --csv straight.csv --log straight_raw.txt
+```
+
+速度 PID 与占空比扫描使用：
+
+```powershell
+python tools/speed_pid_viz.py --port COM7 --csv spd.csv --log raw.txt
+```
+
+`raw.txt` 和 `spd.csv` 已默认忽略。蓝牙测试使用 UART0，参数为 `9600 8N1`；它与 UART1
+调试遥测是两条不同通道。
+
+## 修改工程
+
+- 修改引脚或外设时，只编辑 `board/sys_config/G3507.syscfg`，随后用 SysConfig CLI 重生成
+  `ti_msp_dl_config.c/h`；不要直接修改生成文件。
+- 新增或删除源码时，同时维护 MDK 5 `.uvprojx`、MDK 6 `.cproject.yml` 和 CCS projectspec。
+- 修改 Keil 工程输入后运行：
+
+```powershell
+python tools/check_keil_project_sync.py
+```
 
 - JY61P、MPU6050 与感为灰度共用 I2C0；阻塞式 MPU6050/感为任务运行时通过
   `JY61P_I2C_SetSuspended()` 与 JY61P 分时。
 - 不可同时使用无线调试器的虚拟串口和 Ex Uart。
-- 修改引脚/外设需改 `board/sys_config/G3507.syscfg` 后用 SysConfig CLI 重新生成，生成代码不手改。
-- Keil MDK 5 (`.uvprojx`) 与 MDK 6/CMSIS Solution (`.csolution.yml`) 并行维护；两者共享
-  相同源码、启动文件、链接脚本和仓库内 SDK，详见 `docs/build-guide.md`。
-- 详见 `docs/architecture.md`、`docs/app-design.md`、`docs/project-structure.md` 与 `docs/interfaces/`。
+
+## 文档索引
+
+- 架构与依赖：[`docs/architecture.md`](docs/architecture.md)
+- app 菜单和调度：[`docs/app-design.md`](docs/app-design.md)
+- 构建与 SysConfig：[`docs/build-guide.md`](docs/build-guide.md)
+- 目录职责：[`docs/project-structure.md`](docs/project-structure.md)
+- 模块接口：[`docs/interfaces/`](docs/interfaces/)
+- 当前待办和上板风险：[`docs/todo.md`](docs/todo.md)
