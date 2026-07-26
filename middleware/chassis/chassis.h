@@ -19,10 +19,10 @@ extern "C" {
  * 起始值, 必须上板整定(用 Device Check「Speed PID」)。integral_limit 使 ki*积分饱和值≈输出上限,
  * 提供抗积分饱和; output_limit=100 即满占空比。
  */
-#define CHASSIS_SPEED_KP             10.0f
-#define CHASSIS_SPEED_KI             2.0f
+#define CHASSIS_SPEED_KP             200.00f
+#define CHASSIS_SPEED_KI             17.0f
 #define CHASSIS_SPEED_KD             0.0f
-#define CHASSIS_SPEED_INTEGRAL_LIMIT 0.4f
+#define CHASSIS_SPEED_INTEGRAL_LIMIT 96.0f
 #define CHASSIS_SPEED_OUTPUT_LIMIT   100.0f
 
 /**

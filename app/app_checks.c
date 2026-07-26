@@ -352,7 +352,7 @@ static APP_TASK_STATUS ChkEnc_Tick(float dt){
 /* ============================ 速度闭环 ============================ */
 
 #define SPD_STEP 0.05f   /* 每次按键调整的目标速度步进, m/s */
-#define SPD_MAX  0.60f   /* 目标速度上下限, m/s */
+#define SPD_MAX  3.0f   /* 目标速度上下限, m/s */
 
 static float spd_target;
 static uint32_t spd_last_ui;
