@@ -2,6 +2,13 @@
 
 ## 未发布
 
+- 新增 MDK 6/Keil Studio CMSIS Solution 工程，同时保留并继续维护 MDK 5 `.uvprojx`。
+  两套工程共享源码、TI 启动汇编和 scatter 文件；新增同步检查脚本确保 35 个编译/链接输入
+  一致。已分别用 D 盘 Keil AC6 6.22 验证：MDK 5 为 0 error/0 warning，MDK 6 自动转换
+  context 构建成功（仅报告 TI legacy armasm 弃用警告）。
+- 将 TI 官方 `TexasInstruments/mspm0-sdk` 以 submodule 引入 `third_party/mspm0-sdk`，固定
+  `mspm0_sdk_2_10_00_04` (`e249e2b`)；MDK 5/6 与 CCS 均改用仓库相对 SDK 路径，CCS 同时
+  修正 `empty.syscfg` 和 debug UART include 元数据。
 - 将四种直行方式的模式状态、指令限幅、PID、姿态有效性、巡航角锁定与底盘输出从
   `app_straight_task` 下沉到 `middleware/straight_drive`，任务层仅保留外设轮询调度、按键、
   OLED 和 Debug_Ex 遥测适配。JY61P BSP 新增完整样本计数和按时间戳判断新鲜度的接口，
@@ -33,8 +40,8 @@
 
 - 校准当前文档到真实代码状态：README/AGENTS 改为菜单调度框架、循迹与 9 项设备检查；
   修正编码器 20ms 与按键 1ms 周期、JY61P 由 Line Track 任务轮询、PID/运动学消费者、
-  OLED=I2C1，并移除接口文档中已删除的 E1/motion/UART0 IMU 路径。构建说明明确记录 CCS
-  projectspec 的 `empty.syscfg` 和 `bsp/debug_uart` include path 两项待修问题。
+  OLED=I2C1，并移除接口文档中已删除的 E1/motion/UART0 IMU 路径。构建说明当时记录的 CCS
+  `empty.syscfg` 和 `bsp/debug_uart` include path 问题，现已随仓库内 SDK 路径迁移一并修正。
 
 - 修复蓝牙**冷上电后 RX 收不到、按复位键才正常**。现象: 冷上电 TX 正常(说明时钟/波特率/引脚
   复用/UART 使能都对)、RX 死; 复位后一切正常——差异在于复位不会给蓝牙模块重新上电, 复位时模块

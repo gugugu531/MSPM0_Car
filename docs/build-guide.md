@@ -2,12 +2,25 @@
 
 ## 工具链
 
-本工程维护两套构建链：
+本工程维护三套工程入口：
 
 - `CCS + ticlang`
-- `Keil MDK 5 + ArmClang`
+- `Keil MDK 5 + ArmClang`（uVision `.uvprojx`）
+- `Keil MDK 6 + ArmClang`（Keil Studio/CMSIS Solution）
 
-两套工程共享 `app`、`core`、`middleware`、`bsp`、`board/sys_config` 中的源码和配置，但各自维护启动文件、链接配置和输出目录。
+三套工程共享 `app`、`core`、`middleware`、`bsp`、`board` 中的源码和配置。MDK 5/6 还共享
+`board/startup/startup_mspm0g350x_uvision.s` 与 `mspm0g3507.sct`，只分别维护工程描述和输出目录。
+
+## 获取仓库内 SDK
+
+TI MSPM0 SDK 来自官方 GitHub submodule，固定版本为 `mspm0_sdk_2_10_00_04`：
+
+```powershell
+git submodule update --init --depth 1 third_party/mspm0-sdk
+```
+
+若未初始化 submodule，三套工程都会因缺少 DriverLib/CMSIS 头或预编译库而失败。工程文件禁止
+重新写入 `C:\ti\...` 等本机 SDK 绝对路径。
 
 ## 共享源码
 
@@ -19,13 +32,15 @@
 - `bsp/`
 - `board/sys_config/`
 
-构建时必须同时包含这些 include path。按照当前重写流程，新增源码先完成分层框架和接口收敛；整体框架确认后，再统一维护 `project/ccs/NUEDC2025_MSPM0G3507_ticlang.projectspec` 和 `project/keil/NUEDC2025_MSPM0G3507.uvprojx`。
+构建时必须同时包含这些 include path。新增或删除源码后须维护 CCS、MDK 5、MDK 6 三套入口，
+并运行：
 
-Keil 工程已同步到当前分层源码树。CCS projectspec 的大部分源码条目已同步，但仍有两项
-已知元数据问题，修复并重新构建前不能视为可用：
+```powershell
+python tools/check_keil_project_sync.py
+```
 
-- 仍链接不存在的 `board/sys_config/empty.syscfg`，实际 SysConfig 输入是 `G3507.syscfg`。
-- 已登记 `bsp/debug_uart/debug_uart.c/.h`，但编译选项缺少 `-I${REPO_ROOT}/bsp/debug_uart`。
+MDK 5/6 已同步且完成构建验证。CCS projectspec 已修正 `G3507.syscfg`、debug UART include 与
+仓库内 SDK 路径，但尚未重新导入 CCS/ticlang 构建，因此仍不能宣称 CCS 已验证可用。
 
 ## CCS 构建
 
@@ -52,7 +67,7 @@ Keil 工程已同步到当前分层源码树。CCS projectspec 的大部分源�
 > 工具链与 SDK 的安装路径因机器而异，本文不写死绝对路径；下文命令中的 `<...>` 均为占位符，
 > 请替换为本机实际安装位置。
 
-## Keil 构建
+## Keil MDK 5 构建
 
 入口文件：
 
@@ -65,13 +80,42 @@ Keil 工程已同步到当前分层源码树。CCS projectspec 的大部分源�
 - Scatter 文件位于 `board/startup/mspm0g3507.sct`
 - `uvoptx`、`uvguix.*` 属于本地会话文件，不作为稳定源码依赖
 
-本地已验证的 Keil 命令（`<KEIL>` = Keil MDK 安装目录）：
+构建命令（`<KEIL>` = Keil MDK 安装目录）：
 
 ```powershell
 & '<KEIL>/UV4/UV4.exe' -r 'NUEDC2025_MSPM0G3507.uvprojx' -o 'keil_build.log'
 ```
 
-运行目录为 `project/keil/`，构建结果为 `Objects/NUEDC2025_MSPM0G3507.axf` 和对应 hex，最近一次 rebuild 为 `0 Error(s), 0 Warning(s)`。
+运行目录为 `project/keil/`，构建结果为 `Objects/NUEDC2025_MSPM0G3507.axf` 和对应 hex。
+2026-07-26 使用 D 盘 Keil 5.41 / AC6 6.22 相对 SDK 路径构建结果为 `0 Error(s), 0 Warning(s)`。
+
+## Keil MDK 6 / Keil Studio 构建
+
+入口文件：
+
+- `project/keil/NUEDC2025_MSPM0G3507.csolution.yml`
+- `project/keil/NUEDC2025_MSPM0G3507.cproject.yml`
+
+VS Code 已安装 Keil Studio Pack 时可直接打开 `.csolution.yml`，选择 Debug 或 Release context
+后构建。`vcpkg-configuration.json` 固定 AC6 6.22 与 CMSIS Toolbox/CMake/Ninja 工具环境。
+若复用 D 盘 Keil 自带编译器，在 VS Code 的 `CMSIS Solution: Environment Variables`
+工作区设置中注册：
+
+```json
+"cmsis-csolution.environmentVariables": {
+  "AC6_TOOLCHAIN_6_22_0": "D:\\Keil_v5\\ARM\\ARMCLANG\\bin"
+}
+```
+
+命令行构建：
+
+```powershell
+cbuild project/keil/NUEDC2025_MSPM0G3507.csolution.yml --rebuild --toolchain AC6
+```
+
+输出位于 `project/keil/out/`。2026-07-26 已使用 CMSIS Toolbox 2.14 调用 D 盘 Keil AC6 6.22
+验证自动转换所得 context，结果为 `1 succeeded, 0 failed`。启动文件沿用 MDK 5 的 TI legacy
+armasm 语法，因此 MDK 6 有一条 `A1950W` 弃用警告；这是兼容性提示，不影响生成 axf。
 
 命令行烧录（调试器已连接）：
 
@@ -121,12 +165,12 @@ Keil 工程已同步到当前分层源码树。CCS projectspec 的大部分源�
 ### 修改外设配置的正确流程
 
 1. 改 `board/sys_config/G3507.syscfg`（纯配置行，**不要在其中写注释**——再生成会丢失）。
-2. 用 SysConfig CLI 重新生成（`<SYSCONFIG>` = SysConfig 安装目录，`<SDK>` = MSPM0 SDK 目录，
-   版本需与工程一致；`<OUT>` = 输出目录，`<REPO>` = 本仓库根目录）：
+2. 用 SysConfig CLI 重新生成（`<SYSCONFIG>` = SysConfig 安装目录，`<OUT>` = 输出目录，
+   `<REPO>` = 本仓库根目录）：
 
 ```powershell
 & "<SYSCONFIG>/sysconfig_cli.bat" `
-    --product "<SDK>/.metadata/product.json" `
+    --product "<REPO>/third_party/mspm0-sdk/.metadata/product.json" `
     --compiler ticlang --output "<OUT>" `
     "<REPO>/board/sys_config/G3507.syscfg"
 ```

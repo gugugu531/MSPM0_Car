@@ -35,6 +35,7 @@ app ─► middleware ─► bsp
   `ui` / `fault`）。
 - `bsp`：直接面向板级外设的驱动（见上表 + `time` / `common`）。
 - `board`：SysConfig 源文件与生成代码、启动/链接资源。
+- `third_party/mspm0-sdk`：TI 官方 MSPM0 SDK 2.10.00.04 submodule，供各工程使用相对路径。
 
 依赖单向：`core` 不读硬件、不调用 middleware；`app` 只编排、不重复实现算法。
 
@@ -44,5 +45,6 @@ app ─► middleware ─► bsp
   `JY61P_I2C_SetSuspended()` 与 JY61P 分时。
 - 不可同时使用无线调试器的虚拟串口和 Ex Uart。
 - 修改引脚/外设需改 `board/sys_config/G3507.syscfg` 后用 SysConfig CLI 重新生成，生成代码不手改。
-- 当前 Keil 工程可用；CCS projectspec 尚有已知元数据问题，详见 `docs/build-guide.md`。
+- Keil MDK 5 (`.uvprojx`) 与 MDK 6/CMSIS Solution (`.csolution.yml`) 并行维护；两者共享
+  相同源码、启动文件、链接脚本和仓库内 SDK，详见 `docs/build-guide.md`。
 - 详见 `docs/architecture.md`、`docs/app-design.md`、`docs/project-structure.md` 与 `docs/interfaces/`。

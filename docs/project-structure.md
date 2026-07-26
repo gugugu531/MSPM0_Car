@@ -10,6 +10,7 @@
 - `bsp/`：板级外设驱动
 - `board/`：SysConfig、启动和链接资源
 - `project/`：CCS 和 Keil 工程文件
+- `third_party/`：外部依赖 submodule
 - `docs/`：工程文档
 - `tools/`：调试和烧录脚本
 
@@ -105,13 +106,20 @@ SysConfig CLI 重新生成。
 
 `project` 保存 IDE 工程入口：
 
-- `ccs/`
-- `keil/`
+- `ccs/`：CCS/TICLANG projectspec
+- `keil/`：并行保存 MDK 5 uVision `.uvprojx` 与 MDK 6/Keil Studio CMSIS Solution
 
-源码路径重构后必须同步维护这两个目录中的工程文件。
+源码路径重构后必须同步维护三套工程文件；MDK 5/6 可运行
+`python tools/check_keil_project_sync.py` 检查编译输入是否一致。
+
+## third_party
+
+- `mspm0-sdk/`：TI 官方 `TexasInstruments/mspm0-sdk` submodule，固定到
+  `mspm0_sdk_2_10_00_04` (`e249e2b`)。MDK 5、MDK 6 与 CCS 均通过仓库相对路径引用。
 
 ## tools
 
 - `speed_pid_viz.py`：可视化 Device Check 的 `[SPD]` 速度 PID 遥测。
+- `check_keil_project_sync.py`：比较 MDK 5/6 的 C、汇编与库输入列表。
 - `straight_test_viz.py`：可视化 Straight Test 的 `[STR]` 左右轮占空比、速度、
   距离、yaw 与 gz，支持原始日志和 CSV 导出。

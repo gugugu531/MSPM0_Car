@@ -1,0 +1,135 @@
+project:
+  packs:
+    - pack: TexasInstruments::MSPM0G1X0X_G3X0X_DFP@^1.3.1
+  setups:
+    - setup: Options for NUEDC2025_MSPM0G3507
+      add-path:
+        - ../..
+        - ../../app
+        - ../../core
+        - ../../core/common
+        - ../../core/filter
+        - ../../core/kinematics
+        - ../../core/pid
+        - ../../middleware/chassis
+        - ../../middleware/fault
+        - ../../middleware/line_follow
+        - ../../middleware/straight_drive
+        - ../../middleware/ui
+        - ../../bsp/common
+        - ../../bsp/bluetooth
+        - ../../bsp/debug_uart
+        - ../../bsp/grayscale_sensor
+        - ../../bsp/ganv_gray
+        - ../../bsp/imu
+        - ../../bsp/key
+        - ../../bsp/motor
+        - ../../bsp/oled
+        - ../../bsp/time
+        - ../../bsp/mpu6050
+        - ../../board/sys_config
+        - ../../third_party/mspm0-sdk/source
+        - ../../third_party/mspm0-sdk/source/third_party/CMSIS/Core/Include
+      debug: "on"
+      define:
+        - __MSPM0G3507__
+        - __MICROLIB
+      define-asm:
+        - __MICROLIB
+      misc:
+        - C:
+            - -std=c99
+          C-CPP:
+            - -fno-rtti
+            - -funsigned-char
+            - -fshort-enums
+            - -fshort-wchar
+            - -ffunction-sections
+            - -Wno-packed
+            - -Wno-missing-variable-declarations
+            - -Wno-missing-prototypes
+            - -Wno-missing-noreturn
+            - -Wno-sign-conversion
+            - -Wno-nonportable-include-path
+            - -Wno-reserved-id-macro
+            - -Wno-unused-macros
+            - -Wno-documentation-unknown-command
+            - -Wno-documentation
+            - -Wno-license-management
+            - -Wno-parentheses-equality
+            - -Wno-covered-switch-default
+            - -Wno-unreachable-code-break
+          CPP:
+            - -xc++
+            - -std=c++11
+            - -fno-exceptions
+          ASM:
+            - -masm=auto
+          Link:
+            - --library_type=microlib
+            - --map
+            - --load_addr_map_info
+            - --xref
+            - --callgraph
+            - --symbols
+            - --info sizes
+            - --info totals
+            - --info unused
+            - --info veneers
+            - --strict
+            - --summary_stderr
+            - --info summarysizes
+  linker:
+    - script: ../../board/startup/mspm0g3507.sct
+  groups:
+    - group: App
+      files:
+        - file: ../../app/main.c
+        - file: ../../app/app_init.c
+        - file: ../../app/app_scheduler.c
+        - file: ../../app/app_mode.c
+        - file: ../../app/app_checks.c
+        - file: ../../app/app_line_task.c
+        - file: ../../app/app_straight_task.c
+        - file: ../../app/app_bt_task.c
+        - file: ../../app/app_menu.c
+        - file: ../../app/app_menu_def.c
+        - file: ../../app/app_fmt.c
+    - group: driverlib
+      files:
+        - file: ../../third_party/mspm0-sdk/source/ti/driverlib/lib/keil/m0p/mspm0g1x0x_g3x0x/driverlib.a
+    - group: Core
+      files:
+        - file: ../../core/kinematics/kinematics.c
+        - file: ../../core/pid/pid.c
+        - file: ../../core/filter/filter.c
+    - group: MiddleWare
+      files:
+        - file: ../../middleware/chassis/chassis.c
+        - file: ../../middleware/fault/system_fault.c
+        - file: ../../middleware/line_follow/line_follow.c
+        - file: ../../middleware/straight_drive/straight_drive.c
+        - file: ../../middleware/ui/ui.c
+    - group: Board
+      files:
+        - file: ../../board/startup/startup_mspm0g350x_uvision.s
+          misc:
+            - ASM:
+                - -masm=auto
+        - file: ../../board/sys_config/ti_msp_dl_config.c
+        - file: ../../board/sys_config/G3507.syscfg
+    - group: BSP
+      files:
+        - file: ../../bsp/bluetooth/bluetooth.c
+        - file: ../../bsp/debug_uart/debug_uart.c
+        - file: ../../bsp/grayscale_sensor/grayscale_sensor.c
+        - file: ../../bsp/ganv_gray/ganv_gray.c
+        - file: ../../bsp/imu/wit_sdk.c
+        - file: ../../bsp/key/key.c
+        - file: ../../bsp/motor/hall_encoder.c
+        - file: ../../bsp/motor/tb6612fng.c
+        - file: ../../bsp/oled/oled.c
+        - file: ../../bsp/time/bsp_time.c
+        - file: ../../bsp/mpu6050/mpu6050.c
+        - file: ../../bsp/mpu6050/mpu6050_dmp_fw.c
+        - file: ../../bsp/mpu6050/mpu6050_test.c

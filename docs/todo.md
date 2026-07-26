@@ -3,8 +3,8 @@
 > 二维云台/瞄准子系统与原 E 题任务框架已移除。当前 app 已重建为菜单驱动的协作式调度
 > 框架，待办集中在底盘闭环整定、外设上板验证和构建工程一致性。
 
-- 修正 CCS projectspec：将不存在的 `empty.syscfg` 改为 `G3507.syscfg`，补上
-  `bsp/debug_uart` include path，并重新验证 CCS/ticlang 构建。
+- 重新导入并验证 CCS/ticlang 构建；projectspec 的 `G3507.syscfg`、debug UART include 和
+  仓库内 SDK 路径已经同步，但尚未用 CCS 工具链完成回归构建。
 - 后续根据真实系统时钟复核 `BSP_TIME_CPUCLK_HZ`，必要时改为从时钟配置自动派生。
 - 后续如增加第二个实体按键，在 `KEY_ID`、硬件映射宏和 `bsp/key` 内部配置表中同步扩展。
 - 后续构建具体 BSP 外设时，继续按 SDK 风格统一公开类型和枚举成员命名。

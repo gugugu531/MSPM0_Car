@@ -3,12 +3,13 @@
 ## 项目概述
 
 - **平台**: MSPM0G3507 (LQFP-64) 车载固件
-- **IDE**: Keil MDK (ARMCLANG V6.22) / CCS (TICLANG)
-- **SDK**: mspm0_sdk_2_10_00_04
+- **IDE**: Keil MDK 5 + MDK 6/Keil Studio (ARMCLANG V6.22) / CCS (TICLANG)
+- **SDK**: `third_party/mspm0-sdk` submodule，固定 mspm0_sdk_2_10_00_04
 - **当前状态**: 原 2025E 二维云台/瞄准子系统已移除；`app` 已重建为菜单驱动的裸机协作式
   调度框架，现有循迹测试、四种直行控制测试和 9 项设备检查。当前重点为底盘闭环整定与上板验证。
 
-> **注意**: 外部工具路径 (Keil、SysConfig、SDK) 需向用户确认实际安装位置。
+> **注意**: 外部工具路径（Keil、SysConfig）需向用户确认实际安装位置；SDK 使用仓库内
+> submodule，不应恢复成本机绝对路径。
 
 ## 硬件外设映射
 
@@ -33,7 +34,8 @@ MSPM0_Car/
 │   └── sys_config/       # SysConfig 源文件及生成代码
 ├── core/                 # 纯计算算法 (pid, filter, kinematics, common)
 ├── middleware/           # 中间件 (chassis, line_follow, straight_drive, ui, fault)
-├── project/{keil,ccs}/   # IDE 工程
+├── project/{keil,ccs}/     # Keil（MDK 5 + MDK 6/CMSIS Solution）与 CCS 工程
+├── third_party/mspm0-sdk/ # TI 官方 SDK submodule（2.10.00.04）
 ├── docs/                 # 架构/接口/构建文档
 └── tools/                # 调试/烧录脚本
 ```
@@ -75,11 +77,14 @@ app ─► middleware ─► {core (纯计算), bsp}
 ```
 > 运行前 `cd` 到 `project/keil/`，UV4.exe 路径需向用户确认。
 
+MDK 6 使用 `project/keil/NUEDC2025_MSPM0G3507.csolution.yml`，通过 Keil Studio Pack
+或 `cbuild` 构建。新增/删除编译输入后运行 `python tools/check_keil_project_sync.py`。
+
 ### Keil 工程维护
 - `.uvprojx` 是 XML，可手编增删 `<File>` 条目；漏加会在链接阶段报 `L6218E`。
-- 已删文件引用须同步移除（Keil 与 CCS 两套工程都要维护）。
-- 当前 CCS projectspec 仍引用不存在的 `empty.syscfg`，且缺少 `bsp/debug_uart` include path；
-  修复并验证前不要宣称 CCS 与 Keil 已完全同步（详见 `docs/build-guide.md`）。
+- 已删文件引用须同步维护 MDK 5、MDK 6 与 CCS 三套工程。
+- MDK 5 与 MDK 6 的源码/库输入必须通过 `tools/check_keil_project_sync.py` 核对一致。
+- CCS projectspec 已改用仓库内 SDK 并修正已知元数据，但重新构建验证前不要宣称 CCS 可用。
 
 ### 提交
 - 格式: `type: 中文描述`（`feat` | `fix` | `docs` | `refactor`）
