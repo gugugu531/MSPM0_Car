@@ -86,6 +86,7 @@
 - `oled/`（SSD1306，帧缓冲模型）
 - `grayscale_sensor/`（数字量 GPIO 版 8 路灰度）
 - `ganv_gray/`（感为 8 路灰度，I2C0，与 MPU6050/JY61P 共总线）
+- `yahboom_track/`（Yahboom 8 路循线模块，I2C0，与感为灰度/MPU6050/JY61P 共总线）
 - `debug_uart/`（Debug_Ex/UART1，非阻塞遥测输出）
 - `bluetooth/`（BlueTooth/UART0，9600 8N1 收发）
 - `time/`

@@ -13,7 +13,7 @@
 - `app_mode.h`：状态机 `APP_MODE`（INIT/MENU/RUN/FAULT）与 `App_Mode_Init/Get`、`App_ControlTick/UiTick`。
 - `app_task.h`：任务生命周期契约——`APP_TASK_STATUS` 与 `APP_TASK_DESC`（`on_enter/on_tick/on_exit`），不含具体任务。
 - `app_menu.h`：菜单树类型 `MENU_NODE`/`MENU_ITEM` 与 `Menu_Tick` 导航；`app_menu_def.c` 定义菜单树实例 `APP_ROOT_MENU`。
-- `app_checks.h`：外设自检任务描述符 `APP_CHK_*`（JY61P / MPU6050 / Grayscale / Gray I2C / TB6612 / Encoder / Speed PID / Duty Sweep）。
+- `app_checks.h`：外设自检任务描述符 `APP_CHK_*`（JY61P / MPU6050 / Grayscale / Gray I2C / Yahboom I2C / TB6612 / Encoder / Speed PID / Duty Sweep）。
 - `app_line_task.h`：循迹测试任务 `APP_LINE_FOLLOW_TEST`（挂根菜单）。
 - `app_straight_task.h`：四种直行测试任务与遥测配置，详见
   `docs/interfaces/app_straight_task.md`。
@@ -48,5 +48,21 @@
 - `hall_encoder.h`：左右双轮霍尔编码器计数、速度和距离估计接口（按 `HALL_ENCODER_ID` 选轮），详细说明见 `docs/interfaces/bsp_hall_encoder.md`。
 - `grayscale_sensor.h`：8 路光敏灰度传感器数字量接口（GPIO），详细说明见 `docs/interfaces/bsp_grayscale_sensor.md`。
 - `ganv_gray.h`：感为 8 路灰度传感器 I2C 驱动（I2C0，默认地址 `0x4F`），详细说明见 `docs/interfaces/bsp_ganv_gray.md`。
+- `yahboom_track.h`：Yahboom 8 路循线模块 I2C 驱动（I2C0，地址 `0x12`），详细说明见 `docs/interfaces/bsp_yahboom_track.md`。
 - `debug_uart.h`：调试串口（Debug_Ex/UART1，115200）**非阻塞发送**——环形缓冲 + TX 中断排空，供遥测输出，无接收。
 - `bluetooth.h`：蓝牙串口（BlueTooth/UART0，9600 8N1）收发——RX 中断 + 环形缓冲，发送直接写 TX FIFO。
+
+### 三种灰度接口的位序与极性
+
+三种驱动保留各自硬件/协议语义，当前没有一个跨驱动统一的 `mask` ABI。调用方不得只根据
+“灰度掩码”名称假设位序和极性：
+
+| 接口 | 位序 | 置 `1` 的含义 |
+|---|---|---|
+| `GrayscaleSensor_ReadMask()` | `bit0=逻辑通道0` … `bit7=逻辑通道7` | 未检测到黑线（实机输入电平语义） |
+| `GanvGray_ReadDigital()` | `bit0=第1路` … `bit7=第8路` | 该路检测到，设备端 LED 亮 |
+| `YahboomTrack_ReadRaw()` | `bit7=X1` … `bit0=X8` | 白底，设备端 LED 灭 |
+| `YahboomTrack_ReadDetectedMask()` | `bit0=X1` … `bit7=X8` | 检测到黑线 |
+
+当前 `middleware/line_follow` 只消费 GPIO `grayscale_sensor`，因此沿用 `0=黑线、1=未检测到`
+的电平数组语义；感为和 Yahboom 目前仅接入 Device Check，尚未接入可切换的巡线传感器抽象层。

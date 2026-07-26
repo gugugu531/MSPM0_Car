@@ -10,12 +10,13 @@
 #include "app_straight_task.h"
 #include "app_bt_task.h"
 
-/* --- Device Check 子菜单：9 个外设自检 --- */
+/* --- Device Check 子菜单：10 个外设自检 --- */
 static const MENU_ITEM device_check_items[] = {
     { .name = "Gyro JY61P",   .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GYRO_JY61P },
     { .name = "Gyro MPU6050", .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GYRO_MPU6050 },
     { .name = "Grayscale",    .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GRAYSCALE },
     { .name = "Gray I2C",     .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GRAY_I2C },
+    { .name = "Yahboom I2C",  .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_YAHBOOM_I2C },
     { .name = "TB6612",       .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_TB6612 },
     { .name = "Encoder",      .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_ENCODER },
     { .name = "Speed PID",    .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_SPEED_PID },

@@ -190,10 +190,12 @@ armasm 语法，因此 MDK 6 有一条 `A1950W` 弃用警告；这是兼容性�
 - 上电后 OLED 显示 `Main Menu`，含 `Line Follow`、`Straight Test` 与
   `Device Check`；`Straight Test` 下有四种直行测试
 - 短按 UP/DOWN 移动选择、ENTER 进入、BACK 返回上级
-- `Device Check` 子菜单内 9 个自检（Gyro JY61P / Gyro MPU6050 / Grayscale / Gray I2C /
-  TB6612 / Encoder / Speed PID / Duty Sweep / BlueTooth）可进入并刷新数据
+- `Device Check` 子菜单内 10 个自检（Gyro JY61P / Gyro MPU6050 / Grayscale / Gray I2C /
+  Yahboom I2C / TB6612 / Encoder / Speed PID / Duty Sweep / BlueTooth）可进入并刷新数据
 - `Gray I2C` 进入后显示 8 路数字量二进制、`act` 触发数与 `ok/er`、`W/R/s` 诊断计数；
   断开传感器应显示 `READ FAIL` 且 `er` 递增
+- `Yahboom I2C` 显示按 X1→X8 排列且 `1=黑线` 的位图、原始 `0x30` 寄存器值及
+  `ok/er`、`R/W/s` 诊断；断开模块应显示 `READ FAIL`
 - TB6612 自检短按发单次脉冲、左右轮编码器计数（`encL`/`encR`）随之变化
 - `Encoder` 自检整车前进时两轮 `spd` 应同为正（方向符号见 `bsp/motor/hall_encoder.h`）
 - `Speed PID` / `Duty Sweep` 须**抬起车轮**运行；可配合 `tools/speed_pid_viz.py` 看曲线

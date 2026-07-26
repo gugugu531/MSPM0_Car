@@ -18,6 +18,7 @@ extern const APP_TASK_DESC APP_CHK_GYRO_JY61P;    /**< JY61P 陀螺/姿态（I2C
 extern const APP_TASK_DESC APP_CHK_GYRO_MPU6050;  /**< MPU6050 原始六轴（I2C0）。 */
 extern const APP_TASK_DESC APP_CHK_GRAYSCALE;     /**< 8 路灰度数字量（GPIO）。 */
 extern const APP_TASK_DESC APP_CHK_GRAY_I2C;      /**< 感为 8 路灰度 I2C（I2C0，0x4F）。 */
+extern const APP_TASK_DESC APP_CHK_YAHBOOM_I2C;   /**< Yahboom 8 路循线 I2C（I2C0，0x12）。 */
 extern const APP_TASK_DESC APP_CHK_TB6612;        /**< TB6612 电机通道脉冲（主动）。 */
 extern const APP_TASK_DESC APP_CHK_ENCODER;       /**< 霍尔编码器计数/速度/里程。 */
 extern const APP_TASK_DESC APP_CHK_SPEED_PID;     /**< 双轮速度闭环 PID（主动，整定用）。 */

@@ -21,6 +21,7 @@ project:
         - ../../bsp/debug_uart
         - ../../bsp/grayscale_sensor
         - ../../bsp/ganv_gray
+        - ../../bsp/yahboom_track
         - ../../bsp/imu
         - ../../bsp/key
         - ../../bsp/motor
@@ -124,6 +125,7 @@ project:
         - file: ../../bsp/debug_uart/debug_uart.c
         - file: ../../bsp/grayscale_sensor/grayscale_sensor.c
         - file: ../../bsp/ganv_gray/ganv_gray.c
+        - file: ../../bsp/yahboom_track/yahboom_track.c
         - file: ../../bsp/imu/wit_sdk.c
         - file: ../../bsp/key/key.c
         - file: ../../bsp/motor/hall_encoder.c

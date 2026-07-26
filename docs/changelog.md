@@ -2,8 +2,13 @@
 
 ## 未发布
 
+- 新增 `bsp/yahboom_track`：Yahboom 八路循线模块 I2C0 阻塞驱动（地址 `0x12`），实现
+  `0x30` 原始状态读取、X1→X8/黑线置 1 的检测掩码、`0x01` 校准控制和诊断计数。
+  Device Check 新增 `Yahboom I2C` 页面；同步登记 MDK 5、MDK 6 与 CCS 工程，并补齐三种
+  灰度接口的位序/极性对照、共享 I2C0 约束、官方协议来源和上板验证清单。MDK 6 AC6 6.22
+  全工程构建通过。
 - 新增 MDK 6/Keil Studio CMSIS Solution 工程，同时保留并继续维护 MDK 5 `.uvprojx`。
-  两套工程共享源码、TI 启动汇编和 scatter 文件；新增同步检查脚本确保 35 个编译/链接输入
+  两套工程共享源码、TI 启动汇编和 scatter 文件；新增同步检查脚本确保 36 个编译/链接输入
   一致。已分别用 D 盘 Keil AC6 6.22 验证：MDK 5 为 0 error/0 warning，MDK 6 自动转换
   context 构建成功（仅报告 TI legacy armasm 弃用警告）。
 - 将 TI 官方 `TexasInstruments/mspm0-sdk` 以 submodule 引入 `third_party/mspm0-sdk`，固定

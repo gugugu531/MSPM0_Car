@@ -20,6 +20,7 @@
 | 姿态 | MPU6050 (DMP) | I2C0（与 JY61P 共总线） | `bsp/mpu6050` |
 | 循迹 | 8 路灰度 | GPIO | `bsp/grayscale_sensor` |
 | 循迹 | 感为 8 路灰度 | I2C0（与两种 IMU 共总线） | `bsp/ganv_gray` |
+| 循迹 | Yahboom 8 路循线模块 | I2C0（地址 `0x12`，与两种 IMU/感为共总线） | `bsp/yahboom_track` |
 | 显示/输入 | OLED / 按键 | I2C1/GPIO | `bsp/oled`, `bsp/key` |
 | 通信 | 蓝牙 / 调试遥测 | UART0/UART1 | `bsp/bluetooth`, `bsp/debug_uart` |
 
@@ -69,7 +70,7 @@ app ─► middleware ─► {core (纯计算), bsp}
 3. 检查生成代码（勿手改生成文件）
 
 > I2C0 实例在 syscfg 中名为 `MPU6050_JY61P_Tracking`（历史命名，未重命名以免牵连重生成），
-> 现由 JY61P / MPU6050 / 感为灰度共用。SR04 的 GPIO 定义为历史残留，未使用。
+> 现由 JY61P / MPU6050 / 感为灰度 / Yahboom 循线模块共用。SR04 的 GPIO 定义为历史残留，未使用。
 
 ### 编译
 ```

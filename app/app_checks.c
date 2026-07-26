@@ -13,6 +13,7 @@
 #include "chassis.h"
 #include "grayscale_sensor.h"
 #include "ganv_gray.h"
+#include "yahboom_track.h"
 #include "hall_encoder.h"
 #include "wit_sdk.h"
 #include "mpu6050.h"
@@ -148,6 +149,106 @@ static APP_TASK_STATUS ChkGrayI2c_Tick(float dt){
 }
 
 static void ChkGrayI2c_Exit(void){
+    JY61P_I2C_SetSuspended(false);   /* 归还 I2C0 给 JY61P */
+}
+
+/* ============================ Yahboom 循线 I2C（I2C0） ============================ */
+/* 与 JY61P/MPU6050/感为灰度共 I2C0：进入时挂起 JY61P、退出时恢复。 */
+
+static uint32_t yb_last_ui;
+static uint32_t yb_ok_cnt;
+static uint32_t yb_err_cnt;
+static uint8_t yb_raw;
+static uint8_t yb_mask;
+
+static char HexDigit(uint8_t value){
+    value &= 0x0FU;
+    return (value < 10U) ? (char)('0' + value) : (char)('A' + value - 10U);
+}
+
+static void ChkYahboomI2c_Enter(void){
+    JY61P_I2C_SetSuspended(true);    /* 让出 I2C0 */
+    (void)YahboomTrack_Init();       /* 探测 0x12，同时清零驱动诊断 */
+    yb_last_ui = 0U;
+    yb_ok_cnt  = 0U;
+    yb_err_cnt = 0U;
+    yb_raw     = 0xFFU;
+    yb_mask    = 0U;
+}
+
+static APP_TASK_STATUS ChkYahboomI2c_Tick(float dt){
+    (void)dt;
+    uint32_t now = BSP_Time_GetMs();
+    if ((now - yb_last_ui) < CHK_UI_PERIOD_MS){
+        return APP_TASK_RUNNING;
+    }
+    yb_last_ui = now;
+
+    uint8_t raw = 0xFFU;
+    BSP_STATUS st = YahboomTrack_ReadRaw(&raw);
+    if (st == BSP_STATUS_OK){
+        yb_raw = raw;
+        yb_mask = 0U;
+        for (uint8_t i = 0U; i < YAHBOOM_TRACK_CHANNEL_COUNT; i++){
+            if ((raw & (uint8_t)(1U << (7U - i))) == 0U){
+                yb_mask |= (uint8_t)(1U << i);   /* bit0=X1，1=黑线 */
+            }
+        }
+        yb_ok_cnt++;
+    } else{
+        yb_err_cnt++;
+    }
+
+    char bits[YAHBOOM_TRACK_CHANNEL_COUNT + 1U];
+    uint8_t active = 0U;
+    for (uint8_t i = 0U; i < YAHBOOM_TRACK_CHANNEL_COUNT; i++){
+        bool detected = ((yb_mask & (uint8_t)(1U << i)) != 0U);
+        bits[i] = detected ? '1' : '0';
+        if (detected){ active++; }
+    }
+    bits[YAHBOOM_TRACK_CHANNEL_COUNT] = '\0';
+
+    char l3[20];
+    char l4[20];
+    char l5[20];
+    uint8_t n;
+
+    if (st == BSP_STATUS_OK){
+        n = PutStr(l3, "raw 0x");
+        l3[n++] = HexDigit((uint8_t)(yb_raw >> 4));
+        l3[n++] = HexDigit(yb_raw);
+        n += PutStr(&l3[n], " act ");
+        AppFmt_I32(&l3[n], (int32_t)active);
+    } else{
+        n = PutStr(l3, "READ FAIL");
+        l3[n] = '\0';
+    }
+
+    n = PutStr(l4, "ok ");
+    AppFmt_I32(&l4[n], (int32_t)yb_ok_cnt);
+    while (l4[n] != '\0'){ n++; }
+    n += PutStr(&l4[n], " er ");
+    AppFmt_I32(&l4[n], (int32_t)yb_err_cnt);
+
+    uint32_t read_fail = 0U;
+    uint32_t write_fail = 0U;
+    int32_t last_status = 0;
+    YahboomTrack_GetDiag(&read_fail, &write_fail, &last_status);
+    n = PutStr(l5, "R");
+    AppFmt_I32(&l5[n], (int32_t)read_fail);
+    while (l5[n] != '\0'){ n++; }
+    n += PutStr(&l5[n], " W");
+    AppFmt_I32(&l5[n], (int32_t)write_fail);
+    while (l5[n] != '\0'){ n++; }
+    n += PutStr(&l5[n], " s");
+    AppFmt_I32(&l5[n], last_status);
+
+    Ui_RenderLines("Chk Yahboom I2C", bits, "X1->X8 1=BLACK", l3, l4, l5,
+                   "BACK: exit");
+    return APP_TASK_RUNNING;
+}
+
+static void ChkYahboomI2c_Exit(void){
     JY61P_I2C_SetSuspended(false);   /* 归还 I2C0 给 JY61P */
 }
 
@@ -493,6 +594,9 @@ const APP_TASK_DESC APP_CHK_GRAYSCALE = {
 };
 const APP_TASK_DESC APP_CHK_GRAY_I2C = {
     "Gray I2C", ChkGrayI2c_Enter, ChkGrayI2c_Tick, ChkGrayI2c_Exit
+};
+const APP_TASK_DESC APP_CHK_YAHBOOM_I2C = {
+    "Yahboom I2C", ChkYahboomI2c_Enter, ChkYahboomI2c_Tick, ChkYahboomI2c_Exit
 };
 const APP_TASK_DESC APP_CHK_TB6612 = {
     "TB6612", ChkTb_Enter, ChkTb_Tick, ChkTb_Exit
