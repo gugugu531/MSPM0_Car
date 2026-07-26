@@ -15,7 +15,7 @@ void MPU6050_RunDmpTest(void)
     uint8_t rc;
 
     DebugUart_Puts("\r\n[MPU6050] DMP self-test start\r\n");
-    DebugUart_Puts("[MPU6050] note: JY61P shares I2C0, disable its poll first!\r\n");
+    DebugUart_Puts("[MPU6050] note: suspend JY61P before using shared I2C0!\r\n");
 
     if (!MPU6050_TestConnection()){
         DebugUart_Puts("[MPU6050] WHO_AM_I FAIL (check wiring/addr/bus conflict)\r\n");

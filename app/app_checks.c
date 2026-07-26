@@ -295,19 +295,29 @@ static APP_TASK_STATUS ChkGyroJy_Tick(float dt){
 }
 
 /* ============================ 陀螺仪 MPU6050 ============================ */
-/* 与 JY61P 共 I2C0：进入时挂起 JY61P、退出时恢复。 */
+/* 基础模式物理量检查；与 JY61P 共 I2C0，进入时挂起、退出时恢复。 */
 
 static uint32_t gm_last_ui;
+static uint8_t gm_page;
+static BSP_STATUS gm_init_status;
 
 static void ChkGyroMpu_Enter(void){
     JY61P_I2C_SetSuspended(true);    /* 让出 I2C0 */
-    (void)MPU6050_Init();
+    gm_init_status = MPU6050_Init();
     gm_last_ui = 0U;
+    gm_page = 0U;
 }
 
 static APP_TASK_STATUS ChkGyroMpu_Tick(float dt){
     (void)dt;
     uint32_t now = BSP_Time_GetMs();
+
+    if ((Key_GetEvent(KEY_ID_UP) == KEY_EVENT_SHORT_PRESS) ||
+        (Key_GetEvent(KEY_ID_DOWN) == KEY_EVENT_SHORT_PRESS)){
+        gm_page ^= 1U;
+        gm_last_ui = 0U;
+    }
+
     if ((now - gm_last_ui) < CHK_UI_PERIOD_MS){
         return APP_TASK_RUNNING;
     }
@@ -315,21 +325,40 @@ static APP_TASK_STATUS ChkGyroMpu_Tick(float dt){
 
     char l1[20];
     char l2[20];
+    char l3[20];
+    char l4[20];
+    char l5[20];
+    char l6[20];
     uint8_t n;
 
-    bool ok = MPU6050_TestConnection();
-    (void)PutStr(l1, ok ? "conn OK" : "conn FAIL");
-    l1[ok ? 7U : 9U] = '\0';
-
-    MPU6050_MOTION6 m;
-    if (ok && (MPU6050_GetMotion6(&m) == BSP_STATUS_OK)){
-        n = PutStr(l2, "gz ");
-        AppFmt_I32(&l2[n], (int32_t)m.gz);
-    } else {
-        (void)PutStr(l2, "gz --"); l2[5] = '\0';
+    bool connected = (gm_init_status == BSP_STATUS_OK) &&
+                     MPU6050_TestConnection();
+    MPU6050_MEASUREMENT m;
+    if (!connected || (MPU6050_GetMeasurement(&m) != BSP_STATUS_OK)){
+        n = PutStr(l1, connected ? "read FAIL" : "conn FAIL");
+        l1[n] = '\0';
+        Ui_RenderLines("Chk MPU6050", l1, "check wiring/bus", "BACK: exit",
+                       NULL, NULL, NULL);
+        return APP_TASK_RUNNING;
     }
 
-    Ui_RenderLines("Chk MPU6050", l1, l2, "BACK: exit", NULL, NULL, NULL);
+    if (gm_page == 0U){
+        (void)PutStr(l1, "unit m/s2"); l1[10] = '\0';
+        n = PutStr(l2, "Ax "); AppFmt_Fixed(&l2[n], m.accel_x_mps2, 2U);
+        n = PutStr(l3, "Ay "); AppFmt_Fixed(&l3[n], m.accel_y_mps2, 2U);
+        n = PutStr(l4, "Az "); AppFmt_Fixed(&l4[n], m.accel_z_mps2, 2U);
+        n = PutStr(l5, "|a| "); AppFmt_Fixed(&l5[n], m.accel_magnitude_mps2, 2U);
+        n = PutStr(l6, "Temp C "); AppFmt_Fixed(&l6[n], m.temperature_c, 1U);
+        Ui_RenderLines("MPU Acc 1/2", l1, l2, l3, l4, l5, l6);
+    } else{
+        (void)PutStr(l1, "unit deg/s"); l1[10] = '\0';
+        n = PutStr(l2, "Gx "); AppFmt_Fixed(&l2[n], m.gyro_x_deg_s, 1U);
+        n = PutStr(l3, "Gy "); AppFmt_Fixed(&l3[n], m.gyro_y_deg_s, 1U);
+        n = PutStr(l4, "Gz "); AppFmt_Fixed(&l4[n], m.gyro_z_deg_s, 1U);
+        n = PutStr(l5, "Pitch "); AppFmt_Fixed(&l5[n], m.pitch_deg, 1U);
+        n = PutStr(l6, "Roll "); AppFmt_Fixed(&l6[n], m.roll_deg, 1U);
+        Ui_RenderLines("MPU Gyro 2/2", l1, l2, l3, l4, l5, l6);
+    }
     return APP_TASK_RUNNING;
 }
 

@@ -17,7 +17,7 @@
 |--------|------|------|------|
 | 底盘轮 | 直流电机 ×2 + 霍尔编码器 | PWM/GPIO | `bsp/motor` (TB6612) |
 | 姿态 | JY61P (WIT 协议) | I2C0 | `bsp/imu` (wit_sdk, 中断驱动) |
-| 姿态 | MPU6050 (DMP) | I2C0（与 JY61P 共总线） | `bsp/mpu6050` |
+| 姿态 | MPU6050（基础六轴 + DMP） | I2C0（共享总线） | `bsp/mpu6050` |
 | 循迹 | 8 路灰度 | GPIO | `bsp/grayscale_sensor` |
 | 循迹 | 感为 8 路灰度 | I2C0（与两种 IMU 共总线） | `bsp/ganv_gray` |
 | 循迹 | Yahboom 8 路循线模块 | I2C0（地址 `0x12`，与两种 IMU/感为共总线） | `bsp/yahboom_track` |

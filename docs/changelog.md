@@ -2,6 +2,10 @@
 
 ## 未发布
 
+- 完善 MPU6050 基础模式：新增一次事务读取加速度、温度和角速度并换算 SI/工程单位的
+  `MPU6050_GetMeasurement()`，同时输出加速度合量与静态 pitch/roll；Device Check 改为
+  加速度/温度和角速度/倾角双页显示。补齐基础模式与 DMP 量程边界、共享 I2C0 所有权、
+  bring-up 限制、上板验证方法和独立接口文档。
 - 新增 `bsp/yahboom_track`：Yahboom 八路循线模块 I2C0 阻塞驱动（地址 `0x12`），实现
   `0x30` 原始状态读取、X1→X8/黑线置 1 的检测掩码、`0x01` 校准控制和诊断计数。
   Device Check 新增 `Yahboom I2C` 页面；同步登记 MDK 5、MDK 6 与 CCS 工程，并补齐三种

@@ -38,7 +38,7 @@ Main Menu
 │   └── Duty+Yaw Hold   (task)   基础占空比 + 启动航向锁定
 └── Device Check        (submenu)
     ├── Gyro JY61P       (task)   JY61P 陀螺/姿态/温度 + 诊断计数
-    ├── Gyro MPU6050     (task)   原始六轴; 与 JY61P 共 I2C0, 进挂起/出恢复
+    ├── Gyro MPU6050     (task)   物理六轴/温度/静态倾角双页; 进挂起/出恢复 JY61P
     ├── Grayscale        (task)   数字量 GPIO 版, 8 路 mask 二进制 + 触发数
     ├── Gray I2C         (task)   感为 I2C 版(0x4F), 8 路数字量 + 在线/固件版本
     ├── TB6612           (task)   短按单次低速脉冲(20%/300ms) + 编码器响应, 抬轮提示
@@ -132,5 +132,7 @@ Device Check 共 10 项(`app_checks.c` 9 项外设自检 + `app_bt_task.c` 蓝�
   DMP 阻塞重，留任务。
 - **命令层**：蓝牙/调试 UART 的 RX/TX 中断 + 环形缓冲 + 命令解析，按需在 app 层新增
   `UARTx_IRQHandler`。
-- **MPU6050 DMP 姿态**：当前自检用原始 `GetMotion6`；若要 DMP 融合姿态，需把阻塞的
-  `MPU6050_RunDmpTest` 改造为非阻塞的 `on_tick` 分步读 FIFO。
+- **MPU6050 DMP 姿态**：当前 Device Check 使用基础模式 `MPU6050_GetMeasurement()`，
+  UP/DOWN 在加速度/温度页与角速度/静态 pitch/roll 页之间切换。DMP 已有阻塞式 bring-up
+  入口 `MPU6050_RunDmpTest()`；若要集成到协作式 app，仍需把初始化与 FIFO 消费改造成
+  非阻塞任务状态机。

@@ -1,6 +1,6 @@
 /**
  * @file  mpu6050.c
- * @brief BSP MPU6050 六轴 IMU 驱动实现 (I2C0, 阻塞) — Step1: 基础读取与自检。
+ * @brief BSP MPU6050 六轴 IMU 阻塞驱动：基础采样、物理量换算与 DMP 姿态。
  *
  * 移植自 Arduino i2cdevlib (Jeff Rowberg) MPU6050 / I2Cdev:
  *   - 位域读写 (ReadBits/WriteBits) 保持与 I2Cdev 相同的 bitStart=字段高位 约定;
@@ -15,7 +15,7 @@
 #include <stddef.h>
 #include <string.h>
 
-/* I2C 外设实例 (I2C0, 与 JY61P 共用) 与自旋超时。 */
+/* I2C0 与 JY61P/感为灰度/Yahboom 共用；总线分时由 app 层负责。 */
 #define MPU6050_I2C_INST     MPU6050_JY61P_Tracking_INST
 #define MPU6050_I2C_TIMEOUT  100000U
 
@@ -42,6 +42,14 @@
 #define MPU6050_WHO_AM_I_BIT         6U
 #define MPU6050_WHO_AM_I_LENGTH      6U
 #define MPU6050_DEVICE_ID            0x34U
+
+/* MPU6050_Init 固定量程下的基础物理量换算参数。 */
+#define MPU6050_ACCEL_LSB_PER_G      16384.0f
+#define MPU6050_GYRO_LSB_250         131.0f
+#define MPU6050_STANDARD_GRAVITY     9.80665f
+#define MPU6050_TEMP_LSB_PER_C       340.0f
+#define MPU6050_TEMP_OFFSET_C        36.53f
+#define MPU6050_RAD_TO_DEG           57.29577951f
 
 /* ═══════════════════ 阻塞 I2C 底层 (勿在 ISR 调用) ═══════════════════════════ */
 
@@ -141,7 +149,7 @@ static bool MPU6050_ReadRegs(uint8_t reg, uint8_t *data, uint8_t len)
     return MPU6050_WaitIdle();
 }
 
-/* ===== I2Cdev 风格便捷读写 (供配置与后续 DMP 复用) ===== */
+/* ===== I2Cdev 风格便捷读写（基础配置与 DMP 共用） ===== */
 
 static bool MPU6050_WriteByte(uint8_t reg, uint8_t val)
 {
@@ -224,20 +232,68 @@ bool MPU6050_TestConnection(void)
     return id == MPU6050_DEVICE_ID;
 }
 
-BSP_STATUS MPU6050_GetMotion6(MPU6050_MOTION6 *out)
+static BSP_STATUS MPU6050_ReadBaseSample(MPU6050_MOTION6 *motion,
+                                         int16_t *temperature_raw)
 {
     uint8_t buf[14];
 
-    if (out == NULL){ return BSP_STATUS_NULL; }
+    if ((motion == NULL) || (temperature_raw == NULL)){
+        return BSP_STATUS_NULL;
+    }
     if (!MPU6050_ReadRegs(MPU6050_RA_ACCEL_XOUT_H, buf, 14U)){ return BSP_STATUS_ERROR; }
 
-    out->ax = (int16_t)(((uint16_t)buf[0] << 8) | buf[1]);
-    out->ay = (int16_t)(((uint16_t)buf[2] << 8) | buf[3]);
-    out->az = (int16_t)(((uint16_t)buf[4] << 8) | buf[5]);
-    /* buf[6],buf[7] = 温度, 跳过 */
-    out->gx = (int16_t)(((uint16_t)buf[8] << 8) | buf[9]);
-    out->gy = (int16_t)(((uint16_t)buf[10] << 8) | buf[11]);
-    out->gz = (int16_t)(((uint16_t)buf[12] << 8) | buf[13]);
+    motion->ax = (int16_t)(((uint16_t)buf[0] << 8) | buf[1]);
+    motion->ay = (int16_t)(((uint16_t)buf[2] << 8) | buf[3]);
+    motion->az = (int16_t)(((uint16_t)buf[4] << 8) | buf[5]);
+    *temperature_raw = (int16_t)(((uint16_t)buf[6] << 8) | buf[7]);
+    motion->gx = (int16_t)(((uint16_t)buf[8] << 8) | buf[9]);
+    motion->gy = (int16_t)(((uint16_t)buf[10] << 8) | buf[11]);
+    motion->gz = (int16_t)(((uint16_t)buf[12] << 8) | buf[13]);
+    return BSP_STATUS_OK;
+}
+
+BSP_STATUS MPU6050_GetMotion6(MPU6050_MOTION6 *out)
+{
+    int16_t temperature_raw;
+
+    return MPU6050_ReadBaseSample(out, &temperature_raw);
+}
+
+BSP_STATUS MPU6050_GetMeasurement(MPU6050_MEASUREMENT *out)
+{
+    MPU6050_MOTION6 raw;
+    int16_t temperature_raw;
+    float accel_scale;
+
+    if (out == NULL){ return BSP_STATUS_NULL; }
+
+    BSP_STATUS status = MPU6050_ReadBaseSample(&raw, &temperature_raw);
+    if (status != BSP_STATUS_OK){ return status; }
+
+    accel_scale = MPU6050_STANDARD_GRAVITY / MPU6050_ACCEL_LSB_PER_G;
+    out->accel_x_mps2 = (float)raw.ax * accel_scale;
+    out->accel_y_mps2 = (float)raw.ay * accel_scale;
+    out->accel_z_mps2 = (float)raw.az * accel_scale;
+    out->accel_magnitude_mps2 = sqrtf(
+        out->accel_x_mps2 * out->accel_x_mps2 +
+        out->accel_y_mps2 * out->accel_y_mps2 +
+        out->accel_z_mps2 * out->accel_z_mps2);
+
+    out->gyro_x_deg_s = (float)raw.gx / MPU6050_GYRO_LSB_250;
+    out->gyro_y_deg_s = (float)raw.gy / MPU6050_GYRO_LSB_250;
+    out->gyro_z_deg_s = (float)raw.gz / MPU6050_GYRO_LSB_250;
+    out->temperature_c =
+        (float)temperature_raw / MPU6050_TEMP_LSB_PER_C +
+        MPU6050_TEMP_OFFSET_C;
+
+    /* 六轴基础模式只能由重力方向估算 pitch/roll，无法观测绝对 yaw。 */
+    out->pitch_deg = atan2f(
+        -out->accel_x_mps2,
+        sqrtf(out->accel_y_mps2 * out->accel_y_mps2 +
+              out->accel_z_mps2 * out->accel_z_mps2)) *
+        MPU6050_RAD_TO_DEG;
+    out->roll_deg = atan2f(out->accel_y_mps2, out->accel_z_mps2) *
+                    MPU6050_RAD_TO_DEG;
     return BSP_STATUS_OK;
 }
 
@@ -553,7 +609,6 @@ void MPU6050_SetDMPEnabled(bool enable)
 /* ═══════════════════ DMP 运行期姿态 (四元数 → yaw/pitch/roll) ═══════════════ */
 
 #define MPU6050_DMP_PACKET_SIZE 42U
-#define MPU6050_RAD_TO_DEG      57.29577951f
 #define MPU6050_GYRO_LSB_2000   16.4f   /* ±2000°/s 量程下 LSB → deg/s */
 
 /* 从 42B DMP 包的偏移解出带符号 int16 (大端)。 */

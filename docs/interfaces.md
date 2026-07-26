@@ -43,7 +43,8 @@
 - `key.h`：按键读取、消抖和事件生成，详细说明见 `docs/interfaces/bsp_key.md`。
 - `oled.h`：SSD1306 OLED 帧缓冲显示接口（I2C1），详细说明见 `docs/interfaces/bsp_oled.md`。
 - `wit_sdk.h`：JY61P（WIT 协议）I2C0 中断驱动、数据解析和结构体读取接口，详细说明见 `docs/interfaces/bsp_wit_sdk.md`。
-- `mpu6050.h`：MPU6050 DMP 姿态驱动（I2C0，与 JY61P 共总线）。
+- `mpu6050.h`：MPU6050 基础六轴/温度/静态倾角与 DMP 姿态驱动（I2C0，共享总线），详细说明见
+  `docs/interfaces/bsp_mpu6050.md`。
 - `tb6612fng.h`：TB6612FNG 双路直流电机驱动芯片接口，详细说明见 `docs/interfaces/bsp_tb6612fng.md`。
 - `hall_encoder.h`：左右双轮霍尔编码器计数、速度和距离估计接口（按 `HALL_ENCODER_ID` 选轮），详细说明见 `docs/interfaces/bsp_hall_encoder.md`。
 - `grayscale_sensor.h`：8 路光敏灰度传感器数字量接口（GPIO），详细说明见 `docs/interfaces/bsp_grayscale_sensor.md`。
