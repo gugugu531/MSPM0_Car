@@ -36,12 +36,15 @@ Brake/Coast` 切回开环并清目标。实际出力由 `Chassis_UpdateSpeedCont
 默认增益（`chassis.h`，**须上板整定**，可用 Device Check「Speed PID」自检）：
 
 ```c
-#define CHASSIS_SPEED_KP             120.0f
-#define CHASSIS_SPEED_KI             250.0f
+#define CHASSIS_SPEED_KP             200.00f
+#define CHASSIS_SPEED_KI             17.0f
 #define CHASSIS_SPEED_KD             0.0f
-#define CHASSIS_SPEED_INTEGRAL_LIMIT 0.4f   /* ki*积分饱和≈输出上限, 抗积分饱和 */
+#define CHASSIS_SPEED_INTEGRAL_LIMIT 96.0f
 #define CHASSIS_SPEED_OUTPUT_LIMIT   100.0f
 ```
+
+`CHASSIS_SPEED_INTEGRAL_LIMIT` 限制的是 PID 内部积分累计值本身，不是已乘 `Ki` 的积分项；
+最终占空比仍由 `CHASSIS_SPEED_OUTPUT_LIMIT` 限制。
 
 > 差速转向（车体 v/ω → 双轮目标）需 `track_width`（暂缺）；有了轮距后用 `core/kinematics`
 > 的 `Kinematics_BodyToWheel` 在 `Chassis_SetWheelSpeed` 之上加一层即可。

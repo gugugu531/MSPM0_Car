@@ -38,6 +38,8 @@
 - `app_menu.c/.h` 与 `app_menu_def.c`：菜单树（`MENU_NODE`/`MENU_ITEM`）导航与菜单树实例定义。
 - `app_checks.c/.h`：外设自检任务描述符，挂在 Device Check 子菜单。
 - `app_line_task.c/.h`：循迹测试任务（完整巡线闭环 + 陀螺增稳），挂在根菜单。
+- `app_straight_task.c/.h`：直行测试的任务生命周期、按键、OLED 与遥测适配，挂在
+  `Straight Test` 子菜单；具体控制由 `middleware/straight_drive` 承担。
 - `app_bt_task.c/.h`：蓝牙串口收发测试任务，挂在 Device Check 子菜单。
 - `app_fmt.c/.h`：定点数字格式化（不引浮点 printf），供自检显示。
 
@@ -63,6 +65,7 @@
 
 - `chassis/`：底盘组合服务（开环占空比 + 每轮速度闭环 PID）
 - `line_follow/`：GPIO 灰度读取、巡线偏差计算、PID/陀螺修正和底盘输出
+- `straight_drive/`：四种直行模式的指令、姿态反馈、PID 与底盘输出
 - `ui/`：轻量 OLED UI 渲染层
 - `fault/`：系统故障处理服务
 
@@ -106,3 +109,9 @@ SysConfig CLI 重新生成。
 - `keil/`
 
 源码路径重构后必须同步维护这两个目录中的工程文件。
+
+## tools
+
+- `speed_pid_viz.py`：可视化 Device Check 的 `[SPD]` 速度 PID 遥测。
+- `straight_test_viz.py`：可视化 Straight Test 的 `[STR]` 左右轮占空比、速度、
+  距离、yaw 与 gz，支持原始日志和 CSV 导出。

@@ -2,6 +2,23 @@
 
 ## 未发布
 
+- 将四种直行方式的模式状态、指令限幅、PID、姿态有效性、巡航角锁定与底盘输出从
+  `app_straight_task` 下沉到 `middleware/straight_drive`，任务层仅保留外设轮询调度、按键、
+  OLED 和 Debug_Ex 遥测适配。JY61P BSP 新增完整样本计数和按时间戳判断新鲜度的接口，
+  去除任务层依据 poll/error 计数推断事务结果的胶水状态机，并修正 timeout getter 误返回
+  NACK 计数的问题。
+- 主菜单新增 `Straight Test` 子菜单，提供纯占空比开环、双轮速度闭环、占空比+陀螺角速度
+  闭环与占空比+陀螺巡航角闭环四种直行测试。占空比类模式进入后直接以 `50%`
+  运动，速度闭环以现有整定数据中约对应 50% 占空比的 `0.65 m/s` 启动；支持
+  `UP/DOWN` 调整、`ENTER` 归零和 `BACK` 刹停退出；陀螺模式在首帧有效采样前禁止电机
+  输出；巡航角以每次开始运动前的 yaw 为基准角，运动期间 IMU 短暂失效也不重置。
+  四种模式每 20ms 统一输出 `[STR]`
+  Debug_Ex 遥测（占空比/速度/距离/yaw/gz），新增 `tools/straight_test_viz.py` 实时四图
+  可视化、自动重连、原始日志与 CSV 导出。
+- 根据两种直行陀螺模式的实车现象拆分 JY61P 反馈符号：原始 yaw 使巡航角环先掉头
+  约 `180°`，故保留 `STRAIGHT_DRIVE_HEADING_YAW_SIGN=-1.0f`；但 gz 跟随反相后角速度模式
+  持续转圈，故恢复 `STRAIGHT_DRIVE_RATE_GYRO_SIGN=1.0f`。
+
 - 合并巡线中间件并澄清命名：删除仅缓存灰度快照的旧 `line_follow` 状态包装，将控制器
   `line_tracking` 收敛为新的 `middleware/line_follow`。新接口以 `LINE_FOLLOW_INPUT.level[]`
   明确实机语义（0=检测到黑线，1=未检测到黑线），保留纯计算 `LineFollow_Compute` 和完整闭环

@@ -6,7 +6,7 @@
 - **IDE**: Keil MDK (ARMCLANG V6.22) / CCS (TICLANG)
 - **SDK**: mspm0_sdk_2_10_00_04
 - **当前状态**: 原 2025E 二维云台/瞄准子系统已移除；`app` 已重建为菜单驱动的裸机协作式
-  调度框架，现有循迹测试、双轮速度闭环和 9 项设备检查。当前重点为底盘闭环整定与上板验证。
+  调度框架，现有循迹测试、四种直行控制测试和 9 项设备检查。当前重点为底盘闭环整定与上板验证。
 
 > **注意**: 外部工具路径 (Keil、SysConfig、SDK) 需向用户确认实际安装位置。
 
@@ -32,7 +32,7 @@ MSPM0_Car/
 │   ├── startup/          # 启动文件, 链接脚本
 │   └── sys_config/       # SysConfig 源文件及生成代码
 ├── core/                 # 纯计算算法 (pid, filter, kinematics, common)
-├── middleware/           # 中间件 (chassis, line_follow, ui, fault)
+├── middleware/           # 中间件 (chassis, line_follow, straight_drive, ui, fault)
 ├── project/{keil,ccs}/   # IDE 工程
 ├── docs/                 # 架构/接口/构建文档
 └── tools/                # 调试/烧录脚本

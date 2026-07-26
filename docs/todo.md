@@ -5,7 +5,6 @@
 
 - 修正 CCS projectspec：将不存在的 `empty.syscfg` 改为 `G3507.syscfg`，补上
   `bsp/debug_uart` include path，并重新验证 CCS/ticlang 构建。
-- 核对并修正 `JY61P_I2C_GetTimeoutCount()` 的实现；当前函数返回 NACK 计数而非独立超时计数。
 - 后续根据真实系统时钟复核 `BSP_TIME_CPUCLK_HZ`，必要时改为从时钟配置自动派生。
 - 后续如增加第二个实体按键，在 `KEY_ID`、硬件映射宏和 `bsp/key` 内部配置表中同步扩展。
 - 后续构建具体 BSP 外设时，继续按 SDK 风格统一公开类型和枚举成员命名。

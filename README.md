@@ -3,7 +3,8 @@
 基于 `TI MSPM0G3507` 的分层车载固件工程。
 
 > **当前状态**：原 2025E 二维云台/瞄准子系统已整体移除；`app` 已重建为菜单驱动的裸机
-> 协作式调度框架。当前可从 OLED 菜单运行 GPIO 灰度循迹测试，以及 JY61P、MPU6050、
+> 协作式调度框架。当前可从 OLED 菜单运行 GPIO 灰度循迹测试、四种直行控制测试，
+> 以及 JY61P、MPU6050、
 > 两种灰度传感器、TB6612、双轮编码器、速度 PID、占空比扫描和蓝牙串口等设备检查任务。
 > 现阶段重点是底盘测速/速度闭环整定与各外设上板验证。
 
@@ -30,7 +31,8 @@ app ─► middleware ─► bsp
 
 - `app`：初始化、协作式调度器、状态机、菜单树与具体测试任务。
 - `core`：PID、滤波和运动学等纯计算能力（`pid` / `filter` / `kinematics` / `common`）。
-- `middleware`：组合 core 与 BSP 的系统能力（`chassis` / `line_follow` / `ui` / `fault`）。
+- `middleware`：组合 core 与 BSP 的系统能力（`chassis` / `line_follow` / `straight_drive` /
+  `ui` / `fault`）。
 - `bsp`：直接面向板级外设的驱动（见上表 + `time` / `common`）。
 - `board`：SysConfig 源文件与生成代码、启动/链接资源。
 

@@ -8,7 +8,9 @@
 
 > 使用现状：`middleware/line_follow` 使用 `Kinematics_Clamp` 与
 > `Kinematics_DifferentialMix`；`middleware/chassis` 使用 `Kinematics_WheelToBody`
-> 将左右轮速度聚合为车体线速度。本文其余标注为「预留」的类型/宏/函数已实现并保留，
+> 将左右轮速度聚合为车体线速度；
+> `middleware/straight_drive` 使用角度归一化、最短角误差与差速混控。
+> 本文其余标注为「预留」的类型/宏/函数已实现并保留，
 > 但当前工程暂无调用者，供后续路径/姿态/动作策略模块复用。
 
 ## 基础宏

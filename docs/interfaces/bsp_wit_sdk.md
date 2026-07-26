@@ -38,8 +38,13 @@ SDK 的命名、串口协议解析、寄存器定义和已有全局变量，同�
   等同总线阻塞驱动分时。
 - `JY61P_I2C_GetPollCount()` / `GetErrorCount()` / `GetNackCount()` /
   `GetTimeoutCount()`：读取诊断计数。
+- `JY61P_I2C_GetSampleCount()`：读取已完整发布的 angle + gyro 样本数。
+- `JY61P_I2C_IsDataFresh(max_age_ms)`：仅当至少发布过一个完整样本，且最近样本年龄不超过
+  指定阈值时返回 `true`。上层控制器应使用此接口判断数据有效性，不应根据 poll/error
+  计数反推事务是否成功。
 
-当前由 `app/app_line_task.c` 和 JY61P 自检任务在每个 20ms 控制拍调用 `JY61P_I2C_Poll()`；
+当前由 `app/app_line_task.c`、`app/app_straight_task.c` 的四种直行测试和
+JY61P 自检任务在每个 20ms 控制拍调用 `JY61P_I2C_Poll()`；
 SysTick ISR 不轮询 JY61P。
 
 ## 结构化读取类型

@@ -31,6 +31,11 @@ run-to-completion 任务。
 ```
 Main Menu
 ├── Line Follow         (task)   循迹测试: line_follow 完整闭环巡线 + 陀螺增稳, 电平图/误差/双轮占空比, 丢线刹停
+├── Straight Test       (submenu)
+│   ├── Duty Open       (task)   左右轮同占空比开环
+│   ├── Speed Closed    (task)   左右轮独立速度 PID 直行
+│   ├── Duty+Gyro Rate  (task)   基础占空比 + gz=0 角速度闭环
+│   └── Duty+Yaw Hold   (task)   基础占空比 + 启动航向锁定
 └── Device Check        (submenu)
     ├── Gyro JY61P       (task)   JY61P 陀螺/姿态/温度 + 诊断计数
     ├── Gyro MPU6050     (task)   原始六轴; 与 JY61P 共 I2C0, 进挂起/出恢复
@@ -77,7 +82,7 @@ Main Menu
 | 模式 | UP | DOWN | ENTER | BACK |
 |---|---|---|---|---|
 | MENU | 上移选择 | 下移选择 | 进入任务 | — |
-| RUN | — | — | — | 中止回菜单 |
+| RUN | 任务定义 | 任务定义 | 任务定义 | 中止回菜单 |
 | FAULT | — | — | 复位回菜单 | — |
 
 `KEY_ID`：`KEY_ID_UP / KEY_ID_DOWN / KEY_ID_ENTER / KEY_ID_BACK`。用 `Key_GetEvent()==KEY_EVENT_SHORT_PRESS` 消费。
