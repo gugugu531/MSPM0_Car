@@ -40,6 +40,18 @@ static bool Straight_UsesGyro(STRAIGHT_DRIVE_MODE mode)
            (mode == STRAIGHT_DRIVE_MODE_GYRO_HEADING);
 }
 
+static float Straight_Abs(float value)
+{
+    return (value < 0.0f) ? -value : value;
+}
+
+/** 以左右轮绝对里程的平均值估算本次测试已行驶的车体距离。 */
+static float Straight_GetTravelDistance(const STRAIGHT_DRIVE_OUTPUT *output)
+{
+    return 0.5f * (Straight_Abs(output->distance_left_m) +
+                   Straight_Abs(output->distance_right_m));
+}
+
 static const char *Straight_Title(STRAIGHT_DRIVE_MODE mode)
 {
     switch (mode){
@@ -105,6 +117,12 @@ static void Straight_Render(const STRAIGHT_DRIVE_OUTPUT *output)
         (output->mode == STRAIGHT_DRIVE_MODE_SPEED) ? "tgt " : "duty ");
     AppFmt_Fixed(&l0[n], output->command,
         (output->mode == STRAIGHT_DRIVE_MODE_SPEED) ? 2U : 1U);
+    while (l0[n] != '\0'){ n++; }
+    n = Straight_AppendStr(l0, n, " x");
+    AppFmt_Fixed(&l0[n], Straight_GetTravelDistance(output), 2U);
+    while (l0[n] != '\0'){ n++; }
+    n = Straight_AppendStr(l0, n, "/");
+    AppFmt_Fixed(&l0[n], STRAIGHT_TEST_TARGET_DISTANCE_M, 1U);
 
     n = Straight_PutStr(l1, "dL ");
     AppFmt_Fixed(&l1[n], output->duty_left_percent, 0U);
@@ -190,6 +208,14 @@ static APP_TASK_STATUS Straight_Tick(float dt_s)
     uint32_t now_ms = BSP_Time_GetMs();
     STRAIGHT_DRIVE_OUTPUT output = StraightDrive_GetOutput();
     Straight_SendTelemetry(now_ms, &output);
+
+    if (Straight_GetTravelDistance(&output) >=
+        STRAIGHT_TEST_TARGET_DISTANCE_M){
+        /* 返回 DONE 后由 app_mode 在同一控制拍统一主动刹车并退回菜单。 */
+        StraightDrive_ZeroCommand();
+        return APP_TASK_DONE;
+    }
+
     if ((now_ms - s_last_ui_ms) >= STRAIGHT_UI_PERIOD_MS){
         s_last_ui_ms = now_ms;
         Straight_Render(&output);

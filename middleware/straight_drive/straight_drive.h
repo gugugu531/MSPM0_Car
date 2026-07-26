@@ -24,8 +24,8 @@ extern "C" {
 #define STRAIGHT_DRIVE_DUTY_LIMIT                   80.0f
 /** 速度闭环模式每次调整量，单位 m/s。 */
 #define STRAIGHT_DRIVE_SPEED_STEP                   0.05f
-/** 速度闭环默认目标，单位 m/s；当前约对应 50% 稳态占空比。 */
-#define STRAIGHT_DRIVE_DEFAULT_SPEED                0.65f
+/** 速度闭环默认目标，单位 m/s；当前约对应 80% 稳态占空比。 */
+#define STRAIGHT_DRIVE_DEFAULT_SPEED                1.06f
 /** 速度目标绝对值上限，单位 m/s。 */
 #define STRAIGHT_DRIVE_SPEED_LIMIT                  3.0f
 /** 差速混控后的单轮占空比绝对值上限，单位 %。 */
