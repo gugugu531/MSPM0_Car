@@ -11,8 +11,8 @@
 extern "C" {
 #endif
 
-/** 循迹测试：用 middleware/line_tracking 完整闭环跑巡线，上板验证循迹行为。 */
-extern const APP_TASK_DESC APP_LINE_TRACK_TEST;
+/** 循迹测试：用 middleware/line_follow 完整闭环跑巡线，上板验证循迹行为。 */
+extern const APP_TASK_DESC APP_LINE_FOLLOW_TEST;
 
 #ifdef __cplusplus
 }

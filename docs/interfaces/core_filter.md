@@ -6,7 +6,7 @@
 
 该模块只做数值运算，不访问 BSP、middleware 或 app，也不绑定任何具体外设。所有接口均为**无状态自由函数**，滤波状态由调用方持有（与 `core/kinematics` 的 `Kinematics_Clamp`/`Kinematics_DifferentialMix` 同风格）。
 
-当前消费者为 `middleware/line_tracking`：用一阶低通平滑数字灰度的量化跳变、用中心死区对小偏心置零，抑制转向尖峰与蛇形极限环。
+当前消费者为 `middleware/line_follow`：用一阶低通平滑数字灰度的量化跳变、用中心死区对小偏心置零，抑制转向尖峰与蛇形极限环。
 
 ## 接口
 

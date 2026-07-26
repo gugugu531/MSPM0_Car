@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\line_tracking;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\bluetooth;..\..\bsp\debug_uart;..\..\bsp\grayscale_sensor;..\..\bsp\ganv_gray;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\bsp\mpu6050;..\..\board\sys_config;C:\ti\mspm0_sdk_2_10_00_04\source;C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include</IncludePath>
+              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\bluetooth;..\..\bsp\debug_uart;..\..\bsp\grayscale_sensor;..\..\bsp\ganv_gray;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\bsp\mpu6050;..\..\board\sys_config;C:\ti\mspm0_sdk_2_10_00_04\source;C:\ti\mspm0_sdk_2_10_00_04\source\third_party\CMSIS\Core\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -484,11 +484,6 @@
               <FileName>line_follow.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\middleware\line_follow\line_follow.c</FilePath>
-            </File>
-            <File>
-              <FileName>line_tracking.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\middleware\line_tracking\line_tracking.c</FilePath>
             </File>
             <File>
               <FileName>ui.c</FileName>

@@ -2,6 +2,18 @@
 
 ## 未发布
 
+- 合并巡线中间件并澄清命名：删除仅缓存灰度快照的旧 `line_follow` 状态包装，将控制器
+  `line_tracking` 收敛为新的 `middleware/line_follow`。新接口以 `LINE_FOLLOW_INPUT.level[]`
+  明确实机语义（0=检测到黑线，1=未检测到黑线），保留纯计算 `LineFollow_Compute` 和完整闭环
+  `LineFollow_Update`；移除无人使用的 `edge_count` 与重复采样接口。同步 app、Keil/CCS 工程
+  和接口文档；应用菜单也统一命名为 `Line Follow`，其电平位图与 Device Check
+  保持相同显示语义。
+
+- 整理循迹控制宏并补齐纯位置 PID 参数：将 `Kp/Ki/Kd`、积分限幅、输出限幅与模式全部改为
+  `LINE_FOLLOW_DEFAULT_PID_*` 具名宏，把传感器/输出、误差预处理、退化 PID、默认陀螺串级
+  分区集中到 `line_follow.h`。同步说明默认陀螺路径不调用 PID、差值限幅会把最终修正限制为
+  `±8`，并修正 JY61P 轮询、死区和已删除 motion 路径等源码注释；控制数值与行为不变。
+
 - 校准当前文档到真实代码状态：README/AGENTS 改为菜单调度框架、循迹与 9 项设备检查；
   修正编码器 20ms 与按键 1ms 周期、JY61P 由 Line Track 任务轮询、PID/运动学消费者、
   OLED=I2C1，并移除接口文档中已删除的 E1/motion/UART0 IMU 路径。构建说明明确记录 CCS

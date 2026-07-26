@@ -143,7 +143,7 @@ Keil 工程已同步到当前分层源码树。CCS projectspec 的大部分源�
 
 编译通过后仍需上板验证（当前 app 框架，详见 `docs/app-design.md`）：
 
-- 上电后 OLED 显示 `Main Menu`，含 `Line Track`（循迹测试）与 `Device Check` 两项
+- 上电后 OLED 显示 `Main Menu`，含 `Line Follow`（循迹测试）与 `Device Check` 两项
 - 短按 UP/DOWN 移动选择、ENTER 进入、BACK 返回上级
 - `Device Check` 子菜单内 9 个自检（Gyro JY61P / Gyro MPU6050 / Grayscale / Gray I2C /
   TB6612 / Encoder / Speed PID / Duty Sweep / BlueTooth）可进入并刷新数据

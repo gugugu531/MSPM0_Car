@@ -30,7 +30,7 @@ static const MENU_NODE device_check_menu = {
 
 /* --- 根菜单 --- */
 static const MENU_ITEM root_items[] = {
-    { .name = "Line Track",   .kind = MENU_ENTRY_TASK,    .u.task = &APP_LINE_TRACK_TEST },
+    { .name = "Line Follow",  .kind = MENU_ENTRY_TASK,    .u.task = &APP_LINE_FOLLOW_TEST },
     { .name = "Device Check", .kind = MENU_ENTRY_SUBMENU, .u.submenu = &device_check_menu },
 };
 

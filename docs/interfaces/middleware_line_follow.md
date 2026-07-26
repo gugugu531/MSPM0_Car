@@ -2,110 +2,151 @@
 
 ## 模块职责
 
-`middleware/line_follow` 负责巡线相关运行状态。它组合 `bsp/grayscale_sensor` 的 8 路灰度传感器读取能力，并维护边线计数和转弯状态。
+`middleware/line_follow` 是完整巡线闭环控制器。它直接从 `bsp/grayscale_sensor` 获取已经
+标准化的 GPIO 灰度读数，计算线中心、误差和差速修正，并通过 `middleware/chassis` 输出左右轮
+占空比。
 
-该模块负责：
+该模块同时提供硬件无关的 `LineFollow_Compute()`，便于使用人工构造的观测做算法验证。
 
-- 读取并缓存 8 路灰度传感器状态。
-- 提供传感器数组、bit mask 和单通道读取接口。
-- 维护边线计数 `edge_count`。
-- 维护转弯状态 `turning`。
+数据流：
 
-该模块不负责：
-
-- 距离积分。
-- 里程估计。
-- PID 控制。
-- 底盘电机控制。
-- 题目流程。
-- OLED 显示。
-
-如果后续业务需要当前阶段距离，应在实际使用点基于 `Chassis_GetDistance()`、`Chassis_ResetDistance()` 或任务上下文重新设计，不在本模块预留距离积分接口。
-
-## 公开类型
-
-### `LINE_FOLLOW_SENSOR_COUNT`
-
-```c
-#define LINE_FOLLOW_SENSOR_COUNT 8U
+```text
+bsp/grayscale_sensor
+        ↓  level[i]: 0=检测到黑线，1=未检测到黑线
+middleware/line_follow
+        ↓  left/right duty
+middleware/chassis
 ```
 
-灰度传感器通道数量。
+该模块不负责直角弯、圈数、边线计数、丢线搜索或任务完成条件；这些属于 app 任务状态机。
 
-### `LINE_FOLLOW_SENSOR_STATE`
+## 输入语义
 
 ```c
 typedef struct {
-    uint8_t value[LINE_FOLLOW_SENSOR_COUNT];
-    uint8_t mask;
-} LINE_FOLLOW_SENSOR_STATE;
+    uint8_t level[LINE_FOLLOW_SENSOR_COUNT];
+} LINE_FOLLOW_INPUT;
 ```
 
-- `value[i]`：第 `i` 路灰度传感器值，保留旧 `Digital[i]` 的逻辑语义。
-- `mask`：8 路状态的 bit 表示，bit0 对应通道 0，bit7 对应通道 7。当前约定 `value[i] != 0` 时对应 bit 置 1。
+- `level[i] == 0`：通道 `i` 检测到黑线。
+- `level[i] != 0`：通道 `i` 未检测到黑线。
+- 通道顺序与 BSP 的 `GRAYSCALE_SENSOR_CHANNEL_0..7` 一致。
 
-### `LINE_FOLLOW_STATE`
+BSP 已处理板级输入反相和物理探头到逻辑通道的映射；上述语义来自 Device Check 实机显示，
+middleware 不再二次翻转。
+
+## 参数分组
+
+```c
+/* 传感器与输出。 */
+#define LINE_FOLLOW_SENSOR_COUNT                       GRAYSCALE_SENSOR_CHANNEL_COUNT
+#define LINE_FOLLOW_ACTIVE_SENSOR_MASK                 0xFFU
+#define LINE_FOLLOW_DEFAULT_POSITION_SCALE             10.0f
+#define LINE_FOLLOW_DEFAULT_BASE_DUTY                  34.0f
+#define LINE_FOLLOW_DEFAULT_OUTPUT_LIMIT               100.0f
+#define LINE_FOLLOW_DEFAULT_DIFFERENTIAL_LIMIT         16.0f
+
+/* 误差预处理。 */
+#define LINE_FOLLOW_ERROR_LPF_ALPHA                    0.5f
+#define LINE_FOLLOW_ERROR_DEADBAND                     10.0f
+
+/* 关闭陀螺增稳时使用的纯位置 PID。 */
+#define LINE_FOLLOW_DEFAULT_PID_KP                     1.0f
+#define LINE_FOLLOW_DEFAULT_PID_KI                     0.0f
+#define LINE_FOLLOW_DEFAULT_PID_KD                     0.0f
+#define LINE_FOLLOW_DEFAULT_PID_INTEGRAL_LIMIT         500.0f
+#define LINE_FOLLOW_DEFAULT_PID_OUTPUT_LIMIT           60.0f
+#define LINE_FOLLOW_DEFAULT_PID_MODE                   PID_MODE_POSITION
+
+/* 默认启用的陀螺串级。 */
+#define LINE_FOLLOW_DEFAULT_GYRO_STAB_ENABLED          true
+#define LINE_FOLLOW_DEFAULT_GYRO_LINE_KP               3.0f
+#define LINE_FOLLOW_DEFAULT_GYRO_STAB_KP               0.20f
+#define LINE_FOLLOW_DEFAULT_OMEGA_REF_LIMIT            60.0f
+#define LINE_FOLLOW_DEFAULT_GYRO_Z_SIGN                (1.0f)
+```
+
+默认使用“灰度偏差 P 外环 + 角速度 P 内环”，只有关闭 `gyro_stab_enabled` 时才调用通用
+位置式 PID。`DIFFERENTIAL_LIMIT=16` 表示左右轮占空比差值不超过 16，因此最终
+`correction` 会限制在 `±8`。
+
+## 配置与输出
+
+`LINE_FOLLOW_CONFIG` 保存基础占空比、误差缩放、输出/差值限幅、退化 PID 配置及陀螺串级
+配置。
 
 ```c
 typedef struct {
-    LINE_FOLLOW_SENSOR_STATE sensor;
-    int32_t edge_count;
-    bool turning;
-} LINE_FOLLOW_STATE;
+    uint8_t level_mask;
+    uint8_t black_count;
+    float error;
+    float correction;
+    float left_duty;
+    float right_duty;
+    bool line_lost;
+} LINE_FOLLOW_OUTPUT;
 ```
 
-巡线状态快照。
+- `level_mask`：本拍数字电平掩码；置 1 表示对应通道未检测到黑线，与 Device Check 一致。
+- `black_count`：启用通道中检测到黑线（`level==0`）的数量。
+- `error`：未经 EMA/死区处理的缩放误差。
+- `correction`：陀螺串级或退化 PID 产生并经过差值限幅的修正量。
+- `line_lost`：没有任何启用通道检测到线。
 
-## 公开接口
+## 接口
 
-### `BSP_STATUS LineFollow_Init(void)`
+### `LINE_FOLLOW_CONFIG LineFollow_GetDefaultConfig(void)`
 
-清空状态并读取一次灰度传感器初始值。
+返回默认配置副本，供上层覆盖个别参数后传给 `LineFollow_Init()`。
+
+### `void LineFollow_Init(const LINE_FOLLOW_CONFIG *config)`
+
+初始化控制器和运行状态；传 `NULL` 使用默认配置。
 
 ### `void LineFollow_Reset(void)`
 
-清空传感器缓存、边线计数和转弯状态。
+复位 PID、EMA 滤波状态和最近输出，不改变配置。
 
-### `BSP_STATUS LineFollow_Update(void)`
+### `BSP_STATUS LineFollow_Update(float dt_s)`
 
-更新巡线状态。当前等价于 `LineFollow_UpdateSensor()`，保留该接口用于后续增加滤波或状态判定。
+完整闭环入口：
 
-### `BSP_STATUS LineFollow_UpdateSensor(void)`
+1. 调用 `GrayscaleSensor_Read()` 获取 GPIO 灰度。
+2. 从 JY61P 缓存读取 `gz`（启用陀螺增稳时）。
+3. 调用 `LineFollow_Compute()`。
+4. 未丢线时调用 `Chassis_SetDuty()`。
 
-调用 `GrayscaleSensor_Read()` 更新传感器数组，并重新计算 `mask`。
+丢线时返回 `BSP_STATUS_NOT_READY`，不自行刹车或搜索。JY61P 的初始化与
+`JY61P_I2C_Poll()` 调度仍由 app 任务负责。
 
-该接口不会屏蔽、估计或消抖任意通道。Device Check 的 Line Sensor 页面显示同一份最新状态。
+### `BSP_STATUS LineFollow_Compute(...)`
 
-### `BSP_STATUS LineFollow_GetSensor(LINE_FOLLOW_SENSOR_STATE *out)`
-
-复制传感器状态。`out == NULL` 时返回 `BSP_STATUS_NULL`。
-
-### `uint8_t LineFollow_GetSensorMask(void)`
-
-返回当前传感器 bit mask。
-
-### `uint8_t LineFollow_GetActiveCount(void)`
-
-返回当前检测到黑线的通道数量。当前灰度传感器语义为 `0` 表示检测到线。
-
-### `int32_t LineFollow_GetEdgeCount(void)`
-
-返回当前边线计数。
-
-### `void LineFollow_IncrementEdge(void)`
-
-边线计数加一。
-
-## 迁移说明
-
-旧变量和接口的迁移关系：
-
-```text
-Digital[]       -> LineFollow_GetSensor()
-edge            -> LineFollow_GetEdgeCount()
-edge++          -> LineFollow_IncrementEdge()
+```c
+BSP_STATUS LineFollow_Compute(const LINE_FOLLOW_INPUT *input,
+                              float dt_s,
+                              float omega_deg_s,
+                              LINE_FOLLOW_OUTPUT *out);
 ```
 
-旧 `sInedge` 和 `UpdateSInedge()` 不迁入本模块。后续在具体使用场景中重新设计阶段距离逻辑。
+纯计算入口，不读取灰度硬件、不驱动底盘。处理顺序为：
 
-> 半线/十字/中心等语义判定与阶段计数增删接口在实际任务中未被采用（app 层自持巡线判定），已随死代码清理移除。
+```text
+level[]（0=黑线）→ 线中心均值 → 缩放误差 → EMA → 中心死区
+           → 陀螺串级或位置 PID → 差值限幅 → 差速混控
+```
+
+### `LINE_FOLLOW_OUTPUT LineFollow_GetOutput(void)`
+
+返回最近一次输出和本拍观测摘要，供 app 显示和诊断。
+
+## 已移除的旧状态包装
+
+原 `middleware/line_follow` 仅缓存灰度快照，并保存无人使用的 `edge_count`；这层包装已合并。
+以下接口不再存在：
+
+- `LineFollow_UpdateSensor()`
+- `LineFollow_GetSensor()` / `GetSensorMask()` / `GetActiveCount()`
+- `LineFollow_GetEdgeCount()` / `IncrementEdge()`
+
+如未来需要 GPIO/I2C 灰度源切换、带时间戳快照、坏道屏蔽或异步采样，再单独引入
+`line_sensing` 观测层。

@@ -2,8 +2,8 @@
  * @file  kinematics.h
  * @brief Core 层二维运动学、差速混控与两轮差速运动学模型接口。
  *
- * 纯算法模块，不读传感器/不驱动执行器。当前唯一消费者是 middleware/line_tracking，
- * 只用到 Kinematics_Clamp 与 Kinematics_DifferentialMix；其余类型/宏/函数标注为
+ * 纯算法模块，不读传感器/不驱动执行器。当前消费者包括 middleware/line_follow 与
+ * middleware/chassis，只用到 Kinematics_Clamp 与 Kinematics_DifferentialMix；其余类型/宏/函数标注为
  * 「预留」——已实现并保留，但当前工程暂无调用者，供后续路径/姿态/动作策略模块复用。
  *
  * 「两轮差速运动学模型」一节(WheelToBody/BodyToWheel/轮速换算/TurnRadius/IntegratePose)

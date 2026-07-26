@@ -6,7 +6,7 @@
 
 该模块不读取传感器、不控制电机、不调用 BSP 或 middleware。调用方负责提供输入数据，并根据计算结果调用对应执行接口。
 
-> 使用现状：`middleware/line_tracking` 使用 `Kinematics_Clamp` 与
+> 使用现状：`middleware/line_follow` 使用 `Kinematics_Clamp` 与
 > `Kinematics_DifferentialMix`；`middleware/chassis` 使用 `Kinematics_WheelToBody`
 > 将左右轮速度聚合为车体线速度。本文其余标注为「预留」的类型/宏/函数已实现并保留，
 > 但当前工程暂无调用者，供后续路径/姿态/动作策略模块复用。

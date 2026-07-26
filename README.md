@@ -30,7 +30,7 @@ app ─► middleware ─► bsp
 
 - `app`：初始化、协作式调度器、状态机、菜单树与具体测试任务。
 - `core`：PID、滤波和运动学等纯计算能力（`pid` / `filter` / `kinematics` / `common`）。
-- `middleware`：组合 core 与 BSP 的系统能力（`chassis` / `line_follow` / `line_tracking` / `ui` / `fault`）。
+- `middleware`：组合 core 与 BSP 的系统能力（`chassis` / `line_follow` / `ui` / `fault`）。
 - `bsp`：直接面向板级外设的驱动（见上表 + `time` / `common`）。
 - `board`：SysConfig 源文件与生成代码、启动/链接资源。
 

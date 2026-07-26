@@ -62,13 +62,12 @@
 `middleware` 放置多个 BSP 外设组合后的系统能力：
 
 - `chassis/`：底盘组合服务（开环占空比 + 每轮速度闭环 PID）
-- `line_follow/`：巡线运行状态服务
-- `line_tracking/`：巡线偏差计算、PID 修正和底盘输出
+- `line_follow/`：GPIO 灰度读取、巡线偏差计算、PID/陀螺修正和底盘输出
 - `ui/`：轻量 OLED UI 渲染层
 - `fault/`：系统故障处理服务
 
-> 注：`line_tracking` 等模块因需直接调用 chassis/line_follow 等下层服务并读取硬件观测，
-> 本质是“组合 core 算法 + 驱动执行器”的中间件能力，置于 `middleware` 以消除
+> 注：`line_follow` 因需调用 chassis、读取 BSP 灰度和 IMU 缓存，
+> 本质是“组合 core 算法 + 硬件观测 + 驱动执行器”的中间件能力，置于 `middleware` 以消除
 > `core ↔ middleware` 循环依赖、保持 `core` 纯计算。
 
 ## bsp

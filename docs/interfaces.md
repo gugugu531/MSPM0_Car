@@ -14,7 +14,7 @@
 - `app_task.h`：任务生命周期契约——`APP_TASK_STATUS` 与 `APP_TASK_DESC`（`on_enter/on_tick/on_exit`），不含具体任务。
 - `app_menu.h`：菜单树类型 `MENU_NODE`/`MENU_ITEM` 与 `Menu_Tick` 导航；`app_menu_def.c` 定义菜单树实例 `APP_ROOT_MENU`。
 - `app_checks.h`：外设自检任务描述符 `APP_CHK_*`（JY61P / MPU6050 / Grayscale / Gray I2C / TB6612 / Encoder / Speed PID / Duty Sweep）。
-- `app_line_task.h`：循迹测试任务 `APP_LINE_TRACK_TEST`（挂根菜单）。
+- `app_line_task.h`：循迹测试任务 `APP_LINE_FOLLOW_TEST`（挂根菜单）。
 - `app_bt_task.h`：蓝牙串口收发测试任务 `APP_CHK_BLUETOOTH`（挂 Device Check）。
 
 ## core
@@ -27,8 +27,8 @@
 ## middleware
 
 - `chassis.h`：底盘组合服务（开环占空比 + 每轮速度闭环 PID），详细说明见 `docs/interfaces/middleware_chassis.md`。
-- `line_follow.h`：巡线运行状态服务，详细说明见 `docs/interfaces/middleware_line_follow.md`。
-- `line_tracking/line_tracking.h`：巡线偏差计算、PID 修正和底盘输出接口，详细说明见 `docs/interfaces/middleware_line_tracking.md`。
+- `line_follow.h`：GPIO 灰度读取、巡线偏差计算、PID/陀螺修正和底盘输出，详细说明见
+  `docs/interfaces/middleware_line_follow.md`。
 - `ui.h`：轻量 OLED UI 渲染层，详细说明见 `docs/interfaces/middleware_ui.md`。
 - `system_fault.h`：系统故障处理服务，详细说明见 `docs/interfaces/middleware_system_fault.md`。
 

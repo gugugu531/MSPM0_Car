@@ -2,13 +2,12 @@
  * @file  app_line_task.c
  * @brief 循迹测试任务实现。
  *
- * 用 middleware/line_tracking 的完整闭环(读灰度 → 计算差速 → 驱动底盘)跑巡线,
+ * 用 middleware/line_follow 的完整闭环（读灰度 → 计算差速 → 驱动底盘）跑巡线，
  * 供上板验证循迹行为。灰度为 GPIO 数字量(SysConfig 已配), 陀螺 JY61P 挂 I2C0、
  * 由本任务 Init + 每拍 Poll, 使默认配置的陀螺增稳生效; 丢线时刹停(测试期安全)。
  */
 #include "app_line_task.h"
 
-#include "line_tracking.h"
 #include "line_follow.h"
 #include "chassis.h"
 #include "wit_sdk.h"
@@ -37,19 +36,18 @@ static uint8_t LtPutStr(char *buf, const char *s){
     return i;
 }
 
-static void LineTrackTest_Enter(void){
-    (void)LineFollow_Init();          /* 灰度(GPIO)与巡线状态复位。 */
-    LineTracking_Init(NULL);          /* 默认配置(含陀螺增稳)。 */
+static void LineFollowTest_Enter(void){
+    LineFollow_Init(NULL);            /* 默认配置（含陀螺增稳），并复位控制状态。 */
     JY61P_I2C_SetSuspended(false);    /* 确保 JY61P 占用 I2C0。 */
     JY61P_I2C_Init();
     lt_last_ui = 0U;
 }
 
-static APP_TASK_STATUS LineTrackTest_Tick(float dt){
+static APP_TASK_STATUS LineFollowTest_Tick(float dt){
     JY61P_I2C_Poll();                 /* 推进陀螺 I2C 状态机, 供增稳读 gz。 */
 
     /* 完整巡线闭环: 读灰度 → 计算 → 驱动底盘。丢线返回 NOT_READY 且不下发占空比。 */
-    BSP_STATUS st = LineTracking_Update(dt);
+    BSP_STATUS st = LineFollow_Update(dt);
     if (st != BSP_STATUS_OK){
         (void)Chassis_Brake();        /* 丢线/异常: 刹停(测试期安全, 不自行搜索)。 */
     }
@@ -60,19 +58,12 @@ static APP_TASK_STATUS LineTrackTest_Tick(float dt){
     }
     lt_last_ui = now;
 
-    LINE_TRACKING_OUTPUT out = LineTracking_GetOutput();
+    LINE_FOLLOW_OUTPUT out = LineFollow_GetOutput();
 
-    /* 传感器命中图: bit='1' 表示该路检测到线(数字量 value==0)。 */
+    /* 与 Device Check 一致：bit='1' 表示该路未检测到黑线，'0' 表示检测到黑线。 */
     char bits[LINE_FOLLOW_SENSOR_COUNT + 1U];
-    LINE_FOLLOW_SENSOR_STATE sensor;
-    if (LineFollow_GetSensor(&sensor) == BSP_STATUS_OK){
-        for (uint8_t i = 0U; i < LINE_FOLLOW_SENSOR_COUNT; i++){
-            bits[i] = (sensor.value[i] == 0U) ? '1' : '0';
-        }
-    } else {
-        for (uint8_t i = 0U; i < LINE_FOLLOW_SENSOR_COUNT; i++){
-            bits[i] = '-';
-        }
+    for (uint8_t i = 0U; i < LINE_FOLLOW_SENSOR_COUNT; i++){
+        bits[i] = ((out.level_mask & (1U << i)) != 0U) ? '1' : '0';
     }
     bits[LINE_FOLLOW_SENSOR_COUNT] = '\0';
 
@@ -90,10 +81,10 @@ static APP_TASK_STATUS LineTrackTest_Tick(float dt){
 
     const char *status = out.line_lost ? "LINE LOST" : "track";
 
-    Ui_RenderLines("Line Track", bits, l2, l3, l4, status, "BACK: exit");
+    Ui_RenderLines("Line Follow", bits, l2, l3, l4, status, "BACK: exit");
     return APP_TASK_RUNNING;
 }
 
-const APP_TASK_DESC APP_LINE_TRACK_TEST = {
-    "Line Track", LineTrackTest_Enter, LineTrackTest_Tick, NULL
+const APP_TASK_DESC APP_LINE_FOLLOW_TEST = {
+    "Line Follow", LineFollowTest_Enter, LineFollowTest_Tick, NULL
 };

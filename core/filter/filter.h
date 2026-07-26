@@ -4,7 +4,7 @@
  *
  * 纯算法模块，不依赖硬件。均为无状态自由函数，滤波状态由调用方持有
  * （与 core/kinematics 的 Clamp/DifferentialMix 同风格）。当前消费者为
- * middleware/line_tracking，用于抑制数字灰度量化跳变引起的转向尖峰/蛇形。
+ * middleware/line_follow，用于抑制数字灰度量化跳变引起的转向尖峰/蛇形。
  */
 #ifndef FILTER_H
 #define FILTER_H

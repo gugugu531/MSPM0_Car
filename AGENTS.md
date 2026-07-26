@@ -32,7 +32,7 @@ MSPM0_Car/
 │   ├── startup/          # 启动文件, 链接脚本
 │   └── sys_config/       # SysConfig 源文件及生成代码
 ├── core/                 # 纯计算算法 (pid, filter, kinematics, common)
-├── middleware/           # 中间件 (chassis, line_follow, line_tracking, ui, fault)
+├── middleware/           # 中间件 (chassis, line_follow, ui, fault)
 ├── project/{keil,ccs}/   # IDE 工程
 ├── docs/                 # 架构/接口/构建文档
 └── tools/                # 调试/烧录脚本

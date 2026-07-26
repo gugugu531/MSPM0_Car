@@ -59,11 +59,8 @@ uint8_t GrayscaleSensor_ReadSingle(GRAYSCALE_SENSOR_CHANNEL channel){
     const GRAYSCALE_SENSOR_HW_CONFIG *hw = &grayscale_sensor_hw[channel];
     uint8_t high_level = (DL_GPIO_readPins(hw->port, hw->pin) != 0U) ? 1U : 0U;
 
-    /*
-     * 多数数字灰度模块为低电平有效。这里统一在 BSP 层完成有效电平翻转，
-     * 使调用者只看到抽象后的 0/1 状态。
-     */
-    if (GRAYSCALE_SENSOR_ACTIVE_LOW != 0U){
+    /* 按当前板级接线反相；发布语义经实机确认：0=黑线，1=非黑线。 */
+    if (GRAYSCALE_SENSOR_INVERT_INPUT != 0U){
         return (uint8_t)(!high_level);
     }
 
@@ -83,7 +80,7 @@ void GrayscaleSensor_Read(uint8_t digital_array[GRAYSCALE_SENSOR_CHANNEL_COUNT])
 uint8_t GrayscaleSensor_ReadMask(void){
     uint8_t mask = 0U;
 
-    /* bit i 对应逻辑通道 i，便于调试页用二进制形式快速观察 8 路状态。 */
+    /* bit i 对应逻辑通道 i；当前实机上置 1 表示未检测到黑线。 */
     for (uint8_t i = 0U; i < GRAYSCALE_SENSOR_CHANNEL_COUNT; i++){
         if (GrayscaleSensor_ReadSingle((GRAYSCALE_SENSOR_CHANNEL)i) != 0U){
             mask |= (uint8_t)(1U << i);

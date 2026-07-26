@@ -32,8 +32,8 @@ extern "C" {
 #define GRAYSCALE_SENSOR_8_PORT     Tracking_Tracking_8_PORT
 #define GRAYSCALE_SENSOR_8_PIN      Tracking_Tracking_8_PIN
 
-/* 有效电平: 1 = 低电平有效 (多数数字灰度模块), BSP 内翻转为"有效为 1"。 */
-#define GRAYSCALE_SENSOR_ACTIVE_LOW 1U
+/* 当前板级输入需要反相后发布；实机语义为 0=检测到黑线，1=未检测到黑线。 */
+#define GRAYSCALE_SENSOR_INVERT_INPUT 1U
 
 /**
  * @brief 灰度传感器通道编号。
@@ -53,19 +53,19 @@ typedef enum {
 /**
  * @brief 读取全部 8 路灰度传感器数字状态。
  * @param digital_array 输出数组，长度必须不小于 GRAYSCALE_SENSOR_CHANNEL_COUNT。
- * @note 输出值已经根据 GRAYSCALE_SENSOR_ACTIVE_LOW 转换为“有效为 1”。
+ * @note 当前实机语义：0=检测到黑线，1=未检测到黑线。
  */
 void GrayscaleSensor_Read(uint8_t digital_array[GRAYSCALE_SENSOR_CHANNEL_COUNT]);
 
 /**
  * @brief 读取 8 路灰度传感器位掩码。
- * @return bit0 对应通道 0，置 1 表示该通道有效。
+ * @return bit0 对应通道 0；置 1 表示该通道未检测到黑线。
  */
 uint8_t GrayscaleSensor_ReadMask(void);
 
 /**
  * @brief 读取单个灰度传感器通道。
- * @return 1 表示有效，0 表示无效或通道非法。
+ * @return 当前实机上 0 表示检测到黑线，1 表示未检测到黑线；非法通道返回 0。
  */
 uint8_t GrayscaleSensor_ReadSingle(GRAYSCALE_SENSOR_CHANNEL channel);
 

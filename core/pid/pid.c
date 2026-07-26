@@ -63,7 +63,7 @@ float PID_Update(PID_CONTROLLER *pid, float target, float feedback, float dt_s){
     pid->state.error = target - feedback;
 
     if (pid->config.mode == PID_MODE_INCREMENTAL){
-        /* 预留：增量式路径当前工程无调用者(消费者仅用位置式)。量纲与位置式一致:
+        /* 预留：增量式路径当前工程无调用者。量纲与位置式一致:
          * ki*e*dt 对应积分、kd*(e-2*le+pe)/dt 对应二阶差分微分。 */
         pid->state.derivative = (pid->state.error -
                                  2.0f * pid->state.last_error +

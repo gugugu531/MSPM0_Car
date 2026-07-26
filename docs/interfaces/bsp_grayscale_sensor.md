@@ -8,7 +8,8 @@
 
 ## 命名说明
 
-模块命名为 `grayscale_sensor`，强调外设本身是“光敏灰度传感器”。巡线、边缘判断等用途由上层 `middleware/line_follow` 和 `middleware/line_tracking` 决定。
+模块命名为 `grayscale_sensor`，强调外设本身是“光敏灰度传感器”。完整巡线控制由上层
+`middleware/line_follow` 负责。
 
 ## 通道顺序
 
@@ -31,15 +32,14 @@
 
 `grayscale_sensor.h` 提供 `GRAYSCALE_SENSOR_1_PORT/PIN` 到 `GRAYSCALE_SENSOR_8_PORT/PIN` 的可覆盖宏，默认映射到 SysConfig 生成的 `Tracking_Tracking_x` 宏。
 
-有效电平由统一宏控制：
+板级输入反相由统一宏控制：
 
 ```c
-#ifndef GRAYSCALE_SENSOR_ACTIVE_LOW
-#define GRAYSCALE_SENSOR_ACTIVE_LOW 1U
-#endif
+#define GRAYSCALE_SENSOR_INVERT_INPUT 1U
 ```
 
-当前默认低电平表示检测到线或有效目标。如果后续某些通道有效电平不同，应扩展为每通道独立 `ACTIVE_LOW` 宏。
+当前实机已经通过 Device Check 确认：接口返回 `0` 表示检测到黑线，返回 `1` 表示未检测到
+黑线。若更换传感器或接线，应先用自检页确认该语义，再调整反相配置。
 
 ## 公开类型
 
@@ -63,20 +63,22 @@ typedef enum {
 
 ### `void GrayscaleSensor_Read(uint8_t digital_array[GRAYSCALE_SENSOR_CHANNEL_COUNT])`
 
-读取全部 8 路数字量。数组元素语义为：
+读取全部 8 路数字量。当前实机数组元素语义为：
 
-- `1`：检测到线或有效目标
-- `0`：未检测到线或无效
+- `0`：检测到黑线
+- `1`：未检测到黑线
 
 传入空指针时函数直接返回。
 
 ### `uint8_t GrayscaleSensor_ReadMask(void)`
 
-读取全部 8 路并返回 bit mask。bit0 对应 `GRAYSCALE_SENSOR_CHANNEL_0`，bit7 对应 `GRAYSCALE_SENSOR_CHANNEL_7`。
+读取全部 8 路并返回 bit mask。bit0 对应 `GRAYSCALE_SENSOR_CHANNEL_0`，bit7 对应
+`GRAYSCALE_SENSOR_CHANNEL_7`；置 1 表示对应通道未检测到黑线。
 
 ### `uint8_t GrayscaleSensor_ReadSingle(GRAYSCALE_SENSOR_CHANNEL channel)`
 
-读取单个逻辑通道。非法通道返回 `0`。
+读取单个逻辑通道。当前实机上 0 表示检测到黑线，1 表示未检测到黑线；非法通道也返回 0，
+因此调用方不得用该接口的非法参数结果判断黑线。
 
 ## 兼容接口
 

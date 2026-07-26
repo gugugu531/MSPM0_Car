@@ -17,7 +17,7 @@ typedef enum {
 
 - `PID_MODE_POSITION`：位置式 PID，输出值直接表示当前控制量。
 - `PID_MODE_INCREMENTAL`：增量式 PID，输出值在上一次输出基础上累加本次增量。**预留**：
-  当前消费者 `middleware/line_tracking` 与 `middleware/chassis` 都使用位置式；增量式路径
+  当前消费者 `middleware/line_follow` 与 `middleware/chassis` 都使用位置式；增量式路径
   已实现并保留但暂无调用者。
 
 位置式 PID 适合角度、视觉误差、巡线偏差等场景。增量式 PID 适合速度闭环、占空比微调等希望输出连续变化的场景。

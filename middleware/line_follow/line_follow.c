@@ -1,88 +1,192 @@
 /**
  * @file  line_follow.c
- * @brief Middleware 层巡线运行状态服务实现。
+ * @brief Middleware 层巡线闭环控制器实现。
  */
 #include "line_follow.h"
-#include "grayscale_sensor.h"
+
+#include "chassis.h"
+#include "filter/filter.h"
+#include "kinematics/kinematics.h"
+#include "wit_sdk.h"
+
 #include <stddef.h>
-#include <string.h>
 
-static LINE_FOLLOW_STATE line_follow_state;
+static const float sensor_position[LINE_FOLLOW_SENSOR_COUNT] = {
+    -3.5f, -2.5f, -1.5f, -0.5f, 0.5f, 1.5f, 2.5f, 3.5f,
+};
 
-static uint8_t LineFollow_BuildMask(const uint8_t value[LINE_FOLLOW_SENSOR_COUNT]){
-    uint8_t mask = 0U;
-
-    /*
-     * mask 只保存最近一次传感器快照的 bit 表达，供调试显示和快速判断使用。
-     * 具体“多少路触发算半线/十字”的语义放在下面的查询函数中。
-     */
-    for (uint8_t i = 0U; i < LINE_FOLLOW_SENSOR_COUNT; i++){
-        if (value[i] != 0U){
-            mask |= (uint8_t)(1U << i);
-        }
-    }
-
-    return mask;
+static bool LineFollow_IsSensorEnabled(uint8_t index){
+    return ((LINE_FOLLOW_ACTIVE_SENSOR_MASK & (1U << index)) != 0U);
 }
 
-BSP_STATUS LineFollow_Init(void){
+static LINE_FOLLOW_CONFIG line_follow_config;
+static LINE_FOLLOW_OUTPUT line_follow_output;
+static PID_CONTROLLER line_follow_pid;
+static bool line_follow_initialized;
+static float line_follow_filtered_error;
+
+LINE_FOLLOW_CONFIG LineFollow_GetDefaultConfig(void){
+    /* 默认使用陀螺串级；PID_CONFIG 仅供关闭增稳后的退化路径使用。 */
+    LINE_FOLLOW_CONFIG config = {
+        .base_duty = LINE_FOLLOW_DEFAULT_BASE_DUTY,
+        .sensor_position_scale = LINE_FOLLOW_DEFAULT_POSITION_SCALE,
+        .output_limit = LINE_FOLLOW_DEFAULT_OUTPUT_LIMIT,
+        .differential_limit = LINE_FOLLOW_DEFAULT_DIFFERENTIAL_LIMIT,
+        .pid_config = {
+            .kp = LINE_FOLLOW_DEFAULT_PID_KP,
+            .ki = LINE_FOLLOW_DEFAULT_PID_KI,
+            .kd = LINE_FOLLOW_DEFAULT_PID_KD,
+            .integral_limit = LINE_FOLLOW_DEFAULT_PID_INTEGRAL_LIMIT,
+            .output_limit = LINE_FOLLOW_DEFAULT_PID_OUTPUT_LIMIT,
+            .mode = LINE_FOLLOW_DEFAULT_PID_MODE,
+        },
+        .gyro_stab_enabled = LINE_FOLLOW_DEFAULT_GYRO_STAB_ENABLED,
+        .gyro_line_kp = LINE_FOLLOW_DEFAULT_GYRO_LINE_KP,
+        .gyro_stab_kp = LINE_FOLLOW_DEFAULT_GYRO_STAB_KP,
+        .omega_ref_limit = LINE_FOLLOW_DEFAULT_OMEGA_REF_LIMIT,
+        .gyro_z_sign = LINE_FOLLOW_DEFAULT_GYRO_Z_SIGN,
+    };
+
+    return config;
+}
+
+static void LineFollow_EnsureInitialized(void){
+    if (!line_follow_initialized){
+        LineFollow_Init(NULL);
+    }
+}
+
+void LineFollow_Init(const LINE_FOLLOW_CONFIG *config){
+    if (config == NULL){
+        line_follow_config = LineFollow_GetDefaultConfig();
+    } else{
+        line_follow_config = *config;
+    }
+
+    PID_Init(&line_follow_pid, &line_follow_config.pid_config);
     LineFollow_Reset();
-    return LineFollow_UpdateSensor();
+    line_follow_initialized = true;
 }
 
 void LineFollow_Reset(void){
-    memset(&line_follow_state, 0, sizeof(line_follow_state));
+    PID_Reset(&line_follow_pid);
+
+    line_follow_filtered_error = 0.0f;
+    line_follow_output.level_mask = 0U;
+    line_follow_output.black_count = 0U;
+    line_follow_output.error = 0.0f;
+    line_follow_output.correction = 0.0f;
+    line_follow_output.left_duty = 0.0f;
+    line_follow_output.right_duty = 0.0f;
+    line_follow_output.line_lost = true;
 }
 
-BSP_STATUS LineFollow_Update(void){
-    return LineFollow_UpdateSensor();
-}
+BSP_STATUS LineFollow_Update(float dt_s){
+    LineFollow_EnsureInitialized();
 
-BSP_STATUS LineFollow_UpdateSensor(void){
-    /*
-     * middleware 层只缓存 BSP 读数，不做 PID、里程或任务状态跳转。
-     * 这样 app/core 可以按自己的周期重复读取同一份快照。
-     */
-    GrayscaleSensor_Read(line_follow_state.sensor.value);
-    line_follow_state.sensor.mask =
-        LineFollow_BuildMask(line_follow_state.sensor.value);
+    LINE_FOLLOW_INPUT input;
+    GrayscaleSensor_Read(input.level);
 
-    return BSP_STATUS_OK;
-}
-
-BSP_STATUS LineFollow_GetSensor(LINE_FOLLOW_SENSOR_STATE *out){
-    if (out == NULL){
-        return BSP_STATUS_NULL;
-    }
-
-    *out = line_follow_state.sensor;
-    return BSP_STATUS_OK;
-}
-
-uint8_t LineFollow_GetSensorMask(void){
-    return line_follow_state.sensor.mask;
-}
-
-uint8_t LineFollow_GetActiveCount(void){
-    uint8_t active_count = 0U;
-
-    /*
-     * 当前上层巡线算法沿用旧 Digital[] 语义：value == 0 表示检测到黑线。
-     * 若后续统一为 BSP 的“有效为 1”语义，应同步调整这里和 line_tracking。
-     */
-    for (uint8_t i = 0U; i < LINE_FOLLOW_SENSOR_COUNT; i++){
-        if (line_follow_state.sensor.value[i] == 0U){
-            active_count++;
+    /* 只消费 JY61P 已发布的缓存；I2C 状态机由当前 app 任务负责周期 Poll。 */
+    float omega_deg_s = 0.0f;
+    if (line_follow_config.gyro_stab_enabled){
+        WIT_IMU_DATA imu;
+        if (WitGetData(&imu) == WIT_HAL_OK){
+            omega_deg_s = line_follow_config.gyro_z_sign * imu.gyro_deg_s.z;
         }
     }
 
-    return active_count;
+    BSP_STATUS status = LineFollow_Compute(&input, dt_s, omega_deg_s,
+                                           &line_follow_output);
+    if (status != BSP_STATUS_OK){
+        return status;
+    }
+
+    if (line_follow_output.line_lost){
+        /* 丢线恢复策略属于 app；本层不搜索、不刹车，只报告未就绪。 */
+        return BSP_STATUS_NOT_READY;
+    }
+
+    return Chassis_SetDuty(line_follow_output.left_duty,
+                           line_follow_output.right_duty);
 }
 
-int32_t LineFollow_GetEdgeCount(void){
-    return line_follow_state.edge_count;
+BSP_STATUS LineFollow_Compute(const LINE_FOLLOW_INPUT *input,
+                              float dt_s,
+                              float omega_deg_s,
+                              LINE_FOLLOW_OUTPUT *out){
+    if ((input == NULL) || (out == NULL)){
+        return BSP_STATUS_NULL;
+    }
+
+    LineFollow_EnsureInitialized();
+
+    float position_sum = 0.0f;
+    uint8_t black_count = 0U;
+    uint8_t level_mask = 0U;
+
+    /* 实机语义：0=检测到黑线，1=未检测到黑线。 */
+    for (uint8_t i = 0U; i < LINE_FOLLOW_SENSOR_COUNT; i++){
+        if (input->level[i] != 0U){
+            level_mask |= (uint8_t)(1U << i);
+        } else if (LineFollow_IsSensorEnabled(i)){
+            position_sum += sensor_position[i];
+            black_count++;
+        }
+    }
+
+    out->level_mask = level_mask;
+    out->black_count = black_count;
+    out->line_lost = (black_count == 0U);
+
+    if (out->line_lost){
+        out->error = 0.0f;
+        out->correction = 0.0f;
+        out->left_duty = 0.0f;
+        out->right_duty = 0.0f;
+        return BSP_STATUS_OK;
+    }
+
+    /* 多路命中时取横向位置均值：负值表示线偏左，正值表示线偏右。 */
+    float average_position = position_sum / (float)black_count;
+    out->error = average_position * line_follow_config.sensor_position_scale;
+
+    /* 原始误差保存在 out；滤波和死区后的 control_error 进入控制律。 */
+    line_follow_filtered_error = Filter_LowpassEma(line_follow_filtered_error,
+        out->error, LINE_FOLLOW_ERROR_LPF_ALPHA);
+    float control_error = Filter_Deadband(line_follow_filtered_error,
+        LINE_FOLLOW_ERROR_DEADBAND);
+
+    if (line_follow_config.gyro_stab_enabled){
+        float omega_ref = Kinematics_Clamp(
+            line_follow_config.gyro_line_kp * control_error,
+            -line_follow_config.omega_ref_limit,
+            line_follow_config.omega_ref_limit);
+        out->correction = line_follow_config.gyro_stab_kp *
+                          (omega_ref - omega_deg_s);
+    } else{
+        out->correction = PID_Update(&line_follow_pid, control_error, 0.0f, dt_s);
+    }
+
+    /* left-right=2*correction，因此按差值上限的一半限制修正量。 */
+    if (line_follow_config.differential_limit > 0.0f){
+        float correction_limit = line_follow_config.differential_limit * 0.5f;
+        out->correction = Kinematics_Clamp(out->correction,
+                                           -correction_limit,
+                                           correction_limit);
+    }
+
+    KINEMATICS_DIFFERENTIAL_OUTPUT duty =
+        Kinematics_DifferentialMix(line_follow_config.base_duty,
+                                   out->correction,
+                                   line_follow_config.output_limit);
+
+    out->left_duty = duty.left;
+    out->right_duty = duty.right;
+
+    return BSP_STATUS_OK;
 }
 
-void LineFollow_IncrementEdge(void){
-    line_follow_state.edge_count++;
+LINE_FOLLOW_OUTPUT LineFollow_GetOutput(void){
+    return line_follow_output;
 }

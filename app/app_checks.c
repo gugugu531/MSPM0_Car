@@ -52,19 +52,19 @@ static APP_TASK_STATUS ChkGrayscale_Tick(float dt){
 
     uint8_t mask = GrayscaleSensor_ReadMask();
     char bits[GRAYSCALE_SENSOR_CHANNEL_COUNT + 1U];
-    uint8_t active = 0U;
+    uint8_t one_count = 0U;
     for (uint8_t i = 0U; i < GRAYSCALE_SENSOR_CHANNEL_COUNT; i++){
         bool on = ((mask & (uint8_t)(1U << i)) != 0U);
         bits[i] = on ? '1' : '0';
         if (on){
-            active++;
+            one_count++;
         }
     }
     bits[GRAYSCALE_SENSOR_CHANNEL_COUNT] = '\0';
 
     char l2[16];
-    uint8_t n = PutStr(l2, "active ");
-    AppFmt_I32(&l2[n], (int32_t)active);
+    uint8_t n = PutStr(l2, "ones ");
+    AppFmt_I32(&l2[n], (int32_t)one_count);
 
     Ui_RenderLines("Chk Grayscale", bits, l2, "BACK: exit",
                    NULL, NULL, NULL);
