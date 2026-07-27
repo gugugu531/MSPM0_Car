@@ -77,23 +77,29 @@ extern "C" {
 
 
 
-/* Defines for Motor */
-#define Motor_INST                                                         TIMA0
-#define Motor_INST_IRQHandler                                   TIMA0_IRQHandler
-#define Motor_INST_INT_IRQN                                     (TIMA0_INT_IRQn)
-#define Motor_INST_CLK_FREQ                                              4000000
-/* GPIO defines for channel 0 */
-#define GPIO_Motor_C0_PORT                                                 GPIOB
-#define GPIO_Motor_C0_PIN                                          DL_GPIO_PIN_8
-#define GPIO_Motor_C0_IOMUX                                      (IOMUX_PINCM25)
-#define GPIO_Motor_C0_IOMUX_FUNC                     IOMUX_PINCM25_PF_TIMA0_CCP0
-#define GPIO_Motor_C0_IDX                                    DL_TIMER_CC_0_INDEX
+/* Defines for Motor_Left */
+#define Motor_Left_INST                                                    TIMA0
+#define Motor_Left_INST_IRQHandler                              TIMA0_IRQHandler
+#define Motor_Left_INST_INT_IRQN                                (TIMA0_INT_IRQn)
+#define Motor_Left_INST_CLK_FREQ                                         4000000
 /* GPIO defines for channel 1 */
-#define GPIO_Motor_C1_PORT                                                 GPIOA
-#define GPIO_Motor_C1_PIN                                          DL_GPIO_PIN_7
-#define GPIO_Motor_C1_IOMUX                                      (IOMUX_PINCM14)
-#define GPIO_Motor_C1_IOMUX_FUNC                     IOMUX_PINCM14_PF_TIMA0_CCP1
-#define GPIO_Motor_C1_IDX                                    DL_TIMER_CC_1_INDEX
+#define GPIO_Motor_Left_C1_PORT                                            GPIOA
+#define GPIO_Motor_Left_C1_PIN                                     DL_GPIO_PIN_7
+#define GPIO_Motor_Left_C1_IOMUX                                 (IOMUX_PINCM14)
+#define GPIO_Motor_Left_C1_IOMUX_FUNC                IOMUX_PINCM14_PF_TIMA0_CCP1
+#define GPIO_Motor_Left_C1_IDX                               DL_TIMER_CC_1_INDEX
+
+/* Defines for Motor_Right */
+#define Motor_Right_INST                                                   TIMG0
+#define Motor_Right_INST_IRQHandler                             TIMG0_IRQHandler
+#define Motor_Right_INST_INT_IRQN                               (TIMG0_INT_IRQn)
+#define Motor_Right_INST_CLK_FREQ                                        4000000
+/* GPIO defines for channel 0 */
+#define GPIO_Motor_Right_C0_PORT                                           GPIOB
+#define GPIO_Motor_Right_C0_PIN                                   DL_GPIO_PIN_10
+#define GPIO_Motor_Right_C0_IOMUX                                (IOMUX_PINCM27)
+#define GPIO_Motor_Right_C0_IOMUX_FUNC               IOMUX_PINCM27_PF_TIMG0_CCP0
+#define GPIO_Motor_Right_C0_IDX                              DL_TIMER_CC_0_INDEX
 
 
 
@@ -239,10 +245,10 @@ extern "C" {
 #define Tracking_Tracking_2_PORT                                         (GPIOB)
 #define Tracking_Tracking_2_PIN                                  (DL_GPIO_PIN_7)
 #define Tracking_Tracking_2_IOMUX                                (IOMUX_PINCM24)
-/* Defines for Tracking_3: GPIOB.10 with pinCMx 27 on package pin 62 */
+/* Defines for Tracking_3: GPIOB.8 with pinCMx 25 on package pin 60 */
 #define Tracking_Tracking_3_PORT                                         (GPIOB)
-#define Tracking_Tracking_3_PIN                                 (DL_GPIO_PIN_10)
-#define Tracking_Tracking_3_IOMUX                                (IOMUX_PINCM27)
+#define Tracking_Tracking_3_PIN                                  (DL_GPIO_PIN_8)
+#define Tracking_Tracking_3_IOMUX                                (IOMUX_PINCM25)
 /* Defines for Tracking_4: GPIOB.9 with pinCMx 26 on package pin 61 */
 #define Tracking_Tracking_4_PORT                                         (GPIOB)
 #define Tracking_Tracking_4_PIN                                  (DL_GPIO_PIN_9)
@@ -294,7 +300,8 @@ void SYSCFG_DL_init(void);
 void SYSCFG_DL_initPower(void);
 void SYSCFG_DL_GPIO_init(void);
 void SYSCFG_DL_SYSCTL_init(void);
-void SYSCFG_DL_Motor_init(void);
+void SYSCFG_DL_Motor_Left_init(void);
+void SYSCFG_DL_Motor_Right_init(void);
 void SYSCFG_DL_TIMER_0_init(void);
 void SYSCFG_DL_OLED_init(void);
 void SYSCFG_DL_MPU6050_JY61P_Tracking_init(void);
