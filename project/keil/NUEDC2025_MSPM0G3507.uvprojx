@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\core\yaw_estimator;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\line_guided_drive;..\..\middleware\straight_drive;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\bluetooth;..\..\bsp\debug_uart;..\..\bsp\grayscale_sensor;..\..\bsp\ganv_gray;..\..\bsp\yahboom_track;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\bsp\mpu6050;..\..\board\sys_config;..\..\third_party\mspm0-sdk\source;..\..\third_party\mspm0-sdk\source\third_party\CMSIS\Core\Include</IncludePath>
+              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\core\yaw_estimator;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\line_guided_drive;..\..\middleware\straight_drive;..\..\middleware\turn_drive;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\bluetooth;..\..\bsp\debug_uart;..\..\bsp\grayscale_sensor;..\..\bsp\ganv_gray;..\..\bsp\yahboom_track;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\bsp\mpu6050;..\..\board\sys_config;..\..\third_party\mspm0-sdk\source;..\..\third_party\mspm0-sdk\source\third_party\CMSIS\Core\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -419,6 +419,11 @@
               <FileName>app_straight_task.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\app\app_straight_task.c</FilePath>
+            </File>
+            <File>
+              <FileName>app_turn_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_turn_task.c</FilePath>
             </File>
             <File>
               <FileName>app_bt_task.c</FileName>
@@ -504,6 +509,11 @@
               <FileName>straight_drive.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\middleware\straight_drive\straight_drive.c</FilePath>
+            </File>
+            <File>
+              <FileName>turn_drive.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\middleware\turn_drive\turn_drive.c</FilePath>
             </File>
             <File>
               <FileName>ui.c</FileName>

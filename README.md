@@ -160,6 +160,7 @@ Pop-Location
 | `Line Follow` | Yahboom 八路循线外环与角速度内环测试 |
 | `Line Guided 80` | 80% 直接起步，角速度启动后切换为循线外环 + 航向内环 |
 | `Straight Test` | 4 种基础直行控制与 5 种斜坡/启动阶段切换实验 |
+| `Turn Test` | 80% 与满速两种 Int->Yaw 转向：直行 2 m，内轮减速并抱死左转 90°，新航向直行 1 m |
 | `Device Check` | JY61P、Yaw A/B、MPU6050、三种灰度、TB6612、编码器、速度 PID、占空比扫描和蓝牙检查 |
 
 两个循迹页面均按 `X1 → X8` 显示 Yahboom 归一化掩码：`1` 表示该路检测到黑线。

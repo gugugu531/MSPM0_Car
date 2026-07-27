@@ -8,6 +8,7 @@
 #include "app_checks.h"
 #include "app_line_task.h"
 #include "app_straight_task.h"
+#include "app_turn_task.h"
 #include "app_bt_task.h"
 
 /* --- Device Check 子菜单：11 个外设自检 --- */
@@ -50,11 +51,25 @@ static const MENU_NODE straight_test_menu = {
     (uint8_t)(sizeof(straight_test_items) / sizeof(straight_test_items[0])),
 };
 
+static const MENU_ITEM turn_test_items[] = {
+    { .name = "Fwd2m L90 +1m", .kind = MENU_ENTRY_TASK,
+      .u.task = &APP_TURN_FWD2M_LEFT90_POST1M_TEST },
+    { .name = "Full Fwd2m L90", .kind = MENU_ENTRY_TASK,
+      .u.task = &APP_TURN_FULL_FWD2M_LEFT90_POST1M_TEST },
+};
+
+static const MENU_NODE turn_test_menu = {
+    "Turn Test",
+    turn_test_items,
+    (uint8_t)(sizeof(turn_test_items) / sizeof(turn_test_items[0])),
+};
+
 /* --- 根菜单 --- */
 static const MENU_ITEM root_items[] = {
     { .name = "Line Follow",   .kind = MENU_ENTRY_TASK,    .u.task = &APP_LINE_FOLLOW_TEST },
     { .name = "Line Guided 80", .kind = MENU_ENTRY_TASK,   .u.task = &APP_LINE_GUIDED_TEST },
     { .name = "Straight Test", .kind = MENU_ENTRY_SUBMENU, .u.submenu = &straight_test_menu },
+    { .name = "Turn Test",     .kind = MENU_ENTRY_SUBMENU, .u.submenu = &turn_test_menu },
     { .name = "Device Check",  .kind = MENU_ENTRY_SUBMENU, .u.submenu = &device_check_menu },
 };
 

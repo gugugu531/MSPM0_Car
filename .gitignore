@@ -54,3 +54,4 @@ docs/datasheets/*.pdf
 /project/keil/RTE/
 /project/keil/*.cbuild*.yml
 /project/keil/compile_commands.json
+/vcpkg-configuration.json

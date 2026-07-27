@@ -17,6 +17,7 @@ project:
         - ../../middleware/line_follow
         - ../../middleware/line_guided_drive
         - ../../middleware/straight_drive
+        - ../../middleware/turn_drive
         - ../../middleware/ui
         - ../../bsp/common
         - ../../bsp/bluetooth
@@ -94,6 +95,7 @@ project:
         - file: ../../app/app_checks.c
         - file: ../../app/app_line_task.c
         - file: ../../app/app_straight_task.c
+        - file: ../../app/app_turn_task.c
         - file: ../../app/app_bt_task.c
         - file: ../../app/app_menu.c
         - file: ../../app/app_menu_def.c
@@ -114,6 +116,7 @@ project:
         - file: ../../middleware/line_follow/line_follow.c
         - file: ../../middleware/line_guided_drive/line_guided_drive.c
         - file: ../../middleware/straight_drive/straight_drive.c
+        - file: ../../middleware/turn_drive/turn_drive.c
         - file: ../../middleware/ui/ui.c
     - group: Board
       files:
