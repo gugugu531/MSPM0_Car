@@ -19,6 +19,7 @@ extern "C" {
 extern const APP_TASK_DESC APP_CHK_GYRO_JY61P;    /**< JY61P 陀螺/姿态（I2C0）。 */
 extern const APP_TASK_DESC APP_CHK_YAW_AB;         /**< 无电机：gz 积分角 A 与 JY61P 融合角 B 对比。 */
 extern const APP_TASK_DESC APP_CHK_GYRO_MPU6050;  /**< MPU6050 物理六轴/静态倾角（I2C0）。 */
+extern const APP_TASK_DESC APP_CHK_GYRO_CY_Z;     /**< 创源 CY-Z 角度/角速度（UART3）。 */
 extern const APP_TASK_DESC APP_CHK_GRAYSCALE;     /**< 8 路灰度数字量（GPIO）。 */
 extern const APP_TASK_DESC APP_CHK_GRAY_I2C;      /**< 感为 8 路灰度 I2C（I2C0，0x4F）。 */
 extern const APP_TASK_DESC APP_CHK_YAHBOOM_I2C;   /**< Yahboom 8 路循线 I2C（I2C0，0x12）。 */

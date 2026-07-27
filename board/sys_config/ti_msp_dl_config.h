@@ -157,6 +157,22 @@ extern "C" {
 #define BlueTooth_BAUD_RATE                                               (9600)
 #define BlueTooth_IBRD_32_MHZ_9600_BAUD                                    (208)
 #define BlueTooth_FBRD_32_MHZ_9600_BAUD                                     (21)
+/* Defines for CY_Z */
+#define CY_Z_INST                                                          UART3
+#define CY_Z_INST_FREQUENCY                                             32000000
+#define CY_Z_INST_IRQHandler                                    UART3_IRQHandler
+#define CY_Z_INST_INT_IRQN                                        UART3_INT_IRQn
+#define GPIO_CY_Z_RX_PORT                                                  GPIOB
+#define GPIO_CY_Z_TX_PORT                                                  GPIOB
+#define GPIO_CY_Z_RX_PIN                                          DL_GPIO_PIN_13
+#define GPIO_CY_Z_TX_PIN                                           DL_GPIO_PIN_2
+#define GPIO_CY_Z_IOMUX_RX                                       (IOMUX_PINCM30)
+#define GPIO_CY_Z_IOMUX_TX                                       (IOMUX_PINCM15)
+#define GPIO_CY_Z_IOMUX_RX_FUNC                        IOMUX_PINCM30_PF_UART3_RX
+#define GPIO_CY_Z_IOMUX_TX_FUNC                        IOMUX_PINCM15_PF_UART3_TX
+#define CY_Z_BAUD_RATE                                                  (115200)
+#define CY_Z_IBRD_32_MHZ_115200_BAUD                                        (17)
+#define CY_Z_FBRD_32_MHZ_115200_BAUD                                        (23)
 /* Defines for Debug_Ex */
 #define Debug_Ex_INST                                                      UART1
 #define Debug_Ex_INST_FREQUENCY                                         32000000
@@ -306,6 +322,7 @@ void SYSCFG_DL_TIMER_0_init(void);
 void SYSCFG_DL_OLED_init(void);
 void SYSCFG_DL_MPU6050_JY61P_Tracking_init(void);
 void SYSCFG_DL_BlueTooth_init(void);
+void SYSCFG_DL_CY_Z_init(void);
 void SYSCFG_DL_Debug_Ex_init(void);
 
 void SYSCFG_DL_SYSTICK_init(void);

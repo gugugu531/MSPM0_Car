@@ -42,6 +42,7 @@
 
 DL_TimerA_backupConfig gMotor_LeftBackup;
 DL_TimerA_backupConfig gTIMER_0Backup;
+DL_UART_Main_backupConfig gCY_ZBackup;
 
 /*
  *  ======== SYSCFG_DL_init ========
@@ -59,12 +60,13 @@ SYSCONFIG_WEAK void SYSCFG_DL_init(void)
     SYSCFG_DL_OLED_init();
     SYSCFG_DL_MPU6050_JY61P_Tracking_init();
     SYSCFG_DL_BlueTooth_init();
+    SYSCFG_DL_CY_Z_init();
     SYSCFG_DL_Debug_Ex_init();
     SYSCFG_DL_SYSTICK_init();
     /* Ensure backup structures have no valid state */
 	gMotor_LeftBackup.backupRdy 	= false;
 	gTIMER_0Backup.backupRdy 	= false;
-
+	gCY_ZBackup.backupRdy 	= false;
 
 }
 /*
@@ -77,6 +79,7 @@ SYSCONFIG_WEAK bool SYSCFG_DL_saveConfiguration(void)
 
 	retStatus &= DL_TimerA_saveConfiguration(Motor_Left_INST, &gMotor_LeftBackup);
 	retStatus &= DL_TimerA_saveConfiguration(TIMER_0_INST, &gTIMER_0Backup);
+	retStatus &= DL_UART_Main_saveConfiguration(CY_Z_INST, &gCY_ZBackup);
 
     return retStatus;
 }
@@ -88,6 +91,7 @@ SYSCONFIG_WEAK bool SYSCFG_DL_restoreConfiguration(void)
 
 	retStatus &= DL_TimerA_restoreConfiguration(Motor_Left_INST, &gMotor_LeftBackup, false);
 	retStatus &= DL_TimerA_restoreConfiguration(TIMER_0_INST, &gTIMER_0Backup, false);
+	retStatus &= DL_UART_Main_restoreConfiguration(CY_Z_INST, &gCY_ZBackup);
 
     return retStatus;
 }
@@ -102,6 +106,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_I2C_reset(OLED_INST);
     DL_I2C_reset(MPU6050_JY61P_Tracking_INST);
     DL_UART_Main_reset(BlueTooth_INST);
+    DL_UART_Main_reset(CY_Z_INST);
     DL_UART_Main_reset(Debug_Ex_INST);
 
 
@@ -113,6 +118,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_I2C_enablePower(OLED_INST);
     DL_I2C_enablePower(MPU6050_JY61P_Tracking_INST);
     DL_UART_Main_enablePower(BlueTooth_INST);
+    DL_UART_Main_enablePower(CY_Z_INST);
     DL_UART_Main_enablePower(Debug_Ex_INST);
 
     delay_cycles(POWER_STARTUP_DELAY);
@@ -152,6 +158,13 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
     
 	DL_GPIO_initPeripheralInputFunctionFeatures(
 		 GPIO_BlueTooth_IOMUX_RX, GPIO_BlueTooth_IOMUX_RX_FUNC,
+		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_UP,
+		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
+    DL_GPIO_initPeripheralOutputFunction(
+        GPIO_CY_Z_IOMUX_TX, GPIO_CY_Z_IOMUX_TX_FUNC);
+    
+	DL_GPIO_initPeripheralInputFunctionFeatures(
+		 GPIO_CY_Z_IOMUX_RX, GPIO_CY_Z_IOMUX_RX_FUNC,
 		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_UP,
 		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
     DL_GPIO_initPeripheralOutputFunction(
@@ -524,6 +537,37 @@ SYSCONFIG_WEAK void SYSCFG_DL_BlueTooth_init(void)
 
 
     DL_UART_Main_enable(BlueTooth_INST);
+}
+static const DL_UART_Main_ClockConfig gCY_ZClockConfig = {
+    .clockSel    = DL_UART_MAIN_CLOCK_BUSCLK,
+    .divideRatio = DL_UART_MAIN_CLOCK_DIVIDE_RATIO_1
+};
+
+static const DL_UART_Main_Config gCY_ZConfig = {
+    .mode        = DL_UART_MAIN_MODE_NORMAL,
+    .direction   = DL_UART_MAIN_DIRECTION_TX_RX,
+    .flowControl = DL_UART_MAIN_FLOW_CONTROL_NONE,
+    .parity      = DL_UART_MAIN_PARITY_NONE,
+    .wordLength  = DL_UART_MAIN_WORD_LENGTH_8_BITS,
+    .stopBits    = DL_UART_MAIN_STOP_BITS_ONE
+};
+
+SYSCONFIG_WEAK void SYSCFG_DL_CY_Z_init(void)
+{
+    DL_UART_Main_setClockConfig(CY_Z_INST, (DL_UART_Main_ClockConfig *) &gCY_ZClockConfig);
+
+    DL_UART_Main_init(CY_Z_INST, (DL_UART_Main_Config *) &gCY_ZConfig);
+    /*
+     * Configure baud rate by setting oversampling and baud rate divisors.
+     *  Target baud rate: 115200
+     *  Actual baud rate: 115211.52
+     */
+    DL_UART_Main_setOversampling(CY_Z_INST, DL_UART_OVERSAMPLING_RATE_16X);
+    DL_UART_Main_setBaudRateDivisor(CY_Z_INST, CY_Z_IBRD_32_MHZ_115200_BAUD, CY_Z_FBRD_32_MHZ_115200_BAUD);
+
+
+
+    DL_UART_Main_enable(CY_Z_INST);
 }
 static const DL_UART_Main_ClockConfig gDebug_ExClockConfig = {
     .clockSel    = DL_UART_MAIN_CLOCK_BUSCLK,

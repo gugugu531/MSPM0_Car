@@ -13,7 +13,7 @@
 - `app_mode.h`：状态机 `APP_MODE`（INIT/MENU/RUN/FAULT）与 `App_Mode_Init/Get`、`App_ControlTick/UiTick`。
 - `app_task.h`：任务生命周期契约——`APP_TASK_STATUS` 与 `APP_TASK_DESC`（`on_enter/on_tick/on_exit`），不含具体任务。
 - `app_menu.h`：菜单树类型 `MENU_NODE`/`MENU_ITEM` 与 `Menu_Tick` 导航；`app_menu_def.c` 定义菜单树实例 `APP_ROOT_MENU`。
-- `app_checks.h`：外设自检任务描述符 `APP_CHK_*`（JY61P / Yaw A/B / MPU6050 / Grayscale / Gray I2C / Yahboom I2C / TB6612 / Encoder / Speed PID / Duty Sweep）。
+- `app_checks.h`：外设自检任务描述符 `APP_CHK_*`（JY61P / Yaw A/B / MPU6050 / CY-Z / Grayscale / Gray I2C / Yahboom I2C / TB6612 / Encoder / Speed PID / Duty Sweep）。
 - `app_line_task.h`：两个 Yahboom 循迹任务及共享 I2C0 分时调度（挂根菜单）。
 - `app_straight_task.h`：九种直行测试任务、3 m 自动停车与遥测配置，详见
   `docs/interfaces/app_straight_task.md`。
@@ -49,6 +49,8 @@
 - `wit_sdk.h`：JY61P（WIT 协议）I2C0 中断驱动、数据解析和结构体读取接口，详细说明见 `docs/interfaces/bsp_wit_sdk.md`。
 - `mpu6050.h`：MPU6050 基础六轴/温度/静态倾角与 DMP 姿态驱动（I2C0，共享总线），详细说明见
   `docs/interfaces/bsp_mpu6050.md`。
+- `cy_z.h`：创源 CY-Z 串口角度/角速度解析、诊断与控制命令，详见
+  `docs/interfaces/bsp_cy_z.md`。
 - `tb6612fng.h`：TB6612FNG 双路直流电机驱动芯片接口，详细说明见 `docs/interfaces/bsp_tb6612fng.md`。
 - `hall_encoder.h`：左右双轮霍尔编码器计数、速度和距离估计接口（按 `HALL_ENCODER_ID` 选轮），详细说明见 `docs/interfaces/bsp_hall_encoder.md`。
 - `grayscale_sensor.h`：8 路光敏灰度传感器数字量接口（GPIO），详细说明见 `docs/interfaces/bsp_grayscale_sensor.md`。

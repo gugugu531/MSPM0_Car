@@ -53,11 +53,12 @@ app ─► middleware ─► bsp
   - `bsp/imu/wit_sdk.c` → `I2C0_IRQHandler`（JY61P I2C 中断驱动状态机）
   - `bsp/debug_uart/debug_uart.c` → `Debug_Ex_INST_IRQHandler`（UART1，TX 环形缓冲排空）
   - `bsp/bluetooth/bluetooth.c` → `BlueTooth_INST_IRQHandler`（UART0，RX 收入环形缓冲 + RX 错误恢复）
+  - `bsp/cy_z/cy_z.c` → `CY_Z_INST_IRQHandler`（UART3，CY-Z RX 入环形缓冲）
 - **`app` 持有需跨子系统分发或属应用调度的中断**：
   - `app/app_scheduler.c` → `SysTick_Handler`（1ms：`BSP_Time_TickInc` 时基递增 + `Key_Scan`
     按键消抖）。`tick_active` 门控确保初始化完成前不误触发。调度器时基即取自此。
 
-> UART 中断按同一原则归属：串口当前各由**单一 BSP 驱动**独占（UART1=调试遥测、UART0=蓝牙），
+> UART 中断按同一原则归属：串口当前各由**单一 BSP 驱动**独占（UART1=调试遥测、UART0=蓝牙、UART3=`cy_z`），
 > 故其 ISR 放在对应 BSP 源文件内。若将来某串口需向多个上层子系统分发命令，再上移到 app 层。
 
 > 新增外设时遵循同一原则：仅该驱动使用的中断放进对应 BSP 源文件；需要唤醒多个上层子系统或承担应用级调度的中断放进 `app`。不要在 `middleware` 里写"转发到下层驱动"的空壳 ISR 入口。

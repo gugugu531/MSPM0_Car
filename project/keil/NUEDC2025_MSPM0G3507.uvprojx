@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\core\yaw_estimator;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\line_guided_drive;..\..\middleware\straight_drive;..\..\middleware\turn_drive;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\bluetooth;..\..\bsp\debug_uart;..\..\bsp\grayscale_sensor;..\..\bsp\ganv_gray;..\..\bsp\yahboom_track;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\bsp\mpu6050;..\..\board\sys_config;..\..\third_party\mspm0-sdk\source;..\..\third_party\mspm0-sdk\source\third_party\CMSIS\Core\Include</IncludePath>
+              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\core\yaw_estimator;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\line_guided_drive;..\..\middleware\straight_drive;..\..\middleware\turn_drive;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\bluetooth;..\..\bsp\debug_uart;..\..\bsp\cy_z;..\..\bsp\grayscale_sensor;..\..\bsp\ganv_gray;..\..\bsp\yahboom_track;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\bsp\mpu6050;..\..\board\sys_config;..\..\third_party\mspm0-sdk\source;..\..\third_party\mspm0-sdk\source\third_party\CMSIS\Core\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -554,6 +554,11 @@
               <FileName>debug_uart.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\debug_uart\debug_uart.c</FilePath>
+            </File>
+            <File>
+              <FileName>cy_z.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\cy_z\cy_z.c</FilePath>
             </File>
             <File>
               <FileName>grayscale_sensor.c</FileName>

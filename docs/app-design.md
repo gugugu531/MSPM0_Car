@@ -46,6 +46,7 @@ Main Menu
     ├── Gyro JY61P       (task)   JY61P 陀螺/姿态/温度 + 诊断计数
     ├── Yaw A/B          (task)   无电机对比 gz 积分角 A 与融合角 B
     ├── Gyro MPU6050     (task)   物理六轴/温度/静态倾角双页; 进挂起/出恢复 JY61P
+    ├── Gyro CY-Z        (task)   UART3 角度/角速度/CRC/ACK；UP清零、DOWN校准、ENTER请求
     ├── Grayscale        (task)   数字量 GPIO 版, 8 路 mask 二进制 + 触发数
     ├── Gray I2C         (task)   感为 I2C 版(0x4F), 8 路数字量 + 在线/固件版本
     ├── Yahboom I2C      (task)   Yahboom I2C 版(0x12), X1→X8 位图 + 诊断计数

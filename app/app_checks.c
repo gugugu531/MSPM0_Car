@@ -10,6 +10,7 @@
 #include "bsp_time.h"
 #include "bsp_common.h"
 #include "debug_uart.h"
+#include "bsp/cy_z/cy_z.h"
 #include "chassis.h"
 #include "grayscale_sensor.h"
 #include "ganv_gray.h"
@@ -27,6 +28,7 @@
 
 /* 自检刷屏节流周期。 */
 #define CHK_UI_PERIOD_MS 200U
+#define CY_Z_MAX_AGE_MS  200U
 
 /* 把字符串拷入 buf，返回长度（不终止），便于随后接 AppFmt_* 拼数字。 */
 static uint8_t PutStr(char *buf, const char *s){
@@ -36,6 +38,80 @@ static uint8_t PutStr(char *buf, const char *s){
         i++;
     }
     return i;
+}
+
+/* ======================== 创源 CY-Z 串口陀螺仪 ======================== */
+
+static uint32_t cyz_last_ui;
+static uint8_t cyz_command_sequence;
+
+static void ChkGyroCyZ_Enter(void){
+    CyZ_Init();
+    cyz_last_ui = 0U;
+    cyz_command_sequence = 0U;
+}
+
+static APP_TASK_STATUS ChkGyroCyZ_Tick(float dt){
+    (void)dt;
+    CyZ_Poll();
+
+    if (Key_GetEvent(KEY_ID_UP) == KEY_EVENT_SHORT_PRESS){
+        CyZ_SendZeroAngle(cyz_command_sequence++);
+    } else if (Key_GetEvent(KEY_ID_DOWN) == KEY_EVENT_SHORT_PRESS){
+        CyZ_SendRecalibrateBias(cyz_command_sequence++);
+    } else if (Key_GetEvent(KEY_ID_ENTER) == KEY_EVENT_SHORT_PRESS){
+        CyZ_RequestTelemetry(cyz_command_sequence++);
+    }
+
+    uint32_t now = BSP_Time_GetMs();
+    if ((now - cyz_last_ui) < CHK_UI_PERIOD_MS){
+        return APP_TASK_RUNNING;
+    }
+    cyz_last_ui = now;
+
+    CY_Z_SAMPLE sample;
+    CY_Z_ACK ack;
+    CY_Z_DIAG diag;
+    char l1[20];
+    char l2[20];
+    char l3[20];
+    char l4[20];
+    char l5[20];
+    uint8_t n;
+
+    CyZ_GetDiag(&diag);
+    if (CyZ_GetSnapshot(&sample) && CyZ_IsFresh(CY_Z_MAX_AGE_MS)){
+        n = PutStr(l1, "angle "); AppFmt_Fixed(&l1[n], sample.angle_deg, 2U);
+        n = PutStr(l2, "gyro "); AppFmt_Fixed(&l2[n], sample.gyro_deg_s, 2U);
+        n = PutStr(l3, "seq "); AppFmt_I32(&l3[n], (int32_t)sample.sequence);
+    } else{
+        n = PutStr(l1, "WAIT UART PB13"); l1[n] = '\0';
+        n = PutStr(l2, "115200 8N1"); l2[n] = '\0';
+        n = PutStr(l3, "TX->PB13 GND"); l3[n] = '\0';
+    }
+
+    n = PutStr(l4, "rx "); AppFmt_I32(&l4[n], (int32_t)diag.rx_bytes);
+    while (l4[n] != '\0'){ n++; }
+    n += PutStr(&l4[n], " ok "); AppFmt_I32(&l4[n], (int32_t)diag.valid_frames);
+
+    if (CyZ_GetAck(&ack)){
+        n = PutStr(l5, "ack "); AppFmt_I32(&l5[n], (int32_t)ack.command);
+        while (l5[n] != '\0'){ n++; }
+        n += PutStr(&l5[n], "/"); AppFmt_I32(&l5[n], (int32_t)ack.result);
+    } else{
+        n = PutStr(l5, "crc "); AppFmt_I32(&l5[n], (int32_t)diag.crc_errors);
+        while (l5[n] != '\0'){ n++; }
+        n += PutStr(&l5[n], " drop ");
+        AppFmt_I32(&l5[n], (int32_t)diag.discarded_bytes);
+    }
+
+    Ui_RenderLines("Chk Gyro CY-Z", l1, l2, l3, l4, l5,
+                   "UP0 DNcal ENreq");
+    return APP_TASK_RUNNING;
+}
+
+static void ChkGyroCyZ_Exit(void){
+    CyZ_Deinit();
 }
 
 /* ============================ 灰度 ============================ */
@@ -731,6 +807,9 @@ const APP_TASK_DESC APP_CHK_YAW_AB = {
 };
 const APP_TASK_DESC APP_CHK_GYRO_MPU6050 = {
     "Gyro MPU6050", ChkGyroMpu_Enter, ChkGyroMpu_Tick, ChkGyroMpu_Exit
+};
+const APP_TASK_DESC APP_CHK_GYRO_CY_Z = {
+    "Gyro CY-Z", ChkGyroCyZ_Enter, ChkGyroCyZ_Tick, ChkGyroCyZ_Exit
 };
 const APP_TASK_DESC APP_CHK_GRAYSCALE = {
     "Grayscale", ChkGrayscale_Enter, ChkGrayscale_Tick, NULL

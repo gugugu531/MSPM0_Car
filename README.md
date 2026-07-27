@@ -17,6 +17,7 @@
 | 底盘轮 | 直流电机 ×2 (TB6612FNG) + 霍尔编码器 | PWM / GPIO | `bsp/motor` |
 | 姿态 | JY61P 六轴 (WIT 协议) | I2C0 | `bsp/imu` (wit_sdk) |
 | 姿态 | MPU6050（基础六轴 + DMP） | I2C0（共享总线） | `bsp/mpu6050` |
+| 姿态 | 创源 CY-Z 串口陀螺仪 | UART3 115200（PB2 TX / PB13 RX） | `bsp/cy_z` |
 | 循迹 | 8 路灰度传感器 | GPIO | `bsp/grayscale_sensor` |
 | 循迹 | 感为 8 路灰度传感器 | I2C0（与两种 IMU 共总线） | `bsp/ganv_gray` |
 | 循迹 | Yahboom 8 路循线模块 | I2C0（地址 `0x12`，与两种 IMU/感为共总线） | `bsp/yahboom_track` |
@@ -221,4 +222,5 @@ python tools/check_keil_project_sync.py
   - 感为 I2C 灰度：[`bsp_ganv_gray.md`](docs/interfaces/bsp_ganv_gray.md)
   - Yahboom I2C 循线：[`bsp_yahboom_track.md`](docs/interfaces/bsp_yahboom_track.md)
   - MPU6050：[`bsp_mpu6050.md`](docs/interfaces/bsp_mpu6050.md)
+  - CY-Z 串口陀螺仪：[`bsp_cy_z.md`](docs/interfaces/bsp_cy_z.md)
 - 当前待办和上板风险：[`docs/todo.md`](docs/todo.md)
