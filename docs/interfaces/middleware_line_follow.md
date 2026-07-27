@@ -2,17 +2,17 @@
 
 ## 模块职责
 
-`middleware/line_follow` 是完整巡线闭环控制器。它直接从 `bsp/grayscale_sensor` 获取已经
-标准化的 GPIO 灰度读数，计算线中心、误差和差速修正，并通过 `middleware/chassis` 输出左右轮
-占空比。
+`middleware/line_follow` 是完整巡线闭环控制器。它接收标准化八路观测，计算线中心、误差
+和差速修正，并通过 `middleware/chassis` 输出左右轮占空比。当前菜单任务使用 Yahboom
+`ReadDetectedMask()`；共享 I2C0 的采样调度由 app 负责，不塞入控制器。
 
 该模块同时提供硬件无关的 `LineFollow_Compute()`，便于使用人工构造的观测做算法验证。
 
 数据流：
 
 ```text
-bsp/grayscale_sensor
-        ↓  level[i]: 0=检测到黑线，1=未检测到黑线
+app/Yahboom 采样
+        ↓  detected_mask: bit0=X1 ... bit7=X8，1=检测到黑线
 middleware/line_follow
         ↓  left/right duty
 middleware/chassis
@@ -32,8 +32,9 @@ typedef struct {
 - `level[i] != 0`：通道 `i` 未检测到黑线。
 - 通道顺序与 BSP 的 `GRAYSCALE_SENSOR_CHANNEL_0..7` 一致。
 
-BSP 已处理板级输入反相和物理探头到逻辑通道的映射；上述语义来自 Device Check 实机显示，
-middleware 不再二次翻转。
+这是保留的 GPIO 兼容输入语义。Yahboom 调用方应直接使用
+`LineFollow_UpdateDetectedMask()` / `LineFollow_ObserveDetectedMask()`，避免自行处理协议原始位序
+和低有效极性。
 
 ## 参数分组
 
@@ -107,17 +108,26 @@ typedef struct {
 
 复位 PID、EMA 滤波状态和最近输出，不改变配置。
 
-### `BSP_STATUS LineFollow_Update(float dt_s)`
+### `BSP_STATUS LineFollow_UpdateDetectedMask(uint8_t detected_mask, float dt_s)`
 
-完整闭环入口：
+当前 Yahboom 循迹任务使用的完整闭环入口：
 
-1. 调用 `GrayscaleSensor_Read()` 获取 GPIO 灰度。
+1. 接收 app 已读取的 Yahboom 归一化黑线掩码。
 2. 从 JY61P 缓存读取 `gz`（启用陀螺增稳时）。
 3. 调用 `LineFollow_Compute()`。
 4. 未丢线时调用 `Chassis_SetDuty()`。
 
 丢线时返回 `BSP_STATUS_NOT_READY`，不自行刹车或搜索。JY61P 的初始化与
-`JY61P_I2C_Poll()` 调度仍由 app 任务负责。
+`JY61P_I2C_Poll()`、Yahboom 阻塞读取及共享 I2C0 分时仍由 app 任务负责。
+
+### `BSP_STATUS LineFollow_Update(float dt_s)`
+
+保留的 GPIO 兼容入口，会直接调用 `GrayscaleSensor_Read()`；当前菜单任务不调用它。
+
+### `LineFollow_Observe()` / `LineFollow_ObserveDetectedMask()`
+
+两个接口只计算 `level_mask`、`black_mask`、命中数量和质心误差，不读硬件、不持有 PID 状态。
+前者接受 `0=黑线` 的电平数组，后者接受 `1=黑线` 的归一化掩码。
 
 ### `BSP_STATUS LineFollow_Compute(...)`
 
@@ -148,5 +158,5 @@ level[]（0=黑线）→ 线中心均值 → 缩放误差 → EMA → 中心死�
 - `LineFollow_GetSensor()` / `GetSensorMask()` / `GetActiveCount()`
 - `LineFollow_GetEdgeCount()` / `IncrementEdge()`
 
-如未来需要 GPIO/I2C 灰度源切换、带时间戳快照、坏道屏蔽或异步采样，再单独引入
-`line_sensing` 观测层。
+如未来需要运行时切换多种传感器、坏道屏蔽或异步观测快照，再单独引入 `line_sensing`
+观测层；当前不为单一 Yahboom 实机路径预建跨设备状态框架。

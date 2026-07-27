@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\straight_drive;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\bluetooth;..\..\bsp\debug_uart;..\..\bsp\grayscale_sensor;..\..\bsp\ganv_gray;..\..\bsp\yahboom_track;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\bsp\mpu6050;..\..\board\sys_config;..\..\third_party\mspm0-sdk\source;..\..\third_party\mspm0-sdk\source\third_party\CMSIS\Core\Include</IncludePath>
+              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\core\yaw_estimator;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\line_guided_drive;..\..\middleware\straight_drive;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\bluetooth;..\..\bsp\debug_uart;..\..\bsp\grayscale_sensor;..\..\bsp\ganv_gray;..\..\bsp\yahboom_track;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\bsp\mpu6050;..\..\board\sys_config;..\..\third_party\mspm0-sdk\source;..\..\third_party\mspm0-sdk\source\third_party\CMSIS\Core\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -470,6 +470,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\core\filter\filter.c</FilePath>
             </File>
+            <File>
+              <FileName>yaw_estimator.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\core\yaw_estimator\yaw_estimator.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -489,6 +494,11 @@
               <FileName>line_follow.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\middleware\line_follow\line_follow.c</FilePath>
+            </File>
+            <File>
+              <FileName>line_guided_drive.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\middleware\line_guided_drive\line_guided_drive.c</FilePath>
             </File>
             <File>
               <FileName>straight_drive.c</FileName>

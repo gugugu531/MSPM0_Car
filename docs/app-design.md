@@ -30,7 +30,8 @@ run-to-completion 任务。
 
 ```
 Main Menu
-├── Line Follow         (task)   循迹测试: line_follow 完整闭环巡线 + 陀螺增稳, 电平图/误差/双轮占空比, 丢线刹停
+├── Line Follow         (task)   Yahboom 循线 + 角速度内环, 黑线位图/误差/双轮占空比, 丢线刹停
+├── Line Guided 80      (task)   80% 直接起步，1s 角速度后切 Yahboom 外环 + 航向内环
 ├── Straight Test       (submenu)
 │   ├── Duty Open       (task)   左右轮同占空比开环
 │   ├── Speed Closed    (task)   左右轮独立速度 PID 直行

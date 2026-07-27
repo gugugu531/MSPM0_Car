@@ -14,7 +14,7 @@
 - `app_task.h`：任务生命周期契约——`APP_TASK_STATUS` 与 `APP_TASK_DESC`（`on_enter/on_tick/on_exit`），不含具体任务。
 - `app_menu.h`：菜单树类型 `MENU_NODE`/`MENU_ITEM` 与 `Menu_Tick` 导航；`app_menu_def.c` 定义菜单树实例 `APP_ROOT_MENU`。
 - `app_checks.h`：外设自检任务描述符 `APP_CHK_*`（JY61P / Yaw A/B / MPU6050 / Grayscale / Gray I2C / Yahboom I2C / TB6612 / Encoder / Speed PID / Duty Sweep）。
-- `app_line_task.h`：循迹测试任务 `APP_LINE_FOLLOW_TEST`（挂根菜单）。
+- `app_line_task.h`：两个 Yahboom 循迹任务及共享 I2C0 分时调度（挂根菜单）。
 - `app_straight_task.h`：九种直行测试任务、3 m 自动停车与遥测配置，详见
   `docs/interfaces/app_straight_task.md`。
 - `app_bt_task.h`：蓝牙串口收发测试任务 `APP_CHK_BLUETOOTH`（挂 Device Check）。
@@ -25,12 +25,16 @@
 - `filter/filter.h`：一阶低通(EMA)与中心死区等通用信号调理算法，详细说明见 `docs/interfaces/core_filter.md`。
 - `common/core_types.h`：core 层基础二维点类型，详细说明见 `docs/interfaces/core_common.md`。
 - `kinematics/kinematics.h`：限幅、角度归一化、差速混控与两轮差速运动学模型（正/逆运动学、转弯半径、位姿积分），详细说明见 `docs/interfaces/core_kinematics.md`。
+- `yaw_estimator/yaw_estimator.h`：纯角速度积分航向 A 与融合角偏移 `B-A`，详细说明见
+  `docs/interfaces/core_yaw_estimator.md`。
 
 ## middleware
 
 - `chassis.h`：底盘组合服务（开环占空比 + 每轮速度闭环 PID），详细说明见 `docs/interfaces/middleware_chassis.md`。
-- `line_follow.h`：GPIO 灰度读取、巡线偏差计算、PID/陀螺修正和底盘输出，详细说明见
+- `line_follow.h`：标准化八路黑线观测、巡线偏差计算、PID/陀螺修正和底盘输出，详细说明见
   `docs/interfaces/middleware_line_follow.md`。
+- `line_guided_drive.h`：80% 直接起步的启动角速度控制、Yahboom 外环与航向内环，详细说明见
+  `docs/interfaces/middleware_line_guided_drive.md`。
 - `straight_drive.h`：九种直行模式的指令、PID、启动阶段切换、姿态反馈和底盘输出，详细说明见
   `docs/interfaces/middleware_straight_drive.md`。
 - `ui.h`：轻量 OLED UI 渲染层，详细说明见 `docs/interfaces/middleware_ui.md`。
@@ -65,5 +69,5 @@
 | `YahboomTrack_ReadRaw()` | `bit7=X1` … `bit0=X8` | 白底，设备端 LED 灭 |
 | `YahboomTrack_ReadDetectedMask()` | `bit0=X1` … `bit7=X8` | 检测到黑线 |
 
-当前 `middleware/line_follow` 只消费 GPIO `grayscale_sensor`，因此沿用 `0=黑线、1=未检测到`
-的电平数组语义；感为和 Yahboom 目前仅接入 Device Check，尚未接入可切换的巡线传感器抽象层。
+当前两个实际循迹任务均调用 `YahboomTrack_ReadDetectedMask()`，并把“黑线置 1”的归一化掩码
+传入 middleware。`LineFollow_Update()` 仍保留为 GPIO 兼容入口，但菜单任务不再调用它。

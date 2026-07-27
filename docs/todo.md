@@ -24,9 +24,9 @@
 
 | 优先级 | 风险 | 当前证据 | 后续处理边界 |
 |---|---|---|---|
-| P0 | JY61P angle、gyro、样本计数和时间戳不是一个原子快照 | I2C ISR 先发布 angle、再发布 gyro，最后递增计数；主循环的 `WitGetData()` 逐项读取 64 位 `double` 缓存 | 在 `bsp/imu` 增加一次性快照接口；只迁移现有 JY61P 直接消费者，不改无关 BSP 或任务 |
+| 已处理 | JY61P angle、gyro、样本计数和时间戳原子快照 | ISR 已使用序列锁一次发布 `JY61P_I2C_SAMPLE`，现有控制消费者已迁移 | 后续控制代码继续只消费 `JY61P_I2C_GetSnapshot()`，禁止回退到拼接裸缓存 |
 | P0 | 直行模式判断散落，新增模式容易漏改 | 同一模式同时参与指令限幅、PID、丢帧恢复、阶段切换、混控、OLED、菜单和 Python 映射 | 配置表和明确阶段枚举只放 `middleware/straight_drive`；app 仅保留菜单/UI/遥测适配 |
-| P1 | A/B 积分在直行控制与 `Yaw A/B` 页面各实现一次，采样顺序和时间来源可能继续分化 | 两处分别读取 `sample_count`、`WitGetData()` 和任务侧 `BSP_Time_GetMs()` | 不允许出现第三份实现；重构时只抽取与硬件无关的积分器，阶段切换仍归 `straight_drive` |
+| 已处理 | A/B 积分曾在直行控制与 `Yaw A/B` 页面重复 | 已抽为纯计算 `core/yaw_estimator`，各调用方仍自行拥有阶段策略 | 新消费者只能复用该组件，不得复制积分和最短角偏移公式 |
 | P1 | 100% 速度优先混控是直行实验的专用策略 | 当前在 `straight_drive` 内单独实现快侧 100%、降低慢侧 | 不下沉到通用 `Kinematics_DifferentialMix()`，除非未来出现第二个经过验证的通用消费者 |
 | P1 | 3 m 判定使用两轮绝对里程平均值，原地旋转也会累计“行驶距离” | `Straight_GetTravelDistance()` 为 `(abs(xL)+abs(xR))/2` | 只在 `app_straight_task` 明确并修正距离语义，不改变 chassis/编码器公开里程定义 |
 | P2 | `startup_complete` 同时表达斜坡结束、定时阶段结束和普通模式就绪 | OLED `phase`、参考角捕获和丢帧恢复依赖同一布尔量 | 用直行模块私有阶段枚举替换，不把实验阶段加入 app 全局状态机 |
@@ -37,11 +37,10 @@
 
 ### 隔离约束（后续修改必须遵守）
 
-1. **禁止新增裸 JY61P 缓存消费者**：在原子快照接口完成前，新任务不得直接组合
-   `WitGetData()`、`JY61P_I2C_GetSampleCount()` 和任务侧时间戳。现有直接消费者限定为
-   `middleware/line_follow`、`middleware/straight_drive`、JY61P 检查和 `Yaw A/B` 检查。
-2. **禁止复制 A/B 算法**：`A0=B0`、积分更新和 `B0+(B1-A1)` 只允许存在于直行控制及其
-   专用无电机验证路径。其他任务若需要航向，应消费稳定的姿态/估计接口，不复制公式。
+1. **禁止新增裸 JY61P 缓存消费者**：新控制任务统一读取 `JY61P_I2C_GetSnapshot()`，不得
+   重新组合 `WitGetData()`、样本计数和任务侧时间戳。
+2. **禁止复制 A/B 算法**：`A0=B0`、积分更新和 `B-A` 最短角偏移统一复用
+   `core/yaw_estimator`；直行和航向循迹各自在自身 middleware 内拥有阶段与参考角策略。
 3. **实验策略不污染通用层**：500 ms 切换、80%/100% 对照、速度优先混控和 3 m 停车均是
    Straight Test 策略，不得加入 `core/pid`、`middleware/chassis`、`line_follow` 或电机 BSP。
    `core` 只可接收可复用且无硬件/任务语义的纯计算原语。
@@ -52,8 +51,8 @@
 
 ### 建议实施顺序
 
-1. 在 `bsp/imu` 建立 `{data, sample_count, timestamp_ms}` 一致快照，并仅迁移上述四类直接消费者。
-2. 为 A/B 积分与参考角公式增加纯计算测试，消除直行控制和检查页之间的重复实现。
+1. ~~在 `bsp/imu` 建立一致快照并迁移直接消费者。~~ 已完成。
+2. A/B 积分重复实现已消除；仍需为角度跨界与参考角公式增加主机侧纯计算测试。
 3. 在 `straight_drive` 内收敛模式配置与阶段枚举，不改变 chassis、PID 或 app 全局状态机。
 4. 独立修正 3 m 距离语义，再处理安全格式化、遥测版本和检查任务文件拆分。
 

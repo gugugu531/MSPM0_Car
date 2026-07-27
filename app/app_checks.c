@@ -19,6 +19,7 @@
 #include "mpu6050.h"
 #include "straight_drive.h"
 #include "kinematics/kinematics.h"
+#include "yaw_estimator.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -303,10 +304,10 @@ static APP_TASK_STATUS ChkGyroJy_Tick(float dt){
 static uint32_t yab_last_ui_ms;
 static uint32_t yab_last_sample_ms;
 static uint32_t yab_last_sample_count;
-static float yab_integrated_deg;
 static float yab_fused_deg;
 static float yab_gyro_z_deg_s;
 static bool yab_valid;
+static YAW_ESTIMATOR yab_estimator;
 
 static void ChkYawAb_Enter(void){
     /* 本任务不调用任何 Chassis/Motor 接口，只观察共享 I2C0 上的 JY61P。 */
@@ -314,8 +315,8 @@ static void ChkYawAb_Enter(void){
     JY61P_I2C_Init();
     yab_last_ui_ms = 0U;
     yab_last_sample_ms = 0U;
-    yab_last_sample_count = JY61P_I2C_GetSampleCount();
-    yab_integrated_deg = 0.0f;
+    yab_last_sample_count = 0U;
+    YawEstimator_Reset(&yab_estimator);
     yab_fused_deg = 0.0f;
     yab_gyro_z_deg_s = 0.0f;
     yab_valid = false;
@@ -326,41 +327,41 @@ static APP_TASK_STATUS ChkYawAb_Tick(float dt){
     JY61P_I2C_Poll();
 
     uint32_t now_ms = BSP_Time_GetMs();
-    uint32_t sample_count = JY61P_I2C_GetSampleCount();
+    JY61P_I2C_SAMPLE sample;
 
-    if (sample_count != yab_last_sample_count){
-        WIT_IMU_DATA imu;
-        yab_last_sample_count = sample_count;
+    if (JY61P_I2C_GetSnapshot(&sample) &&
+        (sample.sample_count != yab_last_sample_count)){
+        yab_last_sample_count = sample.sample_count;
 
-        if (JY61P_I2C_IsDataFresh(YAW_AB_IMU_MAX_AGE_MS) &&
-            (WitGetData(&imu) == WIT_HAL_OK)){
+        if (JY61P_I2C_IsDataFresh(YAW_AB_IMU_MAX_AGE_MS)){
             float fused_deg = Kinematics_NormalizeAngleDeg(
-                STRAIGHT_DRIVE_HEADING_YAW_SIGN * imu.attitude_deg.yaw);
+                STRAIGHT_DRIVE_HEADING_YAW_SIGN *
+                sample.data.attitude_deg.yaw);
             float gyro_z_deg_s =
-                STRAIGHT_DRIVE_RATE_GYRO_SIGN * imu.gyro_deg_s.z;
+                STRAIGHT_DRIVE_RATE_GYRO_SIGN * sample.data.gyro_deg_s.z;
 
             if (!yab_valid){
                 /* A0 = B0：首次完整样本只负责建立公共角度原点。 */
-                yab_integrated_deg = fused_deg;
+                YawEstimator_Start(&yab_estimator, fused_deg);
                 yab_valid = true;
             } else{
                 float sample_dt_s =
-                    (float)(now_ms - yab_last_sample_ms) * 0.001f;
-                yab_integrated_deg = Kinematics_NormalizeAngleDeg(
-                    yab_integrated_deg + gyro_z_deg_s * sample_dt_s);
+                    (float)(sample.timestamp_ms - yab_last_sample_ms) * 0.001f;
+                YawEstimator_Integrate(&yab_estimator, gyro_z_deg_s,
+                                       sample_dt_s);
             }
 
-            yab_last_sample_ms = now_ms;
+            yab_last_sample_ms = sample.timestamp_ms;
             yab_fused_deg = fused_deg;
             yab_gyro_z_deg_s = gyro_z_deg_s;
 
-            float delta_ba_deg = Kinematics_AngleDiffDeg(
-                yab_fused_deg, yab_integrated_deg);
+            float delta_ba_deg = YawEstimator_GetFusionOffset(
+                &yab_estimator, yab_fused_deg);
             DebugUart_Printf(
                 "[YAB] t=%lu n=%lu a=%.3f b=%.3f ba=%.3f gz=%.3f\r\n",
                 (unsigned long)now_ms,
-                (unsigned long)sample_count,
-                (double)yab_integrated_deg,
+                (unsigned long)sample.sample_count,
+                (double)YawEstimator_GetIntegrated(&yab_estimator),
                 (double)yab_fused_deg,
                 (double)delta_ba_deg,
                 (double)yab_gyro_z_deg_s);
@@ -390,11 +391,12 @@ static APP_TASK_STATUS ChkYawAb_Tick(float dt){
     char l5[20];
     uint8_t n;
 
-    n = PutStr(l1, "A "); AppFmt_Fixed(&l1[n], yab_integrated_deg, 2U);
+    n = PutStr(l1, "A ");
+    AppFmt_Fixed(&l1[n], YawEstimator_GetIntegrated(&yab_estimator), 2U);
     n = PutStr(l2, "B "); AppFmt_Fixed(&l2[n], yab_fused_deg, 2U);
     n = PutStr(l3, "B-A ");
-    AppFmt_Fixed(&l3[n],
-        Kinematics_AngleDiffDeg(yab_fused_deg, yab_integrated_deg), 2U);
+    AppFmt_Fixed(&l3[n], YawEstimator_GetFusionOffset(
+        &yab_estimator, yab_fused_deg), 2U);
     n = PutStr(l4, "gz "); AppFmt_Fixed(&l4[n], yab_gyro_z_deg_s, 2U);
     n = PutStr(l5, "sample ");
     AppFmt_I32(&l5[n], (int32_t)yab_last_sample_count);

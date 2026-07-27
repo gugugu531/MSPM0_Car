@@ -34,15 +34,16 @@ void YahboomTrack_GetDiag(uint32_t *read_fail, uint32_t *write_fail,
 
 - 驱动使用阻塞 I2C，只能在线程上下文调用，禁止在 ISR 中调用。
 - 它与 JY61P、MPU6050、感为灰度共用 I2C0。调用前必须由 app 层执行
-  `JY61P_I2C_SetSuspended(true)`，结束占用后再恢复，不能与 JY61P 异步状态机并发。
+  `JY61P_I2C_SetSuspended(true)`，结束占用后再恢复，不能与 JY61P 异步状态机并发。周期
+  循迹还必须先用 `JY61P_I2C_IsIdle()` 确认进行中的 IMU 事务已经自然结束，不能强制截断。
 - 模块官方建议每次上电后等待至少 20 秒，使探头稳定；更换环境、安装高度或地图材质后应重新校准。
 
 ## 当前集成状态
 
 - 已接入 `Main Menu -> Device Check -> Yahboom I2C`，页面显示 X1→X8 的检测位图、原始
   `0x30` 值、有效路数和 I2C 诊断计数。
-- 当前 `middleware/line_follow` 仍只使用 GPIO `bsp/grayscale_sensor`。Yahboom 驱动尚未接入
-  运行时可切换的巡线传感器抽象层，不能仅替换接线就让 `Line Follow` 改用本模块。
+- `Line Follow` 和 `Line Guided 80` 均已使用 `ReadDetectedMask()`；app 负责共享总线采样，
+  middleware 只接收标准化掩码，不依赖 Yahboom 阻塞驱动。
 - Device Check 页面只读状态，不会主动进入校准模式；校准需显式调用接口并配合板载按键。
 
 ## 协议依据

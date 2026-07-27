@@ -38,7 +38,7 @@
 - `app_task.h`：任务生命周期契约（`APP_TASK_STATUS` + `APP_TASK_DESC` 三钩子），不含具体任务。
 - `app_menu.c/.h` 与 `app_menu_def.c`：菜单树（`MENU_NODE`/`MENU_ITEM`）导航与菜单树实例定义。
 - `app_checks.c/.h`：外设自检任务描述符，挂在 Device Check 子菜单。
-- `app_line_task.c/.h`：循迹测试任务（完整巡线闭环 + 陀螺增稳），挂在根菜单。
+- `app_line_task.c/.h`：Yahboom 循迹任务及其与 JY61P 的 I2C0 分时调度，挂在根菜单。
 - `app_straight_task.c/.h`：直行测试的任务生命周期、按键、OLED 与遥测适配，挂在
   `Straight Test` 子菜单；具体控制由 `middleware/straight_drive` 承担。
 - `app_bt_task.c/.h`：蓝牙串口收发测试任务，挂在 Device Check 子菜单。
@@ -57,6 +57,7 @@
 - `pid/`：位置式和增量式 PID 控制器。
 - `filter/`：一阶低通（EMA）与中心死区等通用信号调理算法。
 - `kinematics/`：角度、位姿、差速混控与两轮差速运动学模型（车体参数一律传参，不在层内固化）。
+- `yaw_estimator/`：纯角速度积分航向与融合角偏移计算，不包含硬件和阶段策略。
 
 该层保持硬件无关，不包含 `app`、`middleware` 或 `bsp` 头文件。
 
@@ -65,12 +66,13 @@
 `middleware` 放置多个 BSP 外设组合后的系统能力：
 
 - `chassis/`：底盘组合服务（开环占空比 + 每轮速度闭环 PID）
-- `line_follow/`：GPIO 灰度读取、巡线偏差计算、PID/陀螺修正和底盘输出
+- `line_follow/`：八路黑线观测、巡线偏差计算、PID/陀螺修正和底盘输出
+- `line_guided_drive/`：80% 启动角速度阶段、Yahboom 外环和航向内环状态机
 - `straight_drive/`：九种直行模式的指令、启动阶段切换、姿态反馈、PID 与底盘输出
 - `ui/`：轻量 OLED UI 渲染层
 - `fault/`：系统故障处理服务
 
-> 注：`line_follow` 因需调用 chassis、读取 BSP 灰度和 IMU 缓存，
+> 注：`line_follow` 因需调用 chassis 和读取 IMU 缓存，
 > 本质是“组合 core 算法 + 硬件观测 + 驱动执行器”的中间件能力，置于 `middleware` 以消除
 > `core ↔ middleware` 循环依赖、保持 `core` 纯计算。
 

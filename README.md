@@ -3,7 +3,8 @@
 基于 `TI MSPM0G3507` 的分层车载固件工程。
 
 > **当前状态**：原 2025E 二维云台/瞄准子系统已整体移除；`app` 已重建为菜单驱动的裸机
-> 协作式调度框架。当前可从 OLED 菜单运行 GPIO 灰度循迹测试、九种直行控制/启动实验，
+> 协作式调度框架。当前可从 OLED 菜单运行 Yahboom 八路循迹测试、80% 航向循迹实验、
+> 九种直行控制/启动实验，
 > 以及 JY61P、MPU6050、GPIO/感为/Yahboom 三种灰度传感器、TB6612、双轮编码器、
 > 速度 PID、占空比扫描和蓝牙串口等设备检查任务。
 > 现阶段重点是底盘测速/速度闭环整定与各外设上板验证。
@@ -31,8 +32,9 @@ app ─► middleware ─► bsp
 ```
 
 - `app`：初始化、协作式调度器、状态机、菜单树与具体测试任务。
-- `core`：PID、滤波和运动学等纯计算能力（`pid` / `filter` / `kinematics` / `common`）。
-- `middleware`：组合 core 与 BSP 的系统能力（`chassis` / `line_follow` / `straight_drive` /
+- `core`：PID、滤波、运动学与纯角速度积分等纯计算能力。
+- `middleware`：组合 core 与 BSP 的系统能力（`chassis` / `line_follow` /
+  `line_guided_drive` / `straight_drive` /
   `ui` / `fault`）。
 - `bsp`：直接面向板级外设的驱动（见上表 + `time` / `common`）。
 - `board`：SysConfig 源文件与生成代码、启动/链接资源。
@@ -155,11 +157,12 @@ Pop-Location
 
 | 入口 | 用途 |
 |---|---|
-| `Line Follow` | GPIO 八路灰度循迹与陀螺增稳 |
+| `Line Follow` | Yahboom 八路循线外环与角速度内环测试 |
+| `Line Guided 80` | 80% 直接起步，角速度启动后切换为循线外环 + 航向内环 |
 | `Straight Test` | 4 种基础直行控制与 5 种斜坡/启动阶段切换实验 |
 | `Device Check` | JY61P、Yaw A/B、MPU6050、三种灰度、TB6612、编码器、速度 PID、占空比扫描和蓝牙检查 |
 
-八路 GPIO 灰度在 OLED 上按位显示：`0` 表示该路检测到黑线，`1` 表示未检测到黑线。
+两个循迹页面均按 `X1 → X8` 显示 Yahboom 归一化掩码：`1` 表示该路检测到黑线。
 
 ## 串口遥测与可视化
 
@@ -202,8 +205,8 @@ UART0，参数为 `9600 8N1`；它与 UART1 调试遥测是两条不同通道。
 python tools/check_keil_project_sync.py
 ```
 
-- JY61P、MPU6050、感为灰度与 Yahboom 循线模块共用 I2C0；阻塞式 MPU6050/感为/Yahboom
-  检查任务运行时通过 `JY61P_I2C_SetSuspended()` 与 JY61P 分时。
+- JY61P、MPU6050、感为灰度与 Yahboom 循线模块共用 I2C0；循迹任务只在 JY61P 异步事务
+  空闲时短暂读取 Yahboom，其他阻塞式检查任务通过 `JY61P_I2C_SetSuspended()` 独占总线。
 - 不可同时使用无线调试器的虚拟串口和 Ex Uart。
 
 ## 文档索引

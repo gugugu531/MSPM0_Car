@@ -6,7 +6,8 @@
 SDK 的命名、串口协议解析、寄存器定义和已有全局变量，同时追加当前实际使用的 I2C0 异步驱动，
 不按工程自维护代码的命名规则强制重写。
 
-上层通过结构化 getter 读取 `GyroscopeChannelData[]` 缓存，不应继续直接访问该数组。
+控制器应优先读取原子发布的 `JY61P_I2C_SAMPLE`，不应继续直接访问
+`GyroscopeChannelData[]`。
 
 ## 保留的厂家接口
 
@@ -36,12 +37,15 @@ SDK 的命名、串口协议解析、寄存器定义和已有全局变量，同�
 - `JY61P_I2C_Poll()`：空闲时发起一轮姿态角与角速度读取；忙或总线未空闲时立即返回。
 - `JY61P_I2C_SetSuspended(bool)`：挂起/恢复 JY61P 事务和 I2C0 中断，供 MPU6050、感为灰度
   等同总线阻塞驱动分时。
+- `JY61P_I2C_IsIdle()`：仅当 JY61P 状态机和 I2C0 控制器都空闲时返回 `true`；app 可据此
+  安全地给 Yahboom 阻塞读取分配一个短时间片。
 - `JY61P_I2C_GetPollCount()` / `GetErrorCount()` / `GetNackCount()` /
   `GetTimeoutCount()`：读取诊断计数。
 - `JY61P_I2C_GetSampleCount()`：读取已完整发布的 angle + gyro 样本数。
 - `JY61P_I2C_IsDataFresh(max_age_ms)`：仅当至少发布过一个完整样本，且最近样本年龄不超过
   指定阈值时返回 `true`。上层控制器应使用此接口判断数据有效性，不应根据 poll/error
   计数反推事务是否成功。
+- `JY61P_I2C_GetSnapshot()`：用序列锁原子复制同一轮 angle + gyro 以及其样本计数和发布时间戳。
 
 当前由 `app/app_line_task.c`、`app/app_straight_task.c` 的九种直行测试、JY61P 自检和
 Yaw A/B 无电机对比任务在每个 20ms 控制拍调用 `JY61P_I2C_Poll()`；

@@ -9,6 +9,7 @@
 #include "kinematics/kinematics.h"
 #include "pid/pid.h"
 #include "wit_sdk.h"
+#include "yaw_estimator.h"
 
 static STRAIGHT_DRIVE_OUTPUT s_output;
 static PID_CONTROLLER s_rate_pid;
@@ -18,9 +19,11 @@ static PID_CONTROLLER s_heading_pid;
 static float s_startup_elapsed_s;
 static uint32_t s_integrated_phase_start_ms;
 static bool s_integrated_phase_started;
-static float s_integrated_initial_heading_deg;
 static uint32_t s_integrated_last_sample_ms;
 static uint32_t s_integrated_last_sample_count;
+static uint32_t s_imu_sample_ms;
+static uint32_t s_imu_sample_count;
+static YAW_ESTIMATOR s_yaw_estimator;
 
 /** 两个 A/B 切换实验共用阶段管理；80% 版保留旧积分法作为实车对照。 */
 static bool StraightDrive_IsIntegratedHeadingMode(void)
@@ -116,10 +119,10 @@ static void StraightDrive_InitPid(void)
 
 static void StraightDrive_UpdateImu(void)
 {
-    WIT_IMU_DATA imu;
+    JY61P_I2C_SAMPLE sample;
 
     if (!JY61P_I2C_IsDataFresh(STRAIGHT_DRIVE_IMU_MAX_AGE_MS) ||
-        (WitGetData(&imu) != WIT_HAL_OK)){
+        !JY61P_I2C_GetSnapshot(&sample)){
         s_output.imu_ready = false;
         s_output.correction_percent = 0.0f;
         if ((s_output.mode == STRAIGHT_DRIVE_MODE_RAMP_HEADING) ||
@@ -129,7 +132,7 @@ static void StraightDrive_UpdateImu(void)
             s_output.startup_complete = false;
             s_startup_elapsed_s = 0.0f;
             s_integrated_phase_started = false;
-            s_integrated_initial_heading_deg = 0.0f;
+            YawEstimator_Reset(&s_yaw_estimator);
             s_integrated_last_sample_ms = 0U;
             s_integrated_last_sample_count = 0U;
             s_output.integrated_heading_deg = 0.0f;
@@ -144,9 +147,11 @@ static void StraightDrive_UpdateImu(void)
     }
 
     s_output.gyro_z_deg_s =
-        STRAIGHT_DRIVE_RATE_GYRO_SIGN * imu.gyro_deg_s.z;
+        STRAIGHT_DRIVE_RATE_GYRO_SIGN * sample.data.gyro_deg_s.z;
     s_output.yaw_deg = Kinematics_NormalizeAngleDeg(
-        STRAIGHT_DRIVE_HEADING_YAW_SIGN * imu.attitude_deg.yaw);
+        STRAIGHT_DRIVE_HEADING_YAW_SIGN * sample.data.attitude_deg.yaw);
+    s_imu_sample_ms = sample.timestamp_ms;
+    s_imu_sample_count = sample.sample_count;
     s_output.imu_ready = true;
 }
 
@@ -157,7 +162,7 @@ static void StraightDrive_UpdateStartup(float dt_s)
         if (!s_output.imu_ready || (s_output.command == 0.0f)){
             s_output.startup_complete = false;
             s_integrated_phase_started = false;
-            s_integrated_initial_heading_deg = 0.0f;
+            YawEstimator_Reset(&s_yaw_estimator);
             s_integrated_last_sample_ms = 0U;
             s_integrated_last_sample_count = 0U;
             s_output.integrated_heading_deg = 0.0f;
@@ -169,11 +174,11 @@ static void StraightDrive_UpdateStartup(float dt_s)
             s_integrated_phase_start_ms = now_ms;
             s_integrated_phase_started = true;
             /* A0 = B0：纯积分航向与启动时 JY61P 航向使用同一坐标原点。 */
-            s_integrated_initial_heading_deg = s_output.yaw_deg;
+            YawEstimator_Start(&s_yaw_estimator, s_output.yaw_deg);
             s_output.integrated_heading_deg =
-                s_integrated_initial_heading_deg;
-            s_integrated_last_sample_ms = now_ms;
-            s_integrated_last_sample_count = JY61P_I2C_GetSampleCount();
+                YawEstimator_GetIntegrated(&s_yaw_estimator);
+            s_integrated_last_sample_ms = s_imu_sample_ms;
+            s_integrated_last_sample_count = s_imu_sample_count;
         }
 
         if (!s_output.startup_complete){
@@ -182,15 +187,17 @@ static void StraightDrive_UpdateStartup(float dt_s)
 
             if (s_output.mode ==
                 STRAIGHT_DRIVE_MODE_FULL_INTEGRATED_THEN_HEADING){
-                uint32_t sample_count = JY61P_I2C_GetSampleCount();
+                uint32_t sample_count = s_imu_sample_count;
                 if (sample_count != s_integrated_last_sample_count){
                     float sample_dt_s =
-                        (float)(now_ms - s_integrated_last_sample_ms) * 0.001f;
+                        (float)(s_imu_sample_ms - s_integrated_last_sample_ms) *
+                        0.001f;
+                    YawEstimator_Integrate(&s_yaw_estimator,
+                                           s_output.gyro_z_deg_s,
+                                           sample_dt_s);
                     s_output.integrated_heading_deg =
-                        Kinematics_NormalizeAngleDeg(
-                            s_output.integrated_heading_deg +
-                            s_output.gyro_z_deg_s * sample_dt_s);
-                    s_integrated_last_sample_ms = now_ms;
+                        YawEstimator_GetIntegrated(&s_yaw_estimator);
+                    s_integrated_last_sample_ms = s_imu_sample_ms;
                     s_integrated_last_sample_count = sample_count;
                 }
             }
@@ -200,10 +207,10 @@ static void StraightDrive_UpdateStartup(float dt_s)
             } else if (s_output.mode ==
                       STRAIGHT_DRIVE_MODE_INTEGRATED_THEN_HEADING){
                 /* 保留原 80% 对照版本：每控制拍按固定 dt 积分。 */
+                YawEstimator_Integrate(&s_yaw_estimator,
+                                       s_output.gyro_z_deg_s, dt_s);
                 s_output.integrated_heading_deg =
-                    Kinematics_NormalizeAngleDeg(
-                        s_output.integrated_heading_deg +
-                        s_output.gyro_z_deg_s * dt_s);
+                    YawEstimator_GetIntegrated(&s_yaw_estimator);
             }
         }
         return;
@@ -283,10 +290,11 @@ static BSP_STATUS StraightDrive_Apply(float dt_s)
              * A0=B0。切换时以 reference=B0+(B1-A1) 抵消 B 在猛烈加速期间
              * 相对纯积分 A 产生的偏移；B1-A1 按最短角处理跨越 ±180°。
              */
-            float integration_correction = Kinematics_AngleDiffDeg(
-                s_output.yaw_deg, s_output.integrated_heading_deg);
+            float integration_correction = YawEstimator_GetFusionOffset(
+                &s_yaw_estimator, s_output.yaw_deg);
             s_output.heading_reference_deg = Kinematics_NormalizeAngleDeg(
-                s_integrated_initial_heading_deg + integration_correction);
+                YawEstimator_GetInitialFused(&s_yaw_estimator) +
+                integration_correction);
         } else{
             /* 其余定时切换模式在第二阶段首拍捕获当前融合航向。 */
             s_output.heading_reference_deg = s_output.yaw_deg;
@@ -311,7 +319,7 @@ static BSP_STATUS StraightDrive_Apply(float dt_s)
     } else if (StraightDrive_IsIntegratedHeadingMode() &&
                !s_output.startup_complete){
         float heading_error = Kinematics_AngleDiffDeg(
-            s_integrated_initial_heading_deg,
+            YawEstimator_GetInitialFused(&s_yaw_estimator),
             s_output.integrated_heading_deg);
         s_output.correction_percent = PID_Update(
             &s_integrated_heading_pid, heading_error, 0.0f, dt_s);
@@ -395,7 +403,9 @@ void StraightDrive_Init(STRAIGHT_DRIVE_MODE mode)
     s_startup_elapsed_s = 0.0f;
     s_integrated_phase_start_ms = 0U;
     s_integrated_phase_started = false;
-    s_integrated_initial_heading_deg = 0.0f;
+    s_imu_sample_ms = 0U;
+    s_imu_sample_count = 0U;
+    YawEstimator_Reset(&s_yaw_estimator);
     s_integrated_last_sample_ms = 0U;
     s_integrated_last_sample_count = 0U;
     StraightDrive_InitPid();
@@ -423,7 +433,7 @@ void StraightDrive_AdjustCommand(int8_t steps)
         s_output.startup_complete = false;
         s_startup_elapsed_s = 0.0f;
         s_integrated_phase_started = false;
-        s_integrated_initial_heading_deg = 0.0f;
+        YawEstimator_Reset(&s_yaw_estimator);
         s_integrated_last_sample_ms = 0U;
         s_integrated_last_sample_count = 0U;
         s_output.integrated_heading_deg = 0.0f;
@@ -440,7 +450,7 @@ void StraightDrive_ZeroCommand(void)
     s_output.startup_complete = false;
     s_startup_elapsed_s = 0.0f;
     s_integrated_phase_started = false;
-    s_integrated_initial_heading_deg = 0.0f;
+    YawEstimator_Reset(&s_yaw_estimator);
     s_integrated_last_sample_ms = 0U;
     s_integrated_last_sample_count = 0U;
     s_output.integrated_heading_deg = 0.0f;

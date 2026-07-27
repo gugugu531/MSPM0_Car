@@ -11,8 +11,10 @@
 extern "C" {
 #endif
 
-/** 循迹测试：用 middleware/line_follow 完整闭环跑巡线，上板验证循迹行为。 */
+/** 循迹测试：使用 Yahboom 8 路模块观测，跑 line_follow 完整闭环。 */
 extern const APP_TASK_DESC APP_LINE_FOLLOW_TEST;
+/** 80% 直接起步：角速度启动后运行 Yahboom 循线外环 + 航向内环。 */
+extern const APP_TASK_DESC APP_LINE_GUIDED_TEST;
 
 #ifdef __cplusplus
 }

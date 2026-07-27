@@ -6,6 +6,7 @@
 
 #include "chassis.h"
 #include "filter/filter.h"
+#include "grayscale_sensor.h"
 #include "kinematics/kinematics.h"
 #include "wit_sdk.h"
 
@@ -90,9 +91,10 @@ BSP_STATUS LineFollow_Update(float dt_s){
     /* 只消费 JY61P 已发布的缓存；I2C 状态机由当前 app 任务负责周期 Poll。 */
     float omega_deg_s = 0.0f;
     if (line_follow_config.gyro_stab_enabled){
-        WIT_IMU_DATA imu;
-        if (WitGetData(&imu) == WIT_HAL_OK){
-            omega_deg_s = line_follow_config.gyro_z_sign * imu.gyro_deg_s.z;
+        JY61P_I2C_SAMPLE sample;
+        if (JY61P_I2C_GetSnapshot(&sample)){
+            omega_deg_s = line_follow_config.gyro_z_sign *
+                          sample.data.gyro_deg_s.z;
         }
     }
 
@@ -111,6 +113,82 @@ BSP_STATUS LineFollow_Update(float dt_s){
                            line_follow_output.right_duty);
 }
 
+BSP_STATUS LineFollow_UpdateDetectedMask(uint8_t detected_mask, float dt_s){
+    LineFollow_EnsureInitialized();
+
+    LINE_FOLLOW_INPUT input;
+    for (uint8_t i = 0U; i < LINE_FOLLOW_SENSOR_COUNT; i++){
+        input.level[i] = ((detected_mask & (1U << i)) != 0U) ? 0U : 1U;
+    }
+
+    float omega_deg_s = 0.0f;
+    if (line_follow_config.gyro_stab_enabled){
+        JY61P_I2C_SAMPLE sample;
+        if (JY61P_I2C_GetSnapshot(&sample)){
+            omega_deg_s = line_follow_config.gyro_z_sign *
+                          sample.data.gyro_deg_s.z;
+        }
+    }
+
+    BSP_STATUS status = LineFollow_Compute(&input, dt_s, omega_deg_s,
+                                           &line_follow_output);
+    if (status != BSP_STATUS_OK){
+        return status;
+    }
+    if (line_follow_output.line_lost){
+        return BSP_STATUS_NOT_READY;
+    }
+
+    return Chassis_SetDuty(line_follow_output.left_duty,
+                           line_follow_output.right_duty);
+}
+
+BSP_STATUS LineFollow_Observe(const LINE_FOLLOW_INPUT *input,
+                              float position_scale,
+                              LINE_FOLLOW_OBSERVATION *out){
+    if ((input == NULL) || (out == NULL)){
+        return BSP_STATUS_NULL;
+    }
+
+    float position_sum = 0.0f;
+    uint8_t black_count = 0U;
+    uint8_t level_mask = 0U;
+    uint8_t black_mask = 0U;
+
+    for (uint8_t i = 0U; i < LINE_FOLLOW_SENSOR_COUNT; i++){
+        if (input->level[i] != 0U){
+            level_mask |= (uint8_t)(1U << i);
+        } else if (LineFollow_IsSensorEnabled(i)){
+            black_mask |= (uint8_t)(1U << i);
+            position_sum += sensor_position[i];
+            black_count++;
+        }
+    }
+
+    out->level_mask = level_mask;
+    out->black_mask = black_mask;
+    out->black_count = black_count;
+    out->line_lost = (black_count == 0U);
+    out->error = out->line_lost
+                     ? 0.0f
+                     : (position_sum / (float)black_count) * position_scale;
+    return BSP_STATUS_OK;
+}
+
+BSP_STATUS LineFollow_ObserveDetectedMask(uint8_t detected_mask,
+                                          float position_scale,
+                                          LINE_FOLLOW_OBSERVATION *out){
+    if (out == NULL){
+        return BSP_STATUS_NULL;
+    }
+
+    LINE_FOLLOW_INPUT input;
+    for (uint8_t i = 0U; i < LINE_FOLLOW_SENSOR_COUNT; i++){
+        input.level[i] = ((detected_mask & (1U << i)) != 0U) ? 0U : 1U;
+    }
+    return LineFollow_Observe(&input, position_scale, out);
+}
+
 BSP_STATUS LineFollow_Compute(const LINE_FOLLOW_INPUT *input,
                               float dt_s,
                               float omega_deg_s,
@@ -121,23 +199,16 @@ BSP_STATUS LineFollow_Compute(const LINE_FOLLOW_INPUT *input,
 
     LineFollow_EnsureInitialized();
 
-    float position_sum = 0.0f;
-    uint8_t black_count = 0U;
-    uint8_t level_mask = 0U;
-
-    /* 实机语义：0=检测到黑线，1=未检测到黑线。 */
-    for (uint8_t i = 0U; i < LINE_FOLLOW_SENSOR_COUNT; i++){
-        if (input->level[i] != 0U){
-            level_mask |= (uint8_t)(1U << i);
-        } else if (LineFollow_IsSensorEnabled(i)){
-            position_sum += sensor_position[i];
-            black_count++;
-        }
+    LINE_FOLLOW_OBSERVATION observation;
+    BSP_STATUS observe_status = LineFollow_Observe(
+        input, line_follow_config.sensor_position_scale, &observation);
+    if (observe_status != BSP_STATUS_OK){
+        return observe_status;
     }
 
-    out->level_mask = level_mask;
-    out->black_count = black_count;
-    out->line_lost = (black_count == 0U);
+    out->level_mask = observation.level_mask;
+    out->black_count = observation.black_count;
+    out->line_lost = observation.line_lost;
 
     if (out->line_lost){
         out->error = 0.0f;
@@ -148,8 +219,7 @@ BSP_STATUS LineFollow_Compute(const LINE_FOLLOW_INPUT *input,
     }
 
     /* 多路命中时取横向位置均值：负值表示线偏左，正值表示线偏右。 */
-    float average_position = position_sum / (float)black_count;
-    out->error = average_position * line_follow_config.sensor_position_scale;
+    out->error = observation.error;
 
     /* 原始误差保存在 out；滤波和死区后的 control_error 进入控制律。 */
     line_follow_filtered_error = Filter_LowpassEma(line_follow_filtered_error,

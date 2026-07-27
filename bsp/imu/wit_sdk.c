@@ -630,6 +630,14 @@ int32_t WitGetData(WIT_IMU_DATA *out)
 {
     if(out == NULL)return WIT_HAL_INVAL;
 
+    /* 当前 I2C 路径优先返回 ISR 一次性发布的一致 angle + gyro 快照。 */
+    JY61P_I2C_SAMPLE sample;
+    if (JY61P_I2C_GetSnapshot(&sample)){
+        *out = sample.data;
+        return WIT_HAL_OK;
+    }
+
+    /* 尚无 I2C 样本时保留厂家串口兼容缓存读取路径。 */
     out->acc_g.x = (float)GyroscopeChannelData[0];
     out->acc_g.y = (float)GyroscopeChannelData[1];
     out->acc_g.z = (float)GyroscopeChannelData[2];
@@ -668,6 +676,10 @@ static volatile uint32_t s_jy61p_i2c_error_count;
 static volatile uint32_t s_jy61p_i2c_nack_count;
 static volatile uint32_t s_jy61p_i2c_sample_count;
 static volatile uint32_t s_jy61p_i2c_last_sample_ms;
+static volatile uint32_t s_jy61p_snapshot_sequence;
+static volatile JY61P_I2C_SAMPLE s_jy61p_snapshot;
+static WIT_ATTITUDE s_jy61p_staging_attitude;
+static WIT_VECTOR3F s_jy61p_staging_gyro;
 
 /*
  * 中断驱动异步读状态机: Poll 只 kick 一次"读angle→读gyro"链并立即返回,
@@ -746,17 +758,55 @@ static float JY61P_I2C_ParseAngle(int16_t raw)
 /* 把接收缓冲的 6 字节 angle 帧解码并发布到 GyroscopeChannelData[6..8]。 */
 static void JY61P_I2C_PublishAngle(const uint8_t *buf)
 {
-    GyroscopeChannelData[6] = (double)JY61P_I2C_ParseAngle(JY61P_I2C_ParseI16(&buf[0]));
-    GyroscopeChannelData[7] = (double)JY61P_I2C_ParseAngle(JY61P_I2C_ParseI16(&buf[2]));
-    GyroscopeChannelData[8] = (double)JY61P_I2C_ParseAngle(JY61P_I2C_ParseI16(&buf[4]));
+    s_jy61p_staging_attitude.roll =
+        JY61P_I2C_ParseAngle(JY61P_I2C_ParseI16(&buf[0]));
+    s_jy61p_staging_attitude.pitch =
+        JY61P_I2C_ParseAngle(JY61P_I2C_ParseI16(&buf[2]));
+    s_jy61p_staging_attitude.yaw =
+        JY61P_I2C_ParseAngle(JY61P_I2C_ParseI16(&buf[4]));
+    GyroscopeChannelData[6] = (double)s_jy61p_staging_attitude.roll;
+    GyroscopeChannelData[7] = (double)s_jy61p_staging_attitude.pitch;
+    GyroscopeChannelData[8] = (double)s_jy61p_staging_attitude.yaw;
 }
 
 /* 把接收缓冲的 6 字节 gyro 帧解码并发布到 GyroscopeChannelData[3..5] (deg/s)。 */
 static void JY61P_I2C_PublishGyro(const uint8_t *buf)
 {
-    GyroscopeChannelData[3] = (double)JY61P_I2C_ParseI16(&buf[0]) / 32768.0 * 2000.0;
-    GyroscopeChannelData[4] = (double)JY61P_I2C_ParseI16(&buf[2]) / 32768.0 * 2000.0;
-    GyroscopeChannelData[5] = (double)JY61P_I2C_ParseI16(&buf[4]) / 32768.0 * 2000.0;
+    s_jy61p_staging_gyro.x =
+        (float)JY61P_I2C_ParseI16(&buf[0]) / 32768.0f * 2000.0f;
+    s_jy61p_staging_gyro.y =
+        (float)JY61P_I2C_ParseI16(&buf[2]) / 32768.0f * 2000.0f;
+    s_jy61p_staging_gyro.z =
+        (float)JY61P_I2C_ParseI16(&buf[4]) / 32768.0f * 2000.0f;
+    GyroscopeChannelData[3] = (double)s_jy61p_staging_gyro.x;
+    GyroscopeChannelData[4] = (double)s_jy61p_staging_gyro.y;
+    GyroscopeChannelData[5] = (double)s_jy61p_staging_gyro.z;
+}
+
+/** angle 与 gyro 都完成后，在 ISR 内一次性发布一致快照。 */
+static void JY61P_I2C_PublishSnapshot(void)
+{
+    uint32_t timestamp_ms = BSP_Time_GetMs();
+    uint32_t sample_count = s_jy61p_i2c_sample_count + 1U;
+
+    s_jy61p_snapshot_sequence++;  /* 奇数表示写入中。 */
+    __DMB();
+    s_jy61p_snapshot.data.acc_g.x = 0.0f;
+    s_jy61p_snapshot.data.acc_g.y = 0.0f;
+    s_jy61p_snapshot.data.acc_g.z = 0.0f;
+    s_jy61p_snapshot.data.gyro_deg_s.x = s_jy61p_staging_gyro.x;
+    s_jy61p_snapshot.data.gyro_deg_s.y = s_jy61p_staging_gyro.y;
+    s_jy61p_snapshot.data.gyro_deg_s.z = s_jy61p_staging_gyro.z;
+    s_jy61p_snapshot.data.attitude_deg.roll = s_jy61p_staging_attitude.roll;
+    s_jy61p_snapshot.data.attitude_deg.pitch = s_jy61p_staging_attitude.pitch;
+    s_jy61p_snapshot.data.attitude_deg.yaw = s_jy61p_staging_attitude.yaw;
+    s_jy61p_snapshot.data.temperature_c = 0.0f;
+    s_jy61p_snapshot.sample_count = sample_count;
+    s_jy61p_snapshot.timestamp_ms = timestamp_ms;
+    s_jy61p_i2c_sample_count = sample_count;
+    s_jy61p_i2c_last_sample_ms = timestamp_ms;
+    __DMB();
+    s_jy61p_snapshot_sequence++;  /* 偶数表示完整快照可读。 */
 }
 
 /* 挂起标志: 与 MPU6050 共用 I2C0 时, 测试期挂起 JY61P (停轮询 + 关 I2C0 NVIC),
@@ -778,6 +828,13 @@ void JY61P_I2C_SetSuspended(bool suspend)
     }
 }
 
+bool JY61P_I2C_IsIdle(void)
+{
+    return (s_jy61p_state == JY61P_I2C_IDLE) &&
+           ((DL_I2C_getControllerStatus(JY61P_I2C_INST) &
+             DL_I2C_CONTROLLER_STATUS_IDLE) != 0U);
+}
+
 void JY61P_I2C_Init(void)
 {
     s_jy61p_i2c_poll_count  = 0U;
@@ -785,6 +842,10 @@ void JY61P_I2C_Init(void)
     s_jy61p_i2c_nack_count  = 0U;
     s_jy61p_i2c_sample_count = 0U;
     s_jy61p_i2c_last_sample_ms = 0U;
+    s_jy61p_snapshot_sequence = 0U;
+    s_jy61p_snapshot = (JY61P_I2C_SAMPLE){0};
+    s_jy61p_staging_attitude = (WIT_ATTITUDE){0};
+    s_jy61p_staging_gyro = (WIT_VECTOR3F){0};
     s_jy61p_state           = JY61P_I2C_IDLE;
     s_jy61p_suspended       = false;
     /* 校准已固化在 JY61P flash 中, 上电无需重复执行 */
@@ -858,8 +919,7 @@ void I2C0_IRQHandler(void)
             JY61P_I2C_StartRegRead(JY61P_I2C_REG_GYRO, JY61P_I2C_GYRO_TX);
         } else if (s_jy61p_state == JY61P_I2C_GYRO_RX){
             JY61P_I2C_PublishGyro(s_jy61p_rx);
-            s_jy61p_i2c_last_sample_ms = BSP_Time_GetMs();
-            s_jy61p_i2c_sample_count++;
+            JY61P_I2C_PublishSnapshot();
             s_jy61p_state = JY61P_I2C_IDLE;
         }
         break;
@@ -881,6 +941,43 @@ uint32_t JY61P_I2C_GetErrorCount(void)   { return s_jy61p_i2c_error_count; }
 uint32_t JY61P_I2C_GetNackCount(void)    { return s_jy61p_i2c_nack_count; }
 uint32_t JY61P_I2C_GetTimeoutCount(void) { return s_jy61p_i2c_error_count; }
 uint32_t JY61P_I2C_GetSampleCount(void)  { return s_jy61p_i2c_sample_count; }
+
+bool JY61P_I2C_GetSnapshot(JY61P_I2C_SAMPLE *out)
+{
+    if (out == NULL){
+        return false;
+    }
+
+    uint32_t sequence_before;
+    uint32_t sequence_after;
+    for (;;){
+        sequence_before = s_jy61p_snapshot_sequence;
+        if ((sequence_before & 1U) != 0U){
+            continue;
+        }
+        __DMB();
+        out->data.acc_g.x = s_jy61p_snapshot.data.acc_g.x;
+        out->data.acc_g.y = s_jy61p_snapshot.data.acc_g.y;
+        out->data.acc_g.z = s_jy61p_snapshot.data.acc_g.z;
+        out->data.gyro_deg_s.x = s_jy61p_snapshot.data.gyro_deg_s.x;
+        out->data.gyro_deg_s.y = s_jy61p_snapshot.data.gyro_deg_s.y;
+        out->data.gyro_deg_s.z = s_jy61p_snapshot.data.gyro_deg_s.z;
+        out->data.attitude_deg.roll = s_jy61p_snapshot.data.attitude_deg.roll;
+        out->data.attitude_deg.pitch = s_jy61p_snapshot.data.attitude_deg.pitch;
+        out->data.attitude_deg.yaw = s_jy61p_snapshot.data.attitude_deg.yaw;
+        out->data.temperature_c = s_jy61p_snapshot.data.temperature_c;
+        out->sample_count = s_jy61p_snapshot.sample_count;
+        out->timestamp_ms = s_jy61p_snapshot.timestamp_ms;
+        __DMB();
+        sequence_after = s_jy61p_snapshot_sequence;
+        if ((sequence_before == sequence_after) &&
+            ((sequence_after & 1U) == 0U)){
+            break;
+        }
+    }
+
+    return out->sample_count != 0U;
+}
 
 bool JY61P_I2C_IsDataFresh(uint32_t max_age_ms)
 {

@@ -187,7 +187,7 @@ armasm 语法，因此 MDK 6 有一条 `A1950W` 弃用警告；这是兼容性�
 
 编译通过后仍需上板验证（当前 app 框架，详见 `docs/app-design.md`）：
 
-- 上电后 OLED 显示 `Main Menu`，含 `Line Follow`、`Straight Test` 与
+- 上电后 OLED 显示 `Main Menu`，含 `Line Follow`、`Line Guided 80`、`Straight Test` 与
   `Device Check`；`Straight Test` 下有九种直行测试，所有模式到 3 m 后自动停车
 - 短按 UP/DOWN 移动选择、ENTER 进入、BACK 返回上级
 - `Device Check` 子菜单内 11 个自检（Gyro JY61P / Yaw A/B / Gyro MPU6050 / Grayscale /
@@ -201,6 +201,8 @@ armasm 语法，因此 MDK 6 有一条 `A1950W` 弃用警告；这是兼容性�
   断开传感器应显示 `READ FAIL` 且 `er` 递增
 - `Yahboom I2C` 显示按 X1→X8 排列且 `1=黑线` 的位图、原始 `0x30` 寄存器值及
   `ok/er`、`R/W/s` 诊断；断开模块应显示 `READ FAIL`
+- 两个循迹页均按 X1→X8 显示 `1=黑线`；`Line Guided 80` 应先显示 `START RATE`，约 1 s
+  后进入 `YAW HOLD`，外侧六路命中时进入 `LINE OUTER`
 - TB6612 自检短按发单次脉冲、左右轮编码器计数（`encL`/`encR`）随之变化
 - `Encoder` 自检整车前进时两轮 `spd` 应同为正（方向符号见 `bsp/motor/hall_encoder.h`）
 - `Speed PID` / `Duty Sweep` 须**抬起车轮**运行；可配合 `tools/speed_pid_viz.py` 看曲线

@@ -147,6 +147,8 @@ void JY61P_I2C_Init(void);
 void JY61P_I2C_Poll(void);
 /* 挂起/恢复 JY61P I2C0 轮询与中断 (与 MPU6050 共用总线时, 测试期让位)。 */
 void JY61P_I2C_SetSuspended(bool suspend);
+/** 异步事务和 I2C0 控制器都空闲时返回 true，供 app 协调共享总线。 */
+bool JY61P_I2C_IsIdle(void);
 uint32_t JY61P_I2C_GetPollCount(void);
 uint32_t JY61P_I2C_GetErrorCount(void);
 uint32_t JY61P_I2C_GetNackCount(void);
@@ -174,6 +176,16 @@ typedef struct {
     WIT_ATTITUDE attitude_deg;
     float temperature_c;
 } WIT_IMU_DATA;
+
+/** I2C ISR 完整发布的一致 angle + gyro 样本及其元数据。 */
+typedef struct {
+    WIT_IMU_DATA data;
+    uint32_t sample_count;
+    uint32_t timestamp_ms;
+} JY61P_I2C_SAMPLE;
+
+/** 原子读取最近完整 I2C 样本；尚无完整样本时返回 false。 */
+bool JY61P_I2C_GetSnapshot(JY61P_I2C_SAMPLE *out);
 
 int32_t WitGetAcc(WIT_VECTOR3F *out);
 int32_t WitGetGyro(WIT_VECTOR3F *out);
