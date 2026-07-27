@@ -48,8 +48,8 @@ app ─► middleware ─► bsp
 中断入口按"谁拥有该外设/职责，谁定义 ISR"划分，`middleware` 不做中断转发：
 
 - **BSP 驱动自持其专属外设中断**：
-  - `bsp/motor/hall_encoder.c` → `GROUP1_IRQHandler`（编码器 A 相 GPIO，分派 GPIOB 右轮 /
-    GPIOA 左轮）、`TIMER_0_INST_IRQHandler`（编码器采样定时器，20ms）
+  - `bsp/motor/hall_encoder.c` → `GROUP1_IRQHandler`（编码器 A 相 GPIOA，分派左右两轮）、
+    `TIMER_0_INST_IRQHandler`（编码器采样定时器，20ms）
   - `bsp/imu/wit_sdk.c` → `I2C0_IRQHandler`（JY61P I2C 中断驱动状态机）
   - `bsp/debug_uart/debug_uart.c` → `Debug_Ex_INST_IRQHandler`（UART1，TX 环形缓冲排空）
   - `bsp/bluetooth/bluetooth.c` → `BlueTooth_INST_IRQHandler`（UART0，RX 收入环形缓冲 + RX 错误恢复）

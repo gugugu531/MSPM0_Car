@@ -166,7 +166,7 @@ Chassis_SetDuty(-30.0f, 30.0f);
 
 返回指定轮估计距离，单位 m。
 
-> 编码器采样与 GPIO/定时器中断由 `bsp/motor/hall_encoder.c` 内的 `GROUP1_IRQHandler()`（分别服务右轮 GPIOB / 左轮 GPIOA A 相）/ `TIMER_0_INST_IRQHandler()` 直接处理，middleware 不再转发。
+> 编码器采样与 GPIO/定时器中断由 `bsp/motor/hall_encoder.c` 内的 `GROUP1_IRQHandler()`（服务 GPIOA 上的两轮 A 相）/ `TIMER_0_INST_IRQHandler()` 直接处理，middleware 不再转发。
 
 ### `void Chassis_ResetDistance(void)`
 

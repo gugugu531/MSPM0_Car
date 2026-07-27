@@ -97,9 +97,9 @@ void HallEncoder_ResetDistance(void){
 }
 
 /*
- * 编码器 A 相 GPIO 边沿中断入口 (INT_GROUP1, 聚合 GPIOA/GPIOB)。
- * 右轮 A 相在 GPIOB、左轮 A 相在 GPIOA: 分别读各自端口的使能中断状态, 命中则读对应 B 相
- * 电平做正交解码并各自清中断(见 HallEncoder_Decode)。
+ * 编码器 A 相 GPIO 边沿中断入口 (INT_GROUP1, GPIOA)。
+ * 分别读取两轮 A 相的使能中断状态, 命中则读对应 B 相电平做正交解码并各自清中断
+ * (见 HallEncoder_Decode)。
  */
 void GROUP1_IRQHandler(void){
     uint32_t r_status = DL_GPIO_getEnabledInterruptStatus(HALL_ENCODER_R_A_PORT,

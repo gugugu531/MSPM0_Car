@@ -122,10 +122,6 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
     DL_GPIO_enableOutput(GPIO_Motor_C0_PORT, GPIO_Motor_C0_PIN);
     DL_GPIO_initPeripheralOutputFunction(GPIO_Motor_C1_IOMUX,GPIO_Motor_C1_IOMUX_FUNC);
     DL_GPIO_enableOutput(GPIO_Motor_C1_PORT, GPIO_Motor_C1_PIN);
-    DL_GPIO_initPeripheralOutputFunction(GPIO_Motor_C2_IOMUX,GPIO_Motor_C2_IOMUX_FUNC);
-    DL_GPIO_enableOutput(GPIO_Motor_C2_PORT, GPIO_Motor_C2_PIN);
-    DL_GPIO_initPeripheralOutputFunction(GPIO_Motor_C3_IOMUX,GPIO_Motor_C3_IOMUX_FUNC);
-    DL_GPIO_enableOutput(GPIO_Motor_C3_PORT, GPIO_Motor_C3_PIN);
 
     DL_GPIO_initPeripheralInputFunctionFeatures(GPIO_OLED_IOMUX_SDA,
         GPIO_OLED_IOMUX_SDA_FUNC, DL_GPIO_INVERSION_DISABLE,
@@ -160,13 +156,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
     DL_GPIO_initPeripheralInputFunction(
         GPIO_Debug_Ex_IOMUX_RX, GPIO_Debug_Ex_IOMUX_RX_FUNC);
 
-    DL_GPIO_initDigitalOutput(Servo_PIN1_IOMUX);
-
     DL_GPIO_initDigitalOutput(Buzzer_PIN_IOMUX);
-
-    DL_GPIO_initDigitalInputFeatures(BlueTooth_State_State_PIN_IOMUX,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_NONE,
-		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
 
     DL_GPIO_initDigitalOutputFeatures(Motor_IO_AIN1_IOMUX,
 		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
@@ -260,18 +250,20 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 
     DL_GPIO_initDigitalOutput(LED_R_IOMUX);
 
-    DL_GPIO_clearPins(GPIOA, Servo_PIN1_PIN |
-		Motor_IO_AIN1_PIN |
+    DL_GPIO_clearPins(GPIOA, Motor_IO_AIN1_PIN |
 		SR04_Trig_PIN |
 		LED_G_PIN);
-    DL_GPIO_enableOutput(GPIOA, Servo_PIN1_PIN |
-		Motor_IO_AIN1_PIN |
+    DL_GPIO_enableOutput(GPIOA, Motor_IO_AIN1_PIN |
 		SR04_Trig_PIN |
 		LED_G_PIN);
-    DL_GPIO_setUpperPinsPolarity(GPIOA, DL_GPIO_PIN_22_EDGE_RISE);
-    DL_GPIO_setUpperPinsInputFilter(GPIOA, DL_GPIO_PIN_22_INPUT_FILTER_3_CYCLES);
-    DL_GPIO_clearInterruptStatus(GPIOA, Motor_IO_ENC_L_A_PIN);
-    DL_GPIO_enableInterrupt(GPIOA, Motor_IO_ENC_L_A_PIN);
+    DL_GPIO_setUpperPinsPolarity(GPIOA, DL_GPIO_PIN_28_EDGE_RISE |
+		DL_GPIO_PIN_22_EDGE_RISE);
+    DL_GPIO_setUpperPinsInputFilter(GPIOA, DL_GPIO_PIN_28_INPUT_FILTER_3_CYCLES |
+		DL_GPIO_PIN_22_INPUT_FILTER_3_CYCLES);
+    DL_GPIO_clearInterruptStatus(GPIOA, Motor_IO_ENC_R_A_PIN |
+		Motor_IO_ENC_L_A_PIN);
+    DL_GPIO_enableInterrupt(GPIOA, Motor_IO_ENC_R_A_PIN |
+		Motor_IO_ENC_L_A_PIN);
     DL_GPIO_clearPins(GPIOB, Buzzer_PIN_PIN |
 		Motor_IO_AIN2_PIN |
 		Motor_IO_BIN1_PIN |
@@ -284,10 +276,6 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 		Motor_IO_BIN2_PIN |
 		LED_Y_PIN |
 		LED_R_PIN);
-    DL_GPIO_setLowerPinsPolarity(GPIOB, DL_GPIO_PIN_2_EDGE_RISE);
-    DL_GPIO_setLowerPinsInputFilter(GPIOB, DL_GPIO_PIN_2_INPUT_FILTER_3_CYCLES);
-    DL_GPIO_clearInterruptStatus(GPIOB, Motor_IO_ENC_R_A_PIN);
-    DL_GPIO_enableInterrupt(GPIOB, Motor_IO_ENC_R_A_PIN);
 
 }
 
@@ -353,25 +341,11 @@ SYSCONFIG_WEAK void SYSCFG_DL_Motor_init(void) {
     DL_TimerA_setCaptCompUpdateMethod(Motor_INST, DL_TIMER_CC_UPDATE_METHOD_IMMEDIATE, DL_TIMERA_CAPTURE_COMPARE_1_INDEX);
     DL_TimerA_setCaptureCompareValue(Motor_INST, 500, DL_TIMER_CC_1_INDEX);
 
-    DL_TimerA_setCaptureCompareOutCtl(Motor_INST, DL_TIMER_CC_OCTL_INIT_VAL_LOW,
-		DL_TIMER_CC_OCTL_INV_OUT_DISABLED, DL_TIMER_CC_OCTL_SRC_FUNCVAL,
-		DL_TIMERA_CAPTURE_COMPARE_2_INDEX);
-
-    DL_TimerA_setCaptCompUpdateMethod(Motor_INST, DL_TIMER_CC_UPDATE_METHOD_IMMEDIATE, DL_TIMERA_CAPTURE_COMPARE_2_INDEX);
-    DL_TimerA_setCaptureCompareValue(Motor_INST, 0, DL_TIMER_CC_2_INDEX);
-
-    DL_TimerA_setCaptureCompareOutCtl(Motor_INST, DL_TIMER_CC_OCTL_INIT_VAL_LOW,
-		DL_TIMER_CC_OCTL_INV_OUT_DISABLED, DL_TIMER_CC_OCTL_SRC_FUNCVAL,
-		DL_TIMERA_CAPTURE_COMPARE_3_INDEX);
-
-    DL_TimerA_setCaptCompUpdateMethod(Motor_INST, DL_TIMER_CC_UPDATE_METHOD_IMMEDIATE, DL_TIMERA_CAPTURE_COMPARE_3_INDEX);
-    DL_TimerA_setCaptureCompareValue(Motor_INST, 0, DL_TIMER_CC_3_INDEX);
-
     DL_TimerA_enableClock(Motor_INST);
 
 
     
-    DL_TimerA_setCCPDirection(Motor_INST , DL_TIMER_CC0_OUTPUT | DL_TIMER_CC1_OUTPUT | DL_TIMER_CC2_OUTPUT | DL_TIMER_CC3_OUTPUT );
+    DL_TimerA_setCCPDirection(Motor_INST , DL_TIMER_CC0_OUTPUT | DL_TIMER_CC1_OUTPUT );
 
 
 }

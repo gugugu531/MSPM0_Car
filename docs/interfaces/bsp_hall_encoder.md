@@ -9,7 +9,7 @@
 ## 硬件映射宏
 
 ```c
-/* 右轮: A=ENC_R_A(PB2, 中断), B=ENC_R_B(PA2, 读向) */
+/* 右轮: A=ENC_R_A(PA28, 中断), B=ENC_R_B(PA2, 读向) */
 #define HALL_ENCODER_R_A_PORT Motor_IO_ENC_R_A_PORT
 #define HALL_ENCODER_R_A_PIN  Motor_IO_ENC_R_A_PIN
 #define HALL_ENCODER_R_B_PORT Motor_IO_ENC_R_B_PORT
@@ -21,7 +21,7 @@
 #define HALL_ENCODER_L_B_PIN  Motor_IO_ENC_L_B_PIN
 ```
 
-引脚在 SysConfig 中按轮命名为 `ENC_R_A/ENC_R_B/ENC_L_A/ENC_L_B`（原 `E1A/E1B/E2A/E2B` 语义不清，已改名）。**右轮 A 相在 GPIOB、左轮 A 相在 GPIOA**，两者中断都聚合到 `INT_GROUP1`（`GPIOA_INT_IRQn`）。`GROUP1_IRQHandler()` 会**分别读取两个端口**的使能中断状态、命中则读对应 B 相电平解码、并各自清除。
+引脚在 SysConfig 中按轮命名为 `ENC_R_A/ENC_R_B/ENC_L_A/ENC_L_B`（原 `E1A/E1B/E2A/E2B` 语义不清，已改名）。**两轮 A 相均在 GPIOA**，中断聚合到 `INT_GROUP1`（`GPIOA_INT_IRQn`）。`GROUP1_IRQHandler()` 会分别读取两轮 A 相的使能中断状态、命中则读对应 B 相电平解码、并各自清除。
 
 > 历史坑：旧单轮实现把右轮 B 相错接到 `PB22`（实为一个导航按键脚），导致 B 相恒为高、方向恒判「前进」——仅前进时距离/方向看似正确，倒车会判错。现已修正为右轮 B = `PA2`。
 

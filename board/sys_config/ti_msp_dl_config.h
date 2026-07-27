@@ -83,10 +83,10 @@ extern "C" {
 #define Motor_INST_INT_IRQN                                     (TIMA0_INT_IRQn)
 #define Motor_INST_CLK_FREQ                                              4000000
 /* GPIO defines for channel 0 */
-#define GPIO_Motor_C0_PORT                                                 GPIOA
-#define GPIO_Motor_C0_PIN                                         DL_GPIO_PIN_21
-#define GPIO_Motor_C0_IOMUX                                      (IOMUX_PINCM46)
-#define GPIO_Motor_C0_IOMUX_FUNC                     IOMUX_PINCM46_PF_TIMA0_CCP0
+#define GPIO_Motor_C0_PORT                                                 GPIOB
+#define GPIO_Motor_C0_PIN                                          DL_GPIO_PIN_8
+#define GPIO_Motor_C0_IOMUX                                      (IOMUX_PINCM25)
+#define GPIO_Motor_C0_IOMUX_FUNC                     IOMUX_PINCM25_PF_TIMA0_CCP0
 #define GPIO_Motor_C0_IDX                                    DL_TIMER_CC_0_INDEX
 /* GPIO defines for channel 1 */
 #define GPIO_Motor_C1_PORT                                                 GPIOA
@@ -94,18 +94,6 @@ extern "C" {
 #define GPIO_Motor_C1_IOMUX                                      (IOMUX_PINCM14)
 #define GPIO_Motor_C1_IOMUX_FUNC                     IOMUX_PINCM14_PF_TIMA0_CCP1
 #define GPIO_Motor_C1_IDX                                    DL_TIMER_CC_1_INDEX
-/* GPIO defines for channel 2 */
-#define GPIO_Motor_C2_PORT                                                 GPIOB
-#define GPIO_Motor_C2_PIN                                          DL_GPIO_PIN_4
-#define GPIO_Motor_C2_IOMUX                                      (IOMUX_PINCM17)
-#define GPIO_Motor_C2_IOMUX_FUNC                     IOMUX_PINCM17_PF_TIMA0_CCP2
-#define GPIO_Motor_C2_IDX                                    DL_TIMER_CC_2_INDEX
-/* GPIO defines for channel 3 */
-#define GPIO_Motor_C3_PORT                                                 GPIOA
-#define GPIO_Motor_C3_PIN                                         DL_GPIO_PIN_17
-#define GPIO_Motor_C3_IOMUX                                      (IOMUX_PINCM39)
-#define GPIO_Motor_C3_IOMUX_FUNC                     IOMUX_PINCM39_PF_TIMA0_CCP3
-#define GPIO_Motor_C3_IDX                                    DL_TIMER_CC_3_INDEX
 
 
 
@@ -184,24 +172,12 @@ extern "C" {
 
 
 
-/* Port definition for Pin Group Servo */
-#define Servo_PORT                                                       (GPIOA)
-
-/* Defines for PIN1: GPIOA.28 with pinCMx 3 on package pin 35 */
-#define Servo_PIN1_PIN                                          (DL_GPIO_PIN_28)
-#define Servo_PIN1_IOMUX                                          (IOMUX_PINCM3)
 /* Port definition for Pin Group Buzzer */
 #define Buzzer_PORT                                                      (GPIOB)
 
 /* Defines for PIN: GPIOB.5 with pinCMx 18 on package pin 53 */
 #define Buzzer_PIN_PIN                                           (DL_GPIO_PIN_5)
 #define Buzzer_PIN_IOMUX                                         (IOMUX_PINCM18)
-/* Port definition for Pin Group BlueTooth_State */
-#define BlueTooth_State_PORT                                             (GPIOB)
-
-/* Defines for State_PIN: GPIOB.10 with pinCMx 27 on package pin 62 */
-#define BlueTooth_State_State_PIN_PIN                           (DL_GPIO_PIN_10)
-#define BlueTooth_State_State_PIN_IOMUX                          (IOMUX_PINCM27)
 /* Defines for AIN1: GPIOA.16 with pinCMx 38 on package pin 9 */
 #define Motor_IO_AIN1_PORT                                               (GPIOA)
 #define Motor_IO_AIN1_PIN                                       (DL_GPIO_PIN_16)
@@ -218,19 +194,16 @@ extern "C" {
 #define Motor_IO_BIN2_PORT                                               (GPIOB)
 #define Motor_IO_BIN2_PIN                                       (DL_GPIO_PIN_19)
 #define Motor_IO_BIN2_IOMUX                                      (IOMUX_PINCM45)
-/* Defines for ENC_R_A: GPIOB.2 with pinCMx 15 on package pin 50 */
-#define Motor_IO_ENC_R_A_PORT                                            (GPIOB)
-// pins affected by this interrupt request:["ENC_R_A"]
-#define Motor_IO_GPIOB_INT_IRQN                                 (GPIOB_INT_IRQn)
-#define Motor_IO_GPIOB_INT_IIDX                 (DL_INTERRUPT_GROUP1_IIDX_GPIOB)
-#define Motor_IO_ENC_R_A_IIDX                                (DL_GPIO_IIDX_DIO2)
-#define Motor_IO_ENC_R_A_PIN                                     (DL_GPIO_PIN_2)
-#define Motor_IO_ENC_R_A_IOMUX                                   (IOMUX_PINCM15)
+/* Defines for ENC_R_A: GPIOA.28 with pinCMx 3 on package pin 35 */
+#define Motor_IO_ENC_R_A_PORT                                            (GPIOA)
+// pins affected by this interrupt request:["ENC_R_A","ENC_L_A"]
+#define Motor_IO_INT_IRQN                                       (GPIOA_INT_IRQn)
+#define Motor_IO_INT_IIDX                       (DL_INTERRUPT_GROUP1_IIDX_GPIOA)
+#define Motor_IO_ENC_R_A_IIDX                               (DL_GPIO_IIDX_DIO28)
+#define Motor_IO_ENC_R_A_PIN                                    (DL_GPIO_PIN_28)
+#define Motor_IO_ENC_R_A_IOMUX                                    (IOMUX_PINCM3)
 /* Defines for ENC_L_A: GPIOA.22 with pinCMx 47 on package pin 18 */
 #define Motor_IO_ENC_L_A_PORT                                            (GPIOA)
-// pins affected by this interrupt request:["ENC_L_A"]
-#define Motor_IO_GPIOA_INT_IRQN                                 (GPIOA_INT_IRQn)
-#define Motor_IO_GPIOA_INT_IIDX                 (DL_INTERRUPT_GROUP1_IIDX_GPIOA)
 #define Motor_IO_ENC_L_A_IIDX                               (DL_GPIO_IIDX_DIO22)
 #define Motor_IO_ENC_L_A_PIN                                    (DL_GPIO_PIN_22)
 #define Motor_IO_ENC_L_A_IOMUX                                   (IOMUX_PINCM47)
@@ -266,10 +239,10 @@ extern "C" {
 #define Tracking_Tracking_2_PORT                                         (GPIOB)
 #define Tracking_Tracking_2_PIN                                  (DL_GPIO_PIN_7)
 #define Tracking_Tracking_2_IOMUX                                (IOMUX_PINCM24)
-/* Defines for Tracking_3: GPIOB.8 with pinCMx 25 on package pin 60 */
+/* Defines for Tracking_3: GPIOB.10 with pinCMx 27 on package pin 62 */
 #define Tracking_Tracking_3_PORT                                         (GPIOB)
-#define Tracking_Tracking_3_PIN                                  (DL_GPIO_PIN_8)
-#define Tracking_Tracking_3_IOMUX                                (IOMUX_PINCM25)
+#define Tracking_Tracking_3_PIN                                 (DL_GPIO_PIN_10)
+#define Tracking_Tracking_3_IOMUX                                (IOMUX_PINCM27)
 /* Defines for Tracking_4: GPIOB.9 with pinCMx 26 on package pin 61 */
 #define Tracking_Tracking_4_PORT                                         (GPIOB)
 #define Tracking_Tracking_4_PIN                                  (DL_GPIO_PIN_9)
@@ -299,10 +272,10 @@ extern "C" {
 /* Defines for Echo: GPIOA.26 with pinCMx 59 on package pin 30 */
 #define SR04_Echo_PIN                                           (DL_GPIO_PIN_26)
 #define SR04_Echo_IOMUX                                          (IOMUX_PINCM59)
-/* Defines for G: GPIOA.31 with pinCMx 6 on package pin 39 */
+/* Defines for G: GPIOA.23 with pinCMx 53 on package pin 24 */
 #define LED_G_PORT                                                       (GPIOA)
-#define LED_G_PIN                                               (DL_GPIO_PIN_31)
-#define LED_G_IOMUX                                               (IOMUX_PINCM6)
+#define LED_G_PIN                                               (DL_GPIO_PIN_23)
+#define LED_G_IOMUX                                              (IOMUX_PINCM53)
 /* Defines for Y: GPIOB.27 with pinCMx 58 on package pin 29 */
 #define LED_Y_PORT                                                       (GPIOB)
 #define LED_Y_PIN                                               (DL_GPIO_PIN_27)

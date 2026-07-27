@@ -24,9 +24,9 @@ typedef enum {
 
 /*
  * 引脚映射(SysConfig 生成板级名)。每轮方案: A 相上升沿中断计数 + 读 B 相电平定方向。
- *   右轮: A=ENC_R_A(PB2, 中断), B=ENC_R_B(PA2, 读向);
+ *   右轮: A=ENC_R_A(PA28, 中断), B=ENC_R_B(PA2, 读向);
  *   左轮: A=ENC_L_A(PA22, 中断), B=ENC_L_B(PA25, 读向)。
- * 右轮 A 相在 GPIOB、左轮 A 相在 GPIOA, 两者中断均聚合到 INT_GROUP1(GPIOA_INT_IRQn)。
+ * 两轮 A 相均在 GPIOA, 中断聚合到 INT_GROUP1(GPIOA_INT_IRQn)。
  */
 #define HALL_ENCODER_R_A_PORT           Motor_IO_ENC_R_A_PORT
 #define HALL_ENCODER_R_A_PIN            Motor_IO_ENC_R_A_PIN
