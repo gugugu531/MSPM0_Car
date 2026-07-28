@@ -69,6 +69,7 @@ static const MENU_NODE turn_test_menu = {
 static const MENU_ITEM root_items[] = {
     { .name = "Line Follow",   .kind = MENU_ENTRY_TASK,    .u.task = &APP_LINE_FOLLOW_TEST },
     { .name = "Line Guided 80", .kind = MENU_ENTRY_TASK,   .u.task = &APP_LINE_GUIDED_TEST },
+    { .name = "Vision Red",    .kind = MENU_ENTRY_TASK,   .u.task = &APP_VISION_LINE_TEST },
     { .name = "Straight Test", .kind = MENU_ENTRY_SUBMENU, .u.submenu = &straight_test_menu },
     { .name = "Turn Test",     .kind = MENU_ENTRY_SUBMENU, .u.submenu = &turn_test_menu },
     { .name = "Device Check",  .kind = MENU_ENTRY_SUBMENU, .u.submenu = &device_check_menu },

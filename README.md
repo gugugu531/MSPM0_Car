@@ -3,10 +3,13 @@
 基于 `TI MSPM0G3507` 的分层车载固件工程。
 
 > **当前状态**：原 2025E 二维云台/瞄准子系统已整体移除；`app` 已重建为菜单驱动的裸机
-> 协作式调度框架。当前可从 OLED 菜单运行 Yahboom 八路循迹测试、80% 航向循迹实验、
+> 协作式调度框架。当前可从 OLED 菜单运行 Yahboom 八路循迹测试、80% 航向循迹实验、K230 红线视觉循迹、
 > 九种直行控制/启动实验，
 > 以及 JY61P、MPU6050、GPIO/感为/Yahboom 三种灰度传感器、TB6612、双轮编码器、
 > 速度 PID、占空比扫描和蓝牙串口等设备检查任务。
+>
+> **视觉循迹状态**：K230 红线识别、LCD/Preview 和约 90 FPS 板端运行已验证，但尚未安装到车上进行
+> 整车循迹实测；K230 控制 UART 仍关闭，MSPM0 控制增益均为待整车标定的初始值。
 > 现阶段重点是底盘测速/速度闭环整定与各外设上板验证。
 
 ## 硬件构成
@@ -21,6 +24,7 @@
 | 循迹 | 8 路灰度传感器 | GPIO | `bsp/grayscale_sensor` |
 | 循迹 | 感为 8 路灰度传感器 | I2C0（与两种 IMU 共总线） | `bsp/ganv_gray` |
 | 循迹 | Yahboom 8 路循线模块 | I2C0（地址 `0x12`，与两种 IMU/感为共总线） | `bsp/yahboom_track` |
+| 视觉循迹 | K230（只识别红线） | UART1 115200 RX（板端当前未启用） | `k230/vision_red_line_follow.py` + `middleware/vision_line_drive` |
 | 人机 | OLED + 独立按键 | I2C1 / GPIO | `bsp/oled`, `bsp/key` |
 | 通信 | 蓝牙 / 调试遥测 | UART0 9600 / UART1 115200 | `bsp/bluetooth`, `bsp/debug_uart` |
 
@@ -160,6 +164,7 @@ Pop-Location
 |---|---|
 | `Line Follow` | Yahboom 八路循线外环与角速度内环测试 |
 | `Line Guided 80` | 80% 直接起步，角速度启动后切换为循线外环 + 航向内环 |
+| `Vision Red` | K230 红线位置/方向融合循迹；1 s 角速度起步，稳定阶段持续视觉控制 |
 | `Straight Test` | 4 种基础直行控制与 5 种斜坡/启动阶段切换实验 |
 | `Turn Test` | 80% 与满速两种 Int->Yaw 转向：直行 2 m，内轮减速并抱死左转 90°，新航向直行 1 m |
 | `Device Check` | JY61P、Yaw A/B、MPU6050、三种灰度、TB6612、编码器、速度 PID、占空比扫描和蓝牙检查 |
@@ -224,3 +229,6 @@ python tools/check_keil_project_sync.py
   - MPU6050：[`bsp_mpu6050.md`](docs/interfaces/bsp_mpu6050.md)
   - CY-Z 串口陀螺仪：[`bsp_cy_z.md`](docs/interfaces/bsp_cy_z.md)
 - 当前待办和上板风险：[`docs/todo.md`](docs/todo.md)
+- K230 v1.8 固件更新、VS Code CanMV 扩展和 MCP/Preview 连接流程：
+  [`docs/k230-development.md`](docs/k230-development.md)
+- K230 红线识别、阈值/安装标定、串口协议与控制：[`docs/vision-red-line-follow.md`](docs/vision-red-line-follow.md)

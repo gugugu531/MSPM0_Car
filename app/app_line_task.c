@@ -2,13 +2,15 @@
  * @file  app_line_task.c
  * @brief 循迹测试任务实现。
  *
- * 用 Yahboom 8 路循线模块提供黑线观测，再由 line_follow / line_guided_drive
- * 完成闭环。Yahboom 与 JY61P 共用 I2C0，本任务只在 JY61P 异步事务空闲时切换总线所有权。
+ * Yahboom 任务由 line_follow / line_guided_drive 完成闭环；K230 红线任务由
+ * vision_line_drive 完成 UART 解析和连续视觉控制。Yahboom 与 JY61P 共用 I2C0，前两项任务
+ * 只在 JY61P 异步事务空闲时切换总线所有权。
  */
 #include "app_line_task.h"
 
 #include "line_follow.h"
 #include "line_guided_drive.h"
+#include "middleware/vision_line_drive/vision_line_drive.h"
 #include "chassis.h"
 #include "wit_sdk.h"
 
@@ -200,4 +202,81 @@ static APP_TASK_STATUS LineGuidedTest_Tick(float dt){
 
 const APP_TASK_DESC APP_LINE_GUIDED_TEST = {
     "Line Guided 80", LineGuidedTest_Enter, LineGuidedTest_Tick, NULL
+};
+
+/* ========================= K230 红线视觉循迹 ========================= */
+
+static void VisionLineTest_Enter(void){
+    JY61P_I2C_Init();
+    VisionLineDrive_Init();
+    lt_last_ui = 0U;
+}
+
+static const char *VisionLine_PhaseText(VISION_LINE_PHASE phase){
+    switch (phase){
+        case VISION_LINE_PHASE_WAIT_IMU:     return "WAIT IMU";
+        case VISION_LINE_PHASE_STARTUP_RATE: return "START RATE";
+        case VISION_LINE_PHASE_TRACK:        return "VISION TRACK";
+        default:                             return "UNKNOWN";
+    }
+}
+
+static APP_TASK_STATUS VisionLineTest_Tick(float dt){
+    JY61P_I2C_Poll();
+    if (VisionLineDrive_Update(dt) != BSP_STATUS_OK){
+        return APP_TASK_FAULT;
+    }
+
+    uint32_t now = BSP_Time_GetMs();
+    if ((now - lt_last_ui) < LT_UI_PERIOD_MS){
+        return APP_TASK_RUNNING;
+    }
+    lt_last_ui = now;
+
+    VISION_LINE_OUTPUT out = VisionLineDrive_GetOutput();
+    char l1[24];
+    char l2[28];
+    char l3[28];
+    char l4[28];
+    char l5[24];
+    uint8_t n;
+
+    n = LtPutStr(l1, out.track_valid && out.frame_fresh ? "VERT RED OK" : "VERT RED LOST");
+    l1[n] = '\0';
+
+    n = LtPutStr(l2, "p/h ");
+    AppFmt_Fixed(&l2[n], out.position_error, 3U);
+    while (l2[n] != '\0'){ n++; }
+    l2[n++] = '/';
+    AppFmt_Fixed(&l2[n], out.heading_error_deg, 1U);
+
+    n = LtPutStr(l3, "om/gz ");
+    AppFmt_Fixed(&l3[n], out.omega_reference_deg_s, 1U);
+    while (l3[n] != '\0'){ n++; }
+    l3[n++] = '/';
+    AppFmt_Fixed(&l3[n], out.gyro_z_deg_s, 1U);
+
+    n = LtPutStr(l4, "q/age ");
+    AppFmt_I32(&l4[n], (int32_t)out.confidence);
+    while (l4[n] != '\0'){ n++; }
+    l4[n++] = '/';
+    AppFmt_I32(&l4[n], out.frame_fresh ? (int32_t)out.frame_age_ms : -1);
+
+    n = LtPutStr(l5, "d ");
+    AppFmt_Fixed(&l5[n], out.left_duty_percent, 0U);
+    while (l5[n] != '\0'){ n++; }
+    l5[n++] = '/';
+    AppFmt_Fixed(&l5[n], out.right_duty_percent, 0U);
+
+    Ui_RenderLines("Vision Red", l1, l2, l3, l4, l5,
+                   VisionLine_PhaseText(out.phase));
+    return APP_TASK_RUNNING;
+}
+
+static void VisionLineTest_Exit(void){
+    VisionLineDrive_Stop();
+}
+
+const APP_TASK_DESC APP_VISION_LINE_TEST = {
+    "Vision Red", VisionLineTest_Enter, VisionLineTest_Tick, VisionLineTest_Exit
 };

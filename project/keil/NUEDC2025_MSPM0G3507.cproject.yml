@@ -16,6 +16,7 @@ project:
         - ../../middleware/fault
         - ../../middleware/line_follow
         - ../../middleware/line_guided_drive
+        - ../../middleware/vision_line_drive
         - ../../middleware/straight_drive
         - ../../middleware/turn_drive
         - ../../middleware/ui
@@ -116,6 +117,7 @@ project:
         - file: ../../middleware/fault/system_fault.c
         - file: ../../middleware/line_follow/line_follow.c
         - file: ../../middleware/line_guided_drive/line_guided_drive.c
+        - file: ../../middleware/vision_line_drive/vision_line_drive.c
         - file: ../../middleware/straight_drive/straight_drive.c
         - file: ../../middleware/turn_drive/turn_drive.c
         - file: ../../middleware/ui/ui.c

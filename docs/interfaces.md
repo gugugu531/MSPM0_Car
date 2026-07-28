@@ -35,6 +35,8 @@
   `docs/interfaces/middleware_line_follow.md`。
 - `line_guided_drive.h`：80% 直接起步的启动角速度控制、Yahboom 外环与航向内环，详细说明见
   `docs/interfaces/middleware_line_guided_drive.md`。
+- `vision_line_drive.h`：K230 红线帧解析、角速度起步和位置/方向连续融合循迹，详细说明见
+  `docs/interfaces/middleware_vision_line_drive.md`。
 - `straight_drive.h`：九种直行模式的指令、PID、启动阶段切换、姿态反馈和底盘输出，详细说明见
   `docs/interfaces/middleware_straight_drive.md`。
 - `ui.h`：轻量 OLED UI 渲染层，详细说明见 `docs/interfaces/middleware_ui.md`。
@@ -56,7 +58,7 @@
 - `grayscale_sensor.h`：8 路光敏灰度传感器数字量接口（GPIO），详细说明见 `docs/interfaces/bsp_grayscale_sensor.md`。
 - `ganv_gray.h`：感为 8 路灰度传感器 I2C 驱动（I2C0，默认地址 `0x4F`），详细说明见 `docs/interfaces/bsp_ganv_gray.md`。
 - `yahboom_track.h`：Yahboom 8 路循线模块 I2C 驱动（I2C0，地址 `0x12`），详细说明见 `docs/interfaces/bsp_yahboom_track.md`。
-- `debug_uart.h`：调试串口（Debug_Ex/UART1，115200）**非阻塞发送**——环形缓冲 + TX 中断排空，供遥测输出，无接收。
+- `debug_uart.h`：调试串口（Debug_Ex/UART1，115200）非阻塞收发——TX 遥测环形缓冲与 RX K230 视觉字节流。
 - `bluetooth.h`：蓝牙串口（BlueTooth/UART0，9600 8N1）收发——RX 中断 + 环形缓冲，发送直接写 TX FIFO。
 
 ### 三种灰度接口的位序与极性

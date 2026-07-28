@@ -506,6 +506,11 @@
               <FilePath>..\..\middleware\line_guided_drive\line_guided_drive.c</FilePath>
             </File>
             <File>
+              <FileName>vision_line_drive.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\middleware\vision_line_drive\vision_line_drive.c</FilePath>
+            </File>
+            <File>
               <FileName>straight_drive.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\middleware\straight_drive\straight_drive.c</FilePath>

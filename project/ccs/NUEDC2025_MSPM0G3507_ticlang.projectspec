@@ -85,6 +85,8 @@
     <file path="${REPO_ROOT}/middleware/line_follow/line_follow.h" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/middleware/line_guided_drive/line_guided_drive.c" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/middleware/line_guided_drive/line_guided_drive.h" openOnCreation="false" excludeFromBuild="false" action="link" />
+    <file path="${REPO_ROOT}/middleware/vision_line_drive/vision_line_drive.c" openOnCreation="false" excludeFromBuild="false" action="link" />
+    <file path="${REPO_ROOT}/middleware/vision_line_drive/vision_line_drive.h" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/middleware/straight_drive/straight_drive.c" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/middleware/straight_drive/straight_drive.h" openOnCreation="false" excludeFromBuild="false" action="link" />
     <file path="${REPO_ROOT}/middleware/turn_drive/turn_drive.c" openOnCreation="false" excludeFromBuild="false" action="link" />

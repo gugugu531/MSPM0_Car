@@ -157,6 +157,54 @@ def write_file(port: str, baudrate: int, local: Path, remote: str) -> int:
     return 0
 
 
+def print_file(port: str, baudrate: int, remote: str) -> int:
+    """Print a remote text file without modifying the K230 filesystem."""
+    with connect(port, baudrate, 0.2) as ser:
+        enter_raw_repl(ser)
+        try:
+            output = raw_exec(
+                ser,
+                f"with open({remote!r}, 'r') as source:\n"
+                "    while True:\n"
+                "        chunk = source.read(1024)\n"
+                "        if not chunk:\n"
+                "            break\n"
+                "        print(chunk, end='')",
+                timeout_s=15.0,
+            )
+            if output:
+                sys.stdout.buffer.write(output)
+        finally:
+            exit_raw_repl(ser)
+    return 0
+
+
+def copy_file(port: str, baudrate: int, source: str, destination: str) -> int:
+    """Copy a file on the K230 filesystem in bounded chunks."""
+    with connect(port, baudrate, 0.2) as ser:
+        enter_raw_repl(ser)
+        try:
+            output = raw_exec(
+                ser,
+                f"source = open({source!r}, 'rb')\n"
+                f"destination = open({destination!r}, 'wb')\n"
+                "while True:\n"
+                "    chunk = source.read(1024)\n"
+                "    if not chunk:\n"
+                "        break\n"
+                "    destination.write(chunk)\n"
+                "source.close()\n"
+                "destination.close()\n"
+                f"import os\nprint('copied', {destination!r}, os.stat({destination!r})[6])",
+                timeout_s=15.0,
+            )
+            if output:
+                sys.stdout.buffer.write(output)
+        finally:
+            exit_raw_repl(ser)
+    return 0
+
+
 def soft_reset(port: str, baudrate: int) -> int:
     with connect(port, baudrate, 0.2) as ser:
         ser.write(CTRL_C)
@@ -181,6 +229,13 @@ def build_parser() -> argparse.ArgumentParser:
     put.add_argument("local", type=Path)
     put.add_argument("remote", nargs="?", default="/sdcard/main.py")
 
+    cat = sub.add_parser("cat", help="Print a remote text file without changing it")
+    cat.add_argument("remote")
+
+    copy = sub.add_parser("copy", help="Copy a file within the device filesystem")
+    copy.add_argument("source")
+    copy.add_argument("destination")
+
     sub.add_parser("reset", help="Send Ctrl-D soft reset")
     return parser
 
@@ -200,6 +255,10 @@ def main(argv: list[str] | None = None) -> int:
             return run_script(args.port, args.baudrate, args.script)
         if args.command == "put":
             return write_file(args.port, args.baudrate, args.local, args.remote)
+        if args.command == "cat":
+            return print_file(args.port, args.baudrate, args.remote)
+        if args.command == "copy":
+            return copy_file(args.port, args.baudrate, args.source, args.destination)
         if args.command == "reset":
             return soft_reset(args.port, args.baudrate)
     except (OSError, serial.SerialException, K230ReplError) as exc:

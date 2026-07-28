@@ -68,6 +68,7 @@
 - `chassis/`：底盘组合服务（开环占空比 + 每轮速度闭环 PID）
 - `line_follow/`：八路黑线观测、巡线偏差计算、PID/陀螺修正和底盘输出
 - `line_guided_drive/`：80% 启动角速度阶段、Yahboom 外环和航向内环状态机
+- `vision_line_drive/`：K230 红线协议解析、角速度起步和位置/方向融合循迹
 - `straight_drive/`：九种直行模式的指令、启动阶段切换、姿态反馈、PID 与底盘输出
 - `ui/`：轻量 OLED UI 渲染层
 - `fault/`：系统故障处理服务

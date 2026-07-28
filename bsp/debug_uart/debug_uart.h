@@ -1,6 +1,6 @@
 /**
  * @file  debug_uart.h
- * @brief 非阻塞 debug 串口 (Debug_Ex/UART1) 输出: 环形缓冲 + TX 中断排空。
+ * @brief Debug_Ex/UART1 非阻塞收发：TX 遥测 + RX 视觉帧字节流。
  *
  * 控制环只把字节写入环形缓冲即返回 (缓冲满则丢弃并计数, 绝不忙等), TX 由 Debug_Ex
  * (UART1) TX 中断慢慢排空, 对控制链路零阻塞。生产者(线程) 写 head, 消费者(TX ISR)
@@ -17,7 +17,7 @@ extern "C" {
 
 /**
  * @brief 初始化 debug 串口输出 (设置 TX FIFO 阈值, 关闭 TX 中断待用)。
- * @note  须在 SYSCFG_DL_init() 之后调用; Debug_Ex 的 RX 中断由 main 另行配置。
+ * @note 须在 SYSCFG_DL_init() 之后调用；本模块拥有 UART1 ISR 的 TX/RX 分支。
  */
 void DebugUart_Init(void);
 
@@ -45,6 +45,15 @@ void DebugUart_TxIsr(void);
  * @brief 获取因缓冲满被丢弃的累计字节数 (诊断输出是否过载)。
  */
 uint32_t DebugUart_GetDroppedBytes(void);
+
+/** 非阻塞读取 RX 字节；返回实际读取长度。 */
+uint16_t DebugUart_Read(uint8_t *data, uint16_t max_len);
+/** UART1 自初始化后累计接收字节数。 */
+uint32_t DebugUart_GetRxBytes(void);
+/** RX 环形缓冲满时累计丢弃字节数。 */
+uint32_t DebugUart_GetRxDroppedBytes(void);
+/** UART overrun/break/framing/parity 错误累计次数。 */
+uint32_t DebugUart_GetRxErrors(void);
 
 #ifdef __cplusplus
 }

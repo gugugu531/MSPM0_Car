@@ -15,6 +15,13 @@
 /* TX 环形缓冲长度, 必须是 2 的幂 (用掩码回绕)。1KB @115200 约 90ms 缓冲。 */
 #define DEBUG_UART_TX_BUF_LEN 1024U
 #define DEBUG_UART_TX_MASK (DEBUG_UART_TX_BUF_LEN - 1U)
+#define DEBUG_UART_RX_BUF_LEN 256U
+#define DEBUG_UART_RX_MASK (DEBUG_UART_RX_BUF_LEN - 1U)
+#define DEBUG_UART_RX_ERROR_INTERRUPTS                 \
+    (DL_UART_MAIN_INTERRUPT_OVERRUN_ERROR |            \
+     DL_UART_MAIN_INTERRUPT_BREAK_ERROR |              \
+     DL_UART_MAIN_INTERRUPT_FRAMING_ERROR |            \
+     DL_UART_MAIN_INTERRUPT_PARITY_ERROR)
 
 /* 单条 Printf 格式化上限。当前 [STR] 直行遥测行约 140 字符，256 留有余量；
  * 115200 baud 下每拍 20ms 发一行仍低于线路持续吞吐上限。 */
@@ -24,17 +31,40 @@ static uint8_t tx_buf[DEBUG_UART_TX_BUF_LEN];
 static volatile uint16_t tx_head;   /* 生产者(线程) 写入位置 */
 static volatile uint16_t tx_tail;   /* 消费者(TX ISR) 读取位置 */
 static volatile uint32_t tx_dropped;   /* 缓冲满丢弃的字节数 */
+static uint8_t rx_buf[DEBUG_UART_RX_BUF_LEN];
+static volatile uint16_t rx_head;
+static volatile uint16_t rx_tail;
+static volatile uint32_t rx_bytes;
+static volatile uint32_t rx_dropped;
+static volatile uint32_t rx_errors;
+
+static void DebugUart_FlushRx(void){
+    while (!DL_UART_Main_isRXFIFOEmpty(DEBUG_UART_INST)){
+        (void)DL_UART_Main_receiveData(DEBUG_UART_INST);
+    }
+}
 
 void DebugUart_Init(void){
     tx_head = 0U;
     tx_tail = 0U;
     tx_dropped = 0U;
+    rx_head = 0U;
+    rx_tail = 0U;
+    rx_bytes = 0U;
+    rx_dropped = 0U;
+    rx_errors = 0U;
     /* TX FIFO 降到阈值即触发中断续传; 无数据时 TX 中断保持关闭 (见 DebugUart_Write)。 */
     DL_UART_Main_setTXFIFOThreshold(DEBUG_UART_INST, DL_UART_TX_FIFO_LEVEL_ONE_ENTRY);
     DL_UART_Main_disableInterrupt(DEBUG_UART_INST, DL_UART_MAIN_INTERRUPT_TX);
+    DL_UART_Main_setRXFIFOThreshold(DEBUG_UART_INST, DL_UART_RX_FIFO_LEVEL_ONE_ENTRY);
+    DebugUart_FlushRx();
+    DL_UART_Main_clearInterruptStatus(DEBUG_UART_INST,
+        DL_UART_MAIN_INTERRUPT_RX | DEBUG_UART_RX_ERROR_INTERRUPTS);
     /* 放开 UART 中断线; TX 中断本身按需在 Write/TxIsr 里动态开关。 */
     NVIC_ClearPendingIRQ(Debug_Ex_INST_INT_IRQN);
     NVIC_EnableIRQ(Debug_Ex_INST_INT_IRQN);
+    DL_UART_Main_enableInterrupt(DEBUG_UART_INST,
+        DL_UART_MAIN_INTERRUPT_RX | DEBUG_UART_RX_ERROR_INTERRUPTS);
 }
 
 void DebugUart_TxIsr(void){
@@ -103,14 +133,49 @@ uint32_t DebugUart_GetDroppedBytes(void){
     return tx_dropped;
 }
 
+uint16_t DebugUart_Read(uint8_t *data, uint16_t max_len){
+    uint16_t count = 0U;
+    if (data == NULL){
+        return 0U;
+    }
+    while ((count < max_len) && (rx_tail != rx_head)){
+        data[count++] = rx_buf[rx_tail];
+        rx_tail = (uint16_t)((rx_tail + 1U) & DEBUG_UART_RX_MASK);
+    }
+    return count;
+}
+
+uint32_t DebugUart_GetRxBytes(void){ return rx_bytes; }
+uint32_t DebugUart_GetRxDroppedBytes(void){ return rx_dropped; }
+uint32_t DebugUart_GetRxErrors(void){ return rx_errors; }
+
 /*
- * Debug 串口 (Debug_Ex/UART1) 中断入口。当前只处理 TX: FIFO 低于阈值时把环形缓冲续入 FIFO
- * (见 DebugUart_TxIsr), 缓冲空则由 TxIsr 关闭 TX 中断。RX 命令下行如需启用可在此加 RX 分支。
+ * Debug_Ex/UART1 ISR：TX 排空遥测环形缓冲；RX 搬运 K230 视觉帧原始字节。
  */
 void Debug_Ex_INST_IRQHandler(void){
     switch (DL_UART_Main_getPendingInterrupt(DEBUG_UART_INST)){
         case DL_UART_MAIN_IIDX_TX:
             DebugUart_TxIsr();
+            break;
+        case DL_UART_MAIN_IIDX_RX:
+            while (!DL_UART_Main_isRXFIFOEmpty(DEBUG_UART_INST)){
+                uint8_t byte = DL_UART_Main_receiveData(DEBUG_UART_INST);
+                uint16_t next = (uint16_t)((rx_head + 1U) & DEBUG_UART_RX_MASK);
+                if (next == rx_tail){
+                    rx_dropped++;
+                } else{
+                    rx_buf[rx_head] = byte;
+                    rx_head = next;
+                    rx_bytes++;
+                }
+            }
+            break;
+        case DL_UART_MAIN_IIDX_OVERRUN_ERROR:
+        case DL_UART_MAIN_IIDX_BREAK_ERROR:
+        case DL_UART_MAIN_IIDX_FRAMING_ERROR:
+        case DL_UART_MAIN_IIDX_PARITY_ERROR:
+            DebugUart_FlushRx();
+            rx_errors++;
             break;
         default:
             break;
