@@ -20,9 +20,8 @@ extern "C" {
 #define LINE_GUIDED_YAW_CORRECTION_DURATION_MS    500U
 /** JY61P 完整样本最大允许年龄。 */
 #define LINE_GUIDED_IMU_MAX_AGE_MS                60U
-/** 当前安装方向下的航向积分符号，与融合 yaw 采用同一正方向。 */
-#define LINE_GUIDED_INTEGRATION_GYRO_SIGN         (-1.0f)
-/** 当前安装方向下的融合 yaw 符号。 */
+/** 当前安装方向下的 JY61P 反馈符号，须分别上板验证。 */
+#define LINE_GUIDED_RATE_GYRO_SIGN                (1.0f)
 #define LINE_GUIDED_HEADING_YAW_SIGN              (-1.0f)
 /** Yahboom 中间 X4/X5（bit3/4）；只有其余通道命中才进入循线外环。 */
 #define LINE_GUIDED_CENTER_SENSOR_MASK            0x18U
@@ -63,7 +62,6 @@ typedef struct {
     float yaw_deg;
     float corrected_yaw_deg;
     float yaw_correction_deg;
-    /** 已转换到逻辑航向坐标系、仅供 A/B 积分的 gz。 */
     float gyro_z_deg_s;
     float integrated_heading_deg;
     float heading_reference_deg;

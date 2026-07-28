@@ -6,7 +6,9 @@
 
 ```c
 void YawEstimator_Reset(YAW_ESTIMATOR *estimator);
-void YawEstimator_Start(YAW_ESTIMATOR *estimator, float fused_heading_deg);
+void YawEstimator_Start(YAW_ESTIMATOR *estimator,
+                        float fused_heading_deg,
+                        float initial_gyro_z_deg_s);
 void YawEstimator_Integrate(YAW_ESTIMATOR *estimator,
                             float gyro_z_deg_s, float dt_s);
 float YawEstimator_GetIntegrated(const YAW_ESTIMATOR *estimator);
@@ -15,8 +17,9 @@ float YawEstimator_GetFusionOffset(const YAW_ESTIMATOR *estimator,
                                    float fused_heading_deg);
 ```
 
-- `Start(B0)` 建立 `A0=B0`。
-- `Integrate(gz, dt)` 更新并归一化 A 到 `[-180, 180)`。
+- `Start(B0, gz0)` 建立 `A0=B0`，并保存区间起点角速度 `gz0`。
+- `Integrate(gz1, dt)` 使用梯形公式 `A += (gz0 + gz1) / 2 * dt`，随后保存 `gz1`
+  作为下一积分区间起点，并将 A 归一化到 `[-180, 180)`。
 - `GetFusionOffset(B)` 返回 `shortest_angle(B-A)`。
 - 调用者决定何时冻结偏移以及如何构造参考角；core 不知道“启动”“循迹”等阶段。
 

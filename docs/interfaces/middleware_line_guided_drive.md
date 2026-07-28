@@ -17,7 +17,7 @@ WAIT_IMU → HEADING_HOLD ⇄ LINE_PID
 
 ## 控制规则
 
-1. 首个有效 IMU 样本到达后立即以 80% 基础占空比运动。起步后前 500 ms 按 IMU 样本时间戳积分 `gz`，以积分值与 JY61P yaw 的角度差更新 yaw 修正量；500 ms 后该修正量冻结。积分 `gz` 与融合 yaw 分别由 `LINE_GUIDED_INTEGRATION_GYRO_SIGN`、`LINE_GUIDED_HEADING_YAW_SIGN` 转到同一航向坐标系，当前安装方向下二者均为 `-1.0f`。
+1. 首个有效 IMU 样本到达后立即以 80% 基础占空比运动。起步后前 500 ms 按 IMU 样本时间戳积分 `gz`，以积分值与 JY61P yaw 的角度差更新 yaw 修正量；500 ms 后该修正量冻结。
 2. Yahboom 的 `bit0..7` 对应 `X1..X8`，置 1 表示黑线；中间两路 X4/X5 为位 3/4。
 3. 外侧六路掩码 `0xE7` 中任一路检测到黑线时，立即进入 `LINE_PID`。灰度质心误差经 EMA 后直接送入独立 PID，其输出直接作为左右轮占空比差速修正量；航向 PID 不参与该模式。
 4. 外侧六路均未检测到黑线时进入 `HEADING_HOLD`，并仅在切换瞬间捕获当前修正后 yaw 作为参考角；航向 PID 保持该角度。再次检测到外侧黑线后立即切回 `LINE_PID`。

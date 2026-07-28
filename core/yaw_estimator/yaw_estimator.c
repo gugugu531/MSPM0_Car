@@ -16,7 +16,9 @@ void YawEstimator_Reset(YAW_ESTIMATOR *estimator)
     *estimator = (YAW_ESTIMATOR){0};
 }
 
-void YawEstimator_Start(YAW_ESTIMATOR *estimator, float fused_heading_deg)
+void YawEstimator_Start(YAW_ESTIMATOR *estimator,
+                        float fused_heading_deg,
+                        float initial_gyro_z_deg_s)
 {
     if (estimator == NULL){
         return;
@@ -24,6 +26,7 @@ void YawEstimator_Start(YAW_ESTIMATOR *estimator, float fused_heading_deg)
     float heading = Kinematics_NormalizeAngleDeg(fused_heading_deg);
     estimator->initial_fused_deg = heading;
     estimator->integrated_deg = heading;
+    estimator->previous_gyro_z_deg_s = initial_gyro_z_deg_s;
     estimator->initialized = true;
 }
 
@@ -34,8 +37,11 @@ void YawEstimator_Integrate(YAW_ESTIMATOR *estimator,
     if ((estimator == NULL) || !estimator->initialized || (dt_s <= 0.0f)){
         return;
     }
+    float average_gyro_z_deg_s =
+        0.5f * (estimator->previous_gyro_z_deg_s + gyro_z_deg_s);
     estimator->integrated_deg = Kinematics_NormalizeAngleDeg(
-        estimator->integrated_deg + gyro_z_deg_s * dt_s);
+        estimator->integrated_deg + average_gyro_z_deg_s * dt_s);
+    estimator->previous_gyro_z_deg_s = gyro_z_deg_s;
 }
 
 float YawEstimator_GetIntegrated(const YAW_ESTIMATOR *estimator)

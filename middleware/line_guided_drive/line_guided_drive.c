@@ -76,7 +76,7 @@ static bool LineGuidedDrive_UpdateImu(JY61P_I2C_SAMPLE *sample)
     }
 
     s_output.gyro_z_deg_s =
-        LINE_GUIDED_INTEGRATION_GYRO_SIGN * sample->data.gyro_deg_s.z;
+        LINE_GUIDED_RATE_GYRO_SIGN * sample->data.gyro_deg_s.z;
     s_output.yaw_deg = Kinematics_NormalizeAngleDeg(
         LINE_GUIDED_HEADING_YAW_SIGN * sample->data.attitude_deg.yaw);
     s_output.corrected_yaw_deg = Kinematics_NormalizeAngleDeg(
@@ -88,7 +88,8 @@ static bool LineGuidedDrive_UpdateImu(JY61P_I2C_SAMPLE *sample)
 static void LineGuidedDrive_UpdateYawCorrection(const JY61P_I2C_SAMPLE *sample)
 {
     if (!s_yaw_correction_started){
-        YawEstimator_Start(&s_yaw_estimator, s_output.yaw_deg);
+        YawEstimator_Start(&s_yaw_estimator, s_output.yaw_deg,
+                           s_output.gyro_z_deg_s);
         s_output.integrated_heading_deg =
             YawEstimator_GetIntegrated(&s_yaw_estimator);
         s_output.heading_reference_deg = s_output.yaw_deg;

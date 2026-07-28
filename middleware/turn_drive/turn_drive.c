@@ -78,7 +78,7 @@ static bool TurnDrive_UpdateImu(void)
     s_output.corrected_yaw_deg = Kinematics_NormalizeAngleDeg(
         s_output.yaw_deg + s_output.yaw_correction_deg);
     s_output.gyro_z_deg_s =
-        TURN_DRIVE_INTEGRATION_GYRO_SIGN * sample.data.gyro_deg_s.z;
+        TURN_DRIVE_GYRO_Z_SIGN * sample.data.gyro_deg_s.z;
     s_imu_sample_ms = sample.timestamp_ms;
     s_imu_sample_count = sample.sample_count;
     s_output.imu_ready = true;
@@ -90,7 +90,8 @@ static void TurnDrive_EnterIntegratedStraight(void)
     s_integrated_phase_start_ms = BSP_Time_GetMs();
     s_integrated_last_sample_ms = s_imu_sample_ms;
     s_integrated_last_sample_count = s_imu_sample_count;
-    YawEstimator_Start(&s_yaw_estimator, s_output.yaw_deg);
+    YawEstimator_Start(&s_yaw_estimator, s_output.yaw_deg,
+                       s_output.gyro_z_deg_s);
     s_output.integrated_heading_deg =
         YawEstimator_GetIntegrated(&s_yaw_estimator);
     s_output.heading_reference_deg =

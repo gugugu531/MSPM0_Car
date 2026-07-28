@@ -55,17 +55,13 @@ reference = normalize(B0 + shortest_angle(B1 - A1))
 
 ## 参数位置
 
-默认指令、步长、指令/输出限幅、启动阶段时长、IMU 最大时延、各组 PID 与 yaw/gz 符号均集中在
+默认指令、步长、指令/输出限幅、启动阶段时长、IMU 最大时延、各组 PID 与 yaw/gz 反馈符号均集中在
 `middleware/straight_drive/straight_drive.h`，宏统一使用 `STRAIGHT_DRIVE_*` 前缀。
 
 当前实车反馈方向为：
 
-- `STRAIGHT_DRIVE_RATE_GYRO_SIGN = 1.0f`：只用于已验证的 `gz -> 0` 角速度闭环；
-- `STRAIGHT_DRIVE_INTEGRATION_GYRO_SIGN = -1.0f`：只用于 A/B 航向积分；
+- `STRAIGHT_DRIVE_RATE_GYRO_SIGN = 1.0f`
 - `STRAIGHT_DRIVE_HEADING_YAW_SIGN = -1.0f`
-
-角速度闭环反馈极性和航向积分坐标转换是两种独立语义，不得共用同一个符号宏。积分 `gz`
-与融合 yaw 必须同向，确保转动车体时纯积分角 A 与融合角 B 同号变化。
 
 当前已识别的快照一致性、模式分支扩散、A/B 重复实现和测试缺口统一登记在
 [`../todo.md`](../todo.md#直行控制与-jy61p-数据链维护债务)。后续修复必须遵守其中的隔离约束，

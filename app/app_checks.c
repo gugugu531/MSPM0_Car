@@ -414,12 +414,12 @@ static APP_TASK_STATUS ChkYawAb_Tick(float dt){
                 STRAIGHT_DRIVE_HEADING_YAW_SIGN *
                 sample.data.attitude_deg.yaw);
             float gyro_z_deg_s =
-                STRAIGHT_DRIVE_INTEGRATION_GYRO_SIGN *
-                sample.data.gyro_deg_s.z;
+                STRAIGHT_DRIVE_RATE_GYRO_SIGN * sample.data.gyro_deg_s.z;
 
             if (!yab_valid){
                 /* A0 = B0：首次完整样本只负责建立公共角度原点。 */
-                YawEstimator_Start(&yab_estimator, fused_deg);
+                YawEstimator_Start(&yab_estimator, fused_deg,
+                                   gyro_z_deg_s);
                 yab_valid = true;
             } else{
                 float sample_dt_s =

@@ -14,14 +14,17 @@ extern "C" {
 typedef struct {
     float initial_fused_deg;
     float integrated_deg;
+    float previous_gyro_z_deg_s;
     bool initialized;
 } YAW_ESTIMATOR;
 
 /** 清空估计器；清空后必须重新 Start。 */
 void YawEstimator_Reset(YAW_ESTIMATOR *estimator);
-/** 以融合角建立公共原点 A0=B0。 */
-void YawEstimator_Start(YAW_ESTIMATOR *estimator, float fused_heading_deg);
-/** 使用本次角速度和实际时间间隔推进纯积分角 A。 */
+/** 以融合角建立公共原点 A0=B0，并保存梯形积分的首个角速度样本。 */
+void YawEstimator_Start(YAW_ESTIMATOR *estimator,
+                        float fused_heading_deg,
+                        float initial_gyro_z_deg_s);
+/** 使用上一角速度、本次角速度和实际时间间隔，以梯形积分推进纯积分角 A。 */
 void YawEstimator_Integrate(YAW_ESTIMATOR *estimator,
                             float gyro_z_deg_s,
                             float dt_s);
