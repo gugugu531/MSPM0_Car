@@ -116,11 +116,50 @@ def connect(port: str, baudrate: int, timeout_s: float) -> serial.Serial:
     return ser
 
 
-def run_script(port: str, baudrate: int, script: Path) -> int:
+def run_script(port: str, baudrate: int, script: Path, stream: bool = False) -> int:
     code = script.read_text(encoding="utf-8")
     with connect(port, baudrate, 0.2) as ser:
         enter_raw_repl(ser)
         try:
+            if stream:
+                if not code.endswith("\n"):
+                    code += "\n"
+                ser.write(code.encode("utf-8"))
+                ser.write(CTRL_D)
+                acknowledgement = read_until(ser, b"OK", 2.0)
+                pending = acknowledgement.split(b"OK", 1)[1]
+                eof_markers = 0
+
+                def emit(chunk: bytes) -> bool:
+                    nonlocal eof_markers
+                    visible = bytearray()
+                    for byte in chunk:
+                        if byte == CTRL_D[0]:
+                            eof_markers += 1
+                            if eof_markers >= 2:
+                                break
+                        else:
+                            visible.append(byte)
+                    if visible:
+                        sys.stdout.buffer.write(visible)
+                        sys.stdout.buffer.flush()
+                    return eof_markers >= 2
+
+                if pending and emit(pending):
+                    return 0
+                try:
+                    while True:
+                        chunk = ser.read(max(1, min(4096, ser.in_waiting)))
+                        if chunk:
+                            if emit(chunk):
+                                return 0
+                        else:
+                            time.sleep(0.01)
+                except KeyboardInterrupt:
+                    ser.write(CTRL_C)
+                    time.sleep(0.2)
+                return 0
+
             output = raw_exec(ser, code, timeout_s=60.0)
             if output:
                 sys.stdout.buffer.write(output)
@@ -214,6 +253,16 @@ def soft_reset(port: str, baudrate: int) -> int:
     return 0
 
 
+def hard_reset(port: str, baudrate: int) -> int:
+    """Ask the K230 to perform a full SoC reset."""
+    with connect(port, baudrate, 0.2) as ser:
+        enter_raw_repl(ser)
+        ser.write(b"import machine\nmachine.reset()\n")
+        ser.write(CTRL_D)
+        time.sleep(1.0)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="CanMV K230 serial REPL helper")
     parser.add_argument("--port", help="Serial port, for example COM15")
@@ -224,6 +273,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = sub.add_parser("run", help="Run a local script through raw REPL")
     run.add_argument("script", type=Path)
+    run.add_argument(
+        "--stream",
+        action="store_true",
+        help="Keep the REPL attached and stream output until Ctrl-C",
+    )
 
     put = sub.add_parser("put", help="Write a local file to the device filesystem")
     put.add_argument("local", type=Path)
@@ -237,6 +291,7 @@ def build_parser() -> argparse.ArgumentParser:
     copy.add_argument("destination")
 
     sub.add_parser("reset", help="Send Ctrl-D soft reset")
+    sub.add_parser("hard-reset", help="Reset the K230 SoC with machine.reset()")
     return parser
 
 
@@ -252,7 +307,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.command == "run":
-            return run_script(args.port, args.baudrate, args.script)
+            return run_script(args.port, args.baudrate, args.script, args.stream)
         if args.command == "put":
             return write_file(args.port, args.baudrate, args.local, args.remote)
         if args.command == "cat":
@@ -261,6 +316,8 @@ def main(argv: list[str] | None = None) -> int:
             return copy_file(args.port, args.baudrate, args.source, args.destination)
         if args.command == "reset":
             return soft_reset(args.port, args.baudrate)
+        if args.command == "hard-reset":
+            return hard_reset(args.port, args.baudrate)
     except (OSError, serial.SerialException, K230ReplError) as exc:
         print(f"k230_tool: {exc}", file=sys.stderr)
         return 1

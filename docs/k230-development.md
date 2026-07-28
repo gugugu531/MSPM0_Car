@@ -80,14 +80,56 @@ canmv_detect_boards
 
 ## 备用连接方式：raw REPL
 
-`tools/k230_tool.py` 保留为扩展不可用时的备用手段，支持 `list`、`run`、`put`、`cat`、`copy` 和
-`reset`。它通过 USB 串口的 MicroPython raw REPL 工作，默认串口速率为 115200，并使用 DTR。
+`tools/k230_tool.py` 保留为扩展不可用时的备用手段，支持 `list`、`run`、`put`、`cat`、`copy`、
+`reset` 和 `hard-reset`。它通过 USB 串口的 MicroPython raw REPL 工作，默认串口速率为 115200，并使用
+DTR。对 RTSP 等长期运行的服务须使用 `run --stream`，让 raw REPL 会话在服务期间保持连接。
 
 ```powershell
 python tools/k230_tool.py list
 python tools/k230_tool.py --port COM15 put k230/vision_red_line_follow.py /sdcard/main.py
 python tools/k230_tool.py --port COM15 cat /sdcard/main.py
 ```
+
+### WAGA 手机热点 RTSP 验证
+
+当前验证用热点为开放的 `WAGA`（2.4 GHz、无密码）。电脑和 K230 必须连接同一个热点；以实际 DHCP
+地址为准，不要把示例 IP 固化进脚本。部署并保持板端服务运行：
+
+```powershell
+python tools/k230_tool.py --port COM15 put k230/test.py /sdcard/rtsp_test.py
+python tools/k230_tool.py --port COM15 run tools/k230_run_rtsp_test.py --stream
+```
+
+终端打印 `virtual wbc rtsp stream on rtsp://<K230-IP>:8554/test` 后，另开终端抓取一帧或统计帧率：
+
+```powershell
+python tools/k230_video_viewer.py rtsp://<K230-IP>:8554/test --snapshot k230_rtsp.jpg
+python tools/k230_video_viewer.py rtsp://<K230-IP>:8554/test --stats-frames 100
+```
+
+真实摄像头画面使用独立的硬件编码脚本；它选择 GC2093 的原生 1920×1080@60 模式，由 VICAP 硬件
+缩放为 640×360 YUV420SP，再以 60 FPS、1000 kbit/s 编码为 H.264，不经过虚拟画布：
+
+```powershell
+python tools/k230_tool.py --port COM15 put k230/rtsp_camera_stream.py /sdcard/rtsp_camera_stream.py
+python tools/k230_tool.py --port COM15 run tools/k230_run_camera_rtsp.py --stream
+```
+
+`k230_video_viewer.py` 在导入 OpenCV 前固定 FFmpeg 使用 RTSP/TCP 和低缓冲选项，并自动把 WBC 的竖屏
+画面逆时针旋转为横屏。若媒体服务异常退出或第二次初始化失败，先执行
+`python tools/k230_tool.py --port COM15 hard-reset`，再重新上传和启动。测试期间不要让 CanMV 扩展、
+Serial Monitor 或其他程序占用同一串口。
+
+若电脑能加入热点、K230 也已取得同网段地址，但 TCP 仍不能连接，先关闭 Clash/Mihomo 等代理软件的
+TUN 模式，并确认系统中不再存在 TUN 虚拟网卡。仅设置 RTSP 不走系统代理不一定有效，因为 TUN/WFP
+可能在套接字进入普通代理规则前就拦截局域网连接。可先运行
+`python tools/k230_tool.py --port COM15 run tools/probes/k230_wifi_waga_probe.py` 独立确认板端热点关联和
+DHCP，再区分板端联网故障与电脑端拦截。
+
+若 TUN 已关闭、电脑能通过 ARP 得到 K230 的 MAC 地址、板端也打印了 `RTSP server started`，但 TCP
+连接仍超时，应检查手机热点的“客户端隔离/AP isolation/禁止设备互联”设置。可先在提供热点的手机本机
+用 VLC 打开 RTSP 地址：手机可播放而电脑不可播放，基本可确认是热点不允许两个接入设备互访。此时需
+启用热点设备互联，或改用允许局域网客户端互访的 2.4 GHz 路由器。
 
 raw REPL 不能与 VS Code CanMV 扩展同时占用 COM15。若出现“拒绝访问”，先在扩展中停止 Preview 并断开
 板卡，不要反复强行打开端口。v1.8 偶尔会在脚本结束时丢失 raw REPL 的结束标记；此时应重新同步并核对
@@ -119,6 +161,57 @@ raw REPL 不能与 VS Code CanMV 扩展同时占用 COM15。若出现“拒绝�
 - 若需要相机画面、运行远程文件或写入 `main.py`，仍应关闭 Serial Monitor 后使用 CanMV 扩展。
 - 这里的 115200 是 K230 USB CDC/REPL 监视参数；K230 到 MSPM0 的 TTL UART 也计划使用 115200，
   但二者是不同的物理连接和用途。
+
+## Wi-Fi 无线开发代理
+
+完整设计、线协议、安全边界和恢复流程见
+[`k230-remote-development.md`](k230-remote-development.md)。
+
+板端 `/sdcard/main.py` 当前安装为 `k230/remote_dev_agent.py`，上电后持续扫描并连接开放的 2.4 GHz
+热点 `WAGA`。它使用两个 TCP 端口：
+
+| 端口 | 用途 |
+|---:|---|
+| 8266 | 上传文件、请求执行、查询状态和远程重启 |
+| 2323 | 回放并持续输出上传程序的 `print()` 和异常信息 |
+
+代理不含密码或加密，只能在可信、隔离的本地网络中使用。任何能访问 8266 端口的设备都能上传并执行
+Python 代码。若改接公共或不可信网络，必须先增加认证，不能直接暴露该端口。
+
+电脑端使用 `tools/k230_remote.py`：
+
+```powershell
+# 查询代理和当前程序状态
+python tools/k230_remote.py --host 10.190.177.220 status
+
+# 持续查看 print()/异常输出；网络中断后自动重连
+python tools/k230_remote.py --host 10.190.177.220 console
+
+# 只上传文件，不重启
+python tools/k230_remote.py --host 10.190.177.220 put local.py /sdcard/app.py
+
+# 上传为 app.py 并远程重启；重启后自动执行
+python tools/k230_remote.py --host 10.190.177.220 deploy local.py
+
+# 当前 app.py 已结束时请求再次执行
+python tools/k230_remote.py --host 10.190.177.220 run /sdcard/app.py
+
+# 远程系统复位
+python tools/k230_remote.py --host 10.190.177.220 restart
+```
+
+默认自启动文件为 `/sdcard/app.py`。代理自身在主线程外只使用一个网络管理线程，以便 RTSP 应用还能创建
+一个编码取流线程。对于 RTSP 等不会自行结束的程序，更新时使用 `deploy`：它先完整写入临时文件并替换 app.py，再通过
+系统复位停止旧程序并启动新版本。控制协议拒绝覆盖 `/sdcard/main.py`，避免一次错误的网络上传破坏恢复
+入口。
+
+安装无线代理前的原开机程序已备份为 `/sdcard/main_before_remote_dev.py`。若无线代理无法启动，可用 USB
+raw REPL 恢复：
+
+```powershell
+python tools/k230_tool.py --port COM15 copy /sdcard/main_before_remote_dev.py /sdcard/main.py
+python tools/k230_tool.py --port COM15 hard-reset
+```
 
 ## 自启与复位语义
 

@@ -16,3 +16,5 @@
 | `k230_red_line_bench.py` | v1.8 OpenCV 红色竖线循迹 10 秒有限测试 |
 | `k230_v18_capabilities.py` | 查询 v1.8 固件、OpenCV/cv_lite 接口与 Sensor 模式 |
 | `k230_v18_cv2_red_probe.py` | HSV 红色掩膜与轮廓分阶段性能探测 |
+| `k230_wifi_waga_probe.py` | 扫描并连接开放热点 WAGA，打印 DHCP 地址和链路状态 |
+| `k230_remote_exec_test.py` | 验证无线代理的程序执行、定时输出与完成状态回传 |

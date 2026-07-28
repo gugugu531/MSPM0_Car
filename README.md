@@ -231,4 +231,6 @@ python tools/check_keil_project_sync.py
 - 当前待办和上板风险：[`docs/todo.md`](docs/todo.md)
 - K230 v1.8 固件更新、VS Code CanMV 扩展和 MCP/Preview 连接流程：
   [`docs/k230-development.md`](docs/k230-development.md)
+- K230 Wi-Fi 程序上传、远程执行、调试输出与恢复流程：
+  [`docs/k230-remote-development.md`](docs/k230-remote-development.md)
 - K230 红线识别、阈值/安装标定、串口协议与控制：[`docs/vision-red-line-follow.md`](docs/vision-red-line-follow.md)
