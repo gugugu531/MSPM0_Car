@@ -204,13 +204,6 @@ static void Straight_Render(const STRAIGHT_DRIVE_OUTPUT *output)
                 output->distance_left_m - output->distance_right_m, 3U);
             n = Straight_PutStr(l4, "corr ");
             AppFmt_Fixed(&l4[n], output->correction_percent, 1U);
-        } else if (((output->mode == STRAIGHT_DRIVE_MODE_INTEGRATED_THEN_HEADING) ||
-                    (output->mode == STRAIGHT_DRIVE_MODE_FULL_INTEGRATED_THEN_HEADING)) &&
-                   !output->startup_complete){
-            n = Straight_PutStr(l3, "INT yaw ");
-            AppFmt_Fixed(&l3[n], output->integrated_heading_deg, 1U);
-            n = Straight_PutStr(l4, "corr ");
-            AppFmt_Fixed(&l4[n], output->correction_percent, 1U);
         } else{
             n = Straight_PutStr(l3,
                 (output->mode != STRAIGHT_DRIVE_MODE_RAMP_HEADING)
@@ -223,7 +216,12 @@ static void Straight_Render(const STRAIGHT_DRIVE_OUTPUT *output)
                                          ? "CRUISE yaw "
                                          : "yaw ")))
                     : (output->startup_complete ? "CRUISE yaw " : "RAMP yaw "));
-            AppFmt_Fixed(&l3[n], output->yaw_deg, 1U);
+            AppFmt_Fixed(&l3[n],
+                ((output->mode == STRAIGHT_DRIVE_MODE_INTEGRATED_THEN_HEADING) ||
+                 (output->mode == STRAIGHT_DRIVE_MODE_FULL_INTEGRATED_THEN_HEADING))
+                    ? output->corrected_yaw_deg
+                    : output->yaw_deg,
+                1U);
             n = Straight_PutStr(l4, "ref ");
             if (output->heading_reference_valid){
                 AppFmt_Fixed(&l4[n], output->heading_reference_deg, 1U);
@@ -250,7 +248,8 @@ static void Straight_SendTelemetry(uint32_t now_ms,
     /* Speed Closed 的 duty 是上一控制拍已应用的速度 PID 输出。 */
     DebugUart_Printf(
         "[STR] t=%lu m=%u imu=%u cmd=%.3f act=%.3f phase=%u dl=%.1f dr=%.1f "
-        "vl=%.3f vr=%.3f xl=%.4f xr=%.4f yaw=%.2f gz=%.2f iyaw=%.2f corr=%.2f\r\n",
+        "vl=%.3f vr=%.3f xl=%.4f xr=%.4f yaw=%.2f cyaw=%.2f yoff=%.2f "
+        "gz=%.2f iyaw=%.2f corr=%.2f\r\n",
         (unsigned long)now_ms,
         (unsigned int)output->mode,
         output->imu_ready ? 1U : 0U,
@@ -264,6 +263,8 @@ static void Straight_SendTelemetry(uint32_t now_ms,
         (double)output->distance_left_m,
         (double)output->distance_right_m,
         (double)output->yaw_deg,
+        (double)output->corrected_yaw_deg,
+        (double)output->yaw_correction_deg,
         (double)output->gyro_z_deg_s,
         (double)output->integrated_heading_deg,
         (double)output->correction_percent);

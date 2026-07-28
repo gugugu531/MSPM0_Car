@@ -201,8 +201,8 @@ armasm 语法，因此 MDK 6 有一条 `A1950W` 弃用警告；这是兼容性�
   断开传感器应显示 `READ FAIL` 且 `er` 递增
 - `Yahboom I2C` 显示按 X1→X8 排列且 `1=黑线` 的位图、原始 `0x30` 寄存器值及
   `ok/er`、`R/W/s` 诊断；断开模块应显示 `READ FAIL`
-- 两个循迹页均按 X1→X8 显示 `1=黑线`；`Line Guided 80` 应先显示 `START RATE`，约 1 s
-  后进入 `YAW HOLD`，外侧六路命中时进入 `LINE OUTER`
+- 两个循迹页均按 X1→X8 显示 `1=黑线`；`Line Guided 80` 启动后前 500 ms 更新 yaw 修正项，
+  外侧六路命中时显示 `LINE PID`，否则显示 `YAW HOLD`
 - TB6612 自检短按发单次脉冲、左右轮编码器计数（`encL`/`encR`）随之变化
 - `Encoder` 自检整车前进时两轮 `spd` 应同为正（方向符号见 `bsp/motor/hall_encoder.h`）
 - `Speed PID` / `Duty Sweep` 须**抬起车轮**运行；可配合 `tools/speed_pid_viz.py` 看曲线

@@ -1,6 +1,6 @@
 /**
  * @file  line_guided_drive.h
- * @brief 80% 直接起步的 Yahboom 循线外环 + 航向内环控制器。
+ * @brief 80% 直接起步的 Yahboom 灰度 PID / 航向 PID 切换控制器。
  */
 #ifndef LINE_GUIDED_DRIVE_H
 #define LINE_GUIDED_DRIVE_H
@@ -16,8 +16,8 @@ extern "C" {
 
 /** 直接起步基础占空比。 */
 #define LINE_GUIDED_BASE_DUTY_PERCENT             80.0f
-/** 起步角速度闭环持续时间。 */
-#define LINE_GUIDED_STARTUP_RATE_DURATION_MS      1000U
+/** 起步阶段动态更新 A-B yaw 修正量的持续时间。 */
+#define LINE_GUIDED_YAW_CORRECTION_DURATION_MS    500U
 /** JY61P 完整样本最大允许年龄。 */
 #define LINE_GUIDED_IMU_MAX_AGE_MS                60U
 /** 当前安装方向下的 JY61P 反馈符号，须分别上板验证。 */
@@ -27,19 +27,17 @@ extern "C" {
 #define LINE_GUIDED_CENTER_SENSOR_MASK            0x18U
 #define LINE_GUIDED_OUTER_SENSOR_MASK             0xE7U
 
-/** Yahboom 质心误差到即时航向偏置的比例及偏置限幅。 */
-#define LINE_GUIDED_OUTER_HEADING_KP              0.8f
-#define LINE_GUIDED_OUTER_HEADING_LIMIT_DEG       30.0f
+/** 灰度误差的 EMA 预滤波系数。 */
 #define LINE_GUIDED_OUTER_ERROR_LPF_ALPHA         0.5f
 
-/** 起步角速度内环 PID。 */
-#define LINE_GUIDED_RATE_PID_KP                   0.20f
-#define LINE_GUIDED_RATE_PID_KI                   0.0f
-#define LINE_GUIDED_RATE_PID_KD                   0.0f
-#define LINE_GUIDED_RATE_PID_INTEGRAL_LIMIT       100.0f
-#define LINE_GUIDED_RATE_PID_OUTPUT_LIMIT         20.0f
+/** 外侧灰度命中时直接控制左右轮差速的 PID。 */
+#define LINE_GUIDED_LINE_PID_KP                   0.8f
+#define LINE_GUIDED_LINE_PID_KI                   0.0f
+#define LINE_GUIDED_LINE_PID_KD                   0.0f
+#define LINE_GUIDED_LINE_PID_INTEGRAL_LIMIT       100.0f
+#define LINE_GUIDED_LINE_PID_OUTPUT_LIMIT         20.0f
 
-/** 巡航/灰度外环共用的航向内环 PID。 */
+/** 外侧灰度未命中时保持进入该模式瞬间航向的 PID。 */
 #define LINE_GUIDED_HEADING_PID_KP                1.0f
 #define LINE_GUIDED_HEADING_PID_KI                0.0f
 #define LINE_GUIDED_HEADING_PID_KD                0.0f
@@ -48,9 +46,8 @@ extern "C" {
 
 typedef enum {
     LINE_GUIDED_PHASE_WAIT_IMU = 0,
-    LINE_GUIDED_PHASE_STARTUP_RATE,
     LINE_GUIDED_PHASE_HEADING_HOLD,
-    LINE_GUIDED_PHASE_LINE_OUTER
+    LINE_GUIDED_PHASE_LINE_PID
 } LINE_GUIDED_PHASE;
 
 typedef struct {
@@ -63,9 +60,10 @@ typedef struct {
     bool imu_ready;
     float line_error;
     float yaw_deg;
+    float corrected_yaw_deg;
+    float yaw_correction_deg;
     float gyro_z_deg_s;
     float integrated_heading_deg;
-    float startup_fusion_offset_deg;
     float heading_reference_deg;
     float correction_percent;
     float left_duty_percent;
