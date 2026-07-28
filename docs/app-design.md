@@ -32,6 +32,7 @@ run-to-completion 任务。
 Main Menu
 ├── Line Follow         (task)   Yahboom 循线 + 角速度内环, 黑线位图/误差/双轮占空比, 丢线刹停
 ├── Line Guided 80      (task)   80% 直接起步，外侧黑线灰度 PID 优先，否则航向保持
+├── Line->Left->Line    (task)   首段丢线后制动 250 ms，再左转至 X4/X5 命中
 ├── Vision Red          (task)   K230 红线位置/方向融合；1s 角速度起步后持续视觉循迹
 ├── Straight Test       (submenu)
 │   ├── Duty Open       (task)   左右轮同占空比开环
