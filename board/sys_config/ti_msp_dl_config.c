@@ -174,6 +174,8 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 
     DL_GPIO_initDigitalOutput(Buzzer_PIN_IOMUX);
 
+    DL_GPIO_initDigitalOutput(GPIO_GRP_0_PIN_0_IOMUX);
+
     DL_GPIO_initDigitalOutputFeatures(Motor_IO_AIN1_IOMUX,
 		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
 		 DL_GPIO_DRIVE_STRENGTH_LOW, DL_GPIO_HIZ_DISABLE);
@@ -281,12 +283,14 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
     DL_GPIO_enableInterrupt(GPIOA, Motor_IO_ENC_R_A_PIN |
 		Motor_IO_ENC_L_A_PIN);
     DL_GPIO_clearPins(GPIOB, Buzzer_PIN_PIN |
+		GPIO_GRP_0_PIN_0_PIN |
 		Motor_IO_AIN2_PIN |
 		Motor_IO_BIN1_PIN |
 		Motor_IO_BIN2_PIN |
 		LED_Y_PIN |
 		LED_R_PIN);
     DL_GPIO_enableOutput(GPIOB, Buzzer_PIN_PIN |
+		GPIO_GRP_0_PIN_0_PIN |
 		Motor_IO_AIN2_PIN |
 		Motor_IO_BIN1_PIN |
 		Motor_IO_BIN2_PIN |
