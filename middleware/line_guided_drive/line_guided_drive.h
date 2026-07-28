@@ -16,14 +16,11 @@ extern "C" {
 
 /** 直接起步基础占空比。 */
 #define LINE_GUIDED_BASE_DUTY_PERCENT             80.0f
-/** 起步阶段动态更新 A-B yaw 修正量的持续时间。 */
-#define LINE_GUIDED_YAW_CORRECTION_DURATION_MS    500U
 /** JY61P 完整样本最大允许年龄。 */
 #define LINE_GUIDED_IMU_MAX_AGE_MS                60U
 /** 当前安装方向下的 JY61P 反馈符号，须分别上板验证。 */
-#define LINE_GUIDED_RATE_GYRO_SIGN                (1.0f)
 #define LINE_GUIDED_HEADING_YAW_SIGN              (-1.0f)
-/** Yahboom 中间 X4/X5（bit3/4）；只有其余通道命中才进入循线外环。 */
+/** Yahboom 中间 X4/X5（bit3/4）；只有其余通道命中才进入灰度 PID。 */
 #define LINE_GUIDED_CENTER_SENSOR_MASK            0x18U
 #define LINE_GUIDED_OUTER_SENSOR_MASK             0xE7U
 
@@ -60,10 +57,6 @@ typedef struct {
     bool imu_ready;
     float line_error;
     float yaw_deg;
-    float corrected_yaw_deg;
-    float yaw_correction_deg;
-    float gyro_z_deg_s;
-    float integrated_heading_deg;
     float heading_reference_deg;
     float correction_percent;
     float left_duty_percent;

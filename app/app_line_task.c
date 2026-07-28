@@ -156,8 +156,12 @@ static const char *LineGuided_PhaseText(LINE_GUIDED_PHASE phase){
 static APP_TASK_STATUS LineGuidedTest_Tick(float dt){
     uint8_t detected_mask;
     bool sensor_ready = LineSensor_Tick(&detected_mask);
-    if (LineGuidedDrive_Update(detected_mask, sensor_ready, dt) !=
-        BSP_STATUS_OK){
+    BSP_STATUS status = LineGuidedDrive_Update(detected_mask, sensor_ready, dt);
+    if ((status == BSP_STATUS_NOT_READY) &&
+        LineGuidedDrive_GetOutput().line_lost){
+        return APP_TASK_DONE;
+    }
+    if (status != BSP_STATUS_OK){
         return APP_TASK_FAULT;
     }
 
@@ -182,7 +186,7 @@ static APP_TASK_STATUS LineGuidedTest_Tick(float dt){
     n = LtPutStr(l2, "err ");
     AppFmt_Fixed(&l2[n], out.line_error, 1U);
     n = LtPutStr(l3, "yaw/ref ");
-    AppFmt_Fixed(&l3[n], out.corrected_yaw_deg, 1U);
+    AppFmt_Fixed(&l3[n], out.yaw_deg, 1U);
     while (l3[n] != '\0'){ n++; }
     l3[n++] = '/';
     AppFmt_Fixed(&l3[n], out.heading_reference_deg, 1U);
