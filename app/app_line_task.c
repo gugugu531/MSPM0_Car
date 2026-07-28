@@ -12,6 +12,8 @@
 #include "line_guided_drive.h"
 #include "middleware/vision_line_drive/vision_line_drive.h"
 #include "chassis.h"
+#include "kinematics/kinematics.h"
+#include "pid/pid.h"
 #include "wit_sdk.h"
 
 #include "ui.h"
@@ -28,6 +30,16 @@
 #define LT_UI_PERIOD_MS 150U
 /** Yahboom 最近一次成功读数的最大允许年龄。 */
 #define LT_LINE_SENSOR_MAX_AGE_MS 60U
+#define LT_LINE_LEFT_LINE_BRAKE_DURATION_MS 250U
+#define LT_LINE_LEFT_LINE_TURN_TIMEOUT_MS 5000U
+#define LT_LINE_LEFT_LINE_TURN_LEFT_DUTY_PERCENT (-80.0f)
+#define LT_LINE_LEFT_LINE_TURN_RIGHT_DUTY_PERCENT (50.0f)
+#define LT_LINE_LEFT_LINE_TURN_YAW_DELTA_DEG (-75.0f)
+#define LT_LINE_LEFT_LINE_HEADING_PID_KP 1.0f
+#define LT_LINE_LEFT_LINE_HEADING_PID_KI 0.0f
+#define LT_LINE_LEFT_LINE_HEADING_PID_KD 0.0f
+#define LT_LINE_LEFT_LINE_HEADING_PID_INTEGRAL_LIMIT 100.0f
+#define LT_LINE_LEFT_LINE_HEADING_PID_OUTPUT_LIMIT 20.0f
 
 static uint32_t lt_last_ui;
 static uint8_t lt_detected_mask;
@@ -156,8 +168,12 @@ static const char *LineGuided_PhaseText(LINE_GUIDED_PHASE phase){
 static APP_TASK_STATUS LineGuidedTest_Tick(float dt){
     uint8_t detected_mask;
     bool sensor_ready = LineSensor_Tick(&detected_mask);
-    if (LineGuidedDrive_Update(detected_mask, sensor_ready, dt) !=
-        BSP_STATUS_OK){
+    BSP_STATUS status = LineGuidedDrive_Update(detected_mask, sensor_ready, dt);
+    if ((status == BSP_STATUS_NOT_READY) &&
+        LineGuidedDrive_GetOutput().line_lost){
+        return APP_TASK_DONE;
+    }
+    if (status != BSP_STATUS_OK){
         return APP_TASK_FAULT;
     }
 
@@ -182,7 +198,7 @@ static APP_TASK_STATUS LineGuidedTest_Tick(float dt){
     n = LtPutStr(l2, "err ");
     AppFmt_Fixed(&l2[n], out.line_error, 1U);
     n = LtPutStr(l3, "yaw/ref ");
-    AppFmt_Fixed(&l3[n], out.corrected_yaw_deg, 1U);
+    AppFmt_Fixed(&l3[n], out.yaw_deg, 1U);
     while (l3[n] != '\0'){ n++; }
     l3[n++] = '/';
     AppFmt_Fixed(&l3[n], out.heading_reference_deg, 1U);
@@ -201,6 +217,179 @@ static APP_TASK_STATUS LineGuidedTest_Tick(float dt){
 
 const APP_TASK_DESC APP_LINE_GUIDED_TEST = {
     "Line Guided 80", LineGuidedTest_Enter, LineGuidedTest_Tick, NULL
+};
+
+typedef enum {
+    LINE_LEFT_LINE_PHASE_FIRST_TRACK = 0,
+    LINE_LEFT_LINE_PHASE_BRAKE,
+    LINE_LEFT_LINE_PHASE_LEFT_TURN,
+    LINE_LEFT_LINE_PHASE_SECOND_TRACK
+} LINE_LEFT_LINE_PHASE;
+
+static LINE_LEFT_LINE_PHASE line_left_line_phase;
+static uint32_t line_left_line_brake_start_ms;
+static uint32_t line_left_line_turn_start_ms;
+static PID_CONTROLLER line_left_line_heading_pid;
+static float line_left_line_turn_start_yaw_deg;
+static float line_left_line_turn_target_yaw_deg;
+static float line_left_line_turn_yaw_deg;
+static float line_left_line_turn_rotated_deg;
+static float line_left_line_turn_correction_percent;
+
+static bool LineLeftLine_ReadYaw(float *yaw_deg){
+    JY61P_I2C_SAMPLE sample;
+    if (!JY61P_I2C_IsDataFresh(LINE_GUIDED_IMU_MAX_AGE_MS) ||
+        !JY61P_I2C_GetSnapshot(&sample)){
+        return false;
+    }
+    *yaw_deg = Kinematics_NormalizeAngleDeg(
+        LINE_GUIDED_HEADING_YAW_SIGN * sample.data.attitude_deg.yaw);
+    return true;
+}
+
+static BSP_STATUS LineLeftLine_ApplyTurn(float dt_s){
+    float heading_error_deg = Kinematics_AngleDiffDeg(
+        line_left_line_turn_target_yaw_deg, line_left_line_turn_yaw_deg);
+    line_left_line_turn_correction_percent = PID_Update(
+        &line_left_line_heading_pid, heading_error_deg, 0.0f, dt_s);
+    float left_duty_percent = Kinematics_Clamp(
+        LT_LINE_LEFT_LINE_TURN_LEFT_DUTY_PERCENT +
+            line_left_line_turn_correction_percent,
+        -100.0f, 100.0f);
+    float right_duty_percent = Kinematics_Clamp(
+        LT_LINE_LEFT_LINE_TURN_RIGHT_DUTY_PERCENT -
+            line_left_line_turn_correction_percent,
+        -100.0f, 100.0f);
+    return Chassis_SetDuty(left_duty_percent, right_duty_percent);
+}
+
+static void LineLeftLineTest_Enter(void){
+    const PID_CONFIG heading_config = {
+        .kp = LT_LINE_LEFT_LINE_HEADING_PID_KP,
+        .ki = LT_LINE_LEFT_LINE_HEADING_PID_KI,
+        .kd = LT_LINE_LEFT_LINE_HEADING_PID_KD,
+        .integral_limit = LT_LINE_LEFT_LINE_HEADING_PID_INTEGRAL_LIMIT,
+        .output_limit = LT_LINE_LEFT_LINE_HEADING_PID_OUTPUT_LIMIT,
+        .mode = PID_MODE_POSITION,
+    };
+    LineSensor_Enter();
+    LineGuidedDrive_Init();
+    PID_Init(&line_left_line_heading_pid, &heading_config);
+    line_left_line_phase = LINE_LEFT_LINE_PHASE_FIRST_TRACK;
+    line_left_line_brake_start_ms = 0U;
+    line_left_line_turn_start_ms = 0U;
+    line_left_line_turn_start_yaw_deg = 0.0f;
+    line_left_line_turn_target_yaw_deg = 0.0f;
+    line_left_line_turn_yaw_deg = 0.0f;
+    line_left_line_turn_rotated_deg = 0.0f;
+    line_left_line_turn_correction_percent = 0.0f;
+    lt_last_ui = 0U;
+}
+
+static APP_TASK_STATUS LineLeftLine_UpdateTracking(uint8_t detected_mask,
+                                                    bool sensor_ready,
+                                                    float dt_s){
+    BSP_STATUS status = LineGuidedDrive_Update(detected_mask, sensor_ready, dt_s);
+    if ((status == BSP_STATUS_NOT_READY) &&
+        LineGuidedDrive_GetOutput().line_lost){
+        if (line_left_line_phase == LINE_LEFT_LINE_PHASE_FIRST_TRACK){
+            (void)Chassis_Brake();
+            line_left_line_brake_start_ms = BSP_Time_GetMs();
+            line_left_line_phase = LINE_LEFT_LINE_PHASE_BRAKE;
+            return APP_TASK_RUNNING;
+        }
+        return APP_TASK_DONE;
+    }
+    return (status == BSP_STATUS_OK) ? APP_TASK_RUNNING : APP_TASK_FAULT;
+}
+
+static void LineLeftLine_RenderTurn(uint8_t detected_mask){
+    char bits[LINE_FOLLOW_SENSOR_COUNT + 1U];
+    char yaw_line[28];
+    char turn_line[24];
+    uint8_t n;
+    for (uint8_t i = 0U; i < LINE_FOLLOW_SENSOR_COUNT; i++){
+        bits[i] = ((detected_mask & (1U << i)) != 0U) ? '1' : '0';
+    }
+    bits[LINE_FOLLOW_SENSOR_COUNT] = '\0';
+    const char *phase = (line_left_line_phase == LINE_LEFT_LINE_PHASE_BRAKE)
+        ? "BRAKE" : "TURN LEFT";
+    n = LtPutStr(yaw_line, "yaw/ref ");
+    AppFmt_Fixed(&yaw_line[n], line_left_line_turn_yaw_deg, 1U);
+    while (yaw_line[n] != '\0'){ n++; }
+    yaw_line[n++] = '/';
+    AppFmt_Fixed(&yaw_line[n], line_left_line_turn_target_yaw_deg, 1U);
+    n = LtPutStr(turn_line, "left deg ");
+    AppFmt_Fixed(&turn_line[n], line_left_line_turn_rotated_deg, 1U);
+    Ui_RenderLines("Line->Left->Line", bits, phase, yaw_line,
+                   turn_line, "target 75 deg", "BACK: exit");
+}
+
+static APP_TASK_STATUS LineLeftLineTest_Tick(float dt_s){
+    uint8_t detected_mask;
+    bool sensor_ready = LineSensor_Tick(&detected_mask);
+
+    if ((line_left_line_phase == LINE_LEFT_LINE_PHASE_FIRST_TRACK) ||
+        (line_left_line_phase == LINE_LEFT_LINE_PHASE_SECOND_TRACK)){
+        return LineLeftLine_UpdateTracking(detected_mask, sensor_ready, dt_s);
+    }
+
+    uint32_t now = BSP_Time_GetMs();
+    if (line_left_line_phase == LINE_LEFT_LINE_PHASE_BRAKE){
+        if ((uint32_t)(now - line_left_line_brake_start_ms) >=
+            LT_LINE_LEFT_LINE_BRAKE_DURATION_MS){
+            if (!LineLeftLine_ReadYaw(&line_left_line_turn_start_yaw_deg)){
+                (void)Chassis_Brake();
+                return APP_TASK_FAULT;
+            }
+            line_left_line_turn_yaw_deg = line_left_line_turn_start_yaw_deg;
+            line_left_line_turn_target_yaw_deg = Kinematics_NormalizeAngleDeg(
+                line_left_line_turn_start_yaw_deg +
+                LT_LINE_LEFT_LINE_TURN_YAW_DELTA_DEG);
+            line_left_line_turn_rotated_deg = 0.0f;
+            line_left_line_turn_correction_percent = 0.0f;
+            PID_Reset(&line_left_line_heading_pid);
+            line_left_line_phase = LINE_LEFT_LINE_PHASE_LEFT_TURN;
+            line_left_line_turn_start_ms = now;
+            if (LineLeftLine_ApplyTurn(dt_s) != BSP_STATUS_OK){
+                return APP_TASK_FAULT;
+            }
+        }
+    } else{
+        if (!LineLeftLine_ReadYaw(&line_left_line_turn_yaw_deg)){
+            (void)Chassis_Brake();
+            return APP_TASK_FAULT;
+        }
+        line_left_line_turn_rotated_deg = -Kinematics_AngleDiffDeg(
+            line_left_line_turn_yaw_deg,
+            line_left_line_turn_start_yaw_deg);
+        if (line_left_line_turn_rotated_deg >=
+            -LT_LINE_LEFT_LINE_TURN_YAW_DELTA_DEG){
+            (void)Chassis_Brake();
+            LineGuidedDrive_Init();
+            line_left_line_phase = LINE_LEFT_LINE_PHASE_SECOND_TRACK;
+            return LineLeftLine_UpdateTracking(
+                detected_mask, sensor_ready, dt_s);
+        }
+        if ((uint32_t)(now - line_left_line_turn_start_ms) >=
+            LT_LINE_LEFT_LINE_TURN_TIMEOUT_MS){
+            (void)Chassis_Brake();
+            return APP_TASK_FAULT;
+        }
+        if (LineLeftLine_ApplyTurn(dt_s) != BSP_STATUS_OK){
+            return APP_TASK_FAULT;
+        }
+    }
+
+    if ((now - lt_last_ui) >= LT_UI_PERIOD_MS){
+        lt_last_ui = now;
+        LineLeftLine_RenderTurn(detected_mask);
+    }
+    return APP_TASK_RUNNING;
+}
+
+const APP_TASK_DESC APP_LINE_LEFT_LINE_TEST = {
+    "Line->Left->Line", LineLeftLineTest_Enter, LineLeftLineTest_Tick, NULL
 };
 
 /* ========================= K230 红线视觉循迹 ========================= */

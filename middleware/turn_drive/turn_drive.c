@@ -237,7 +237,7 @@ static BSP_STATUS TurnDrive_Apply(float dt_s)
 {
     float elapsed_ratio;
     float left_duty_percent;
-    BSP_STATUS status;
+    float right_duty_percent;
 
     s_output.turn_reduction_percent = 0.0f;
 
@@ -257,17 +257,15 @@ static BSP_STATUS TurnDrive_Apply(float dt_s)
                 (s_config->left_deceleration_end_duty_percent -
                  s_config->base_duty_percent) *
                 TurnDrive_Clamp(elapsed_ratio, 0.0f, 1.0f);
+            right_duty_percent = s_config->base_duty_percent *
+                (1.0f - TurnDrive_Clamp(elapsed_ratio, 0.0f, 1.0f));
             s_output.turn_reduction_percent =
                 s_config->base_duty_percent - left_duty_percent;
-            return Chassis_SetDuty(left_duty_percent,
-                                   s_config->base_duty_percent);
+            return Chassis_SetDuty(left_duty_percent, right_duty_percent);
         case TURN_DRIVE_PHASE_LEFT_TURN_BRAKED:
-            status = Chassis_SetDuty(0.0f, s_config->base_duty_percent);
-            if (status != BSP_STATUS_OK){
-                return status;
-            }
             s_output.turn_reduction_percent = s_config->base_duty_percent;
-            return TB6612FNG_Brake(TB6612FNG_CHANNEL_LEFT);
+            return Chassis_SetDuty(s_config->left_deceleration_end_duty_percent,
+                                   0.0f);
         case TURN_DRIVE_PHASE_POST_TURN_STRAIGHT:
             return TurnDrive_ApplyHeading(s_output.turn_target_deg, dt_s);
         default:
