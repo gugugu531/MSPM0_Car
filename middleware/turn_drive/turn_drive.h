@@ -49,6 +49,8 @@ typedef struct {
     TURN_DRIVE_PHASE phase;
     bool imu_ready;
     float yaw_deg;
+    float corrected_yaw_deg;
+    float yaw_correction_deg;
     float gyro_z_deg_s;
     float integrated_heading_deg;
     float heading_reference_deg;

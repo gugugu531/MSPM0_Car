@@ -147,9 +147,8 @@ static void LineGuidedTest_Enter(void){
 static const char *LineGuided_PhaseText(LINE_GUIDED_PHASE phase){
     switch (phase){
         case LINE_GUIDED_PHASE_WAIT_IMU:      return "WAIT IMU";
-        case LINE_GUIDED_PHASE_STARTUP_RATE:  return "START RATE";
         case LINE_GUIDED_PHASE_HEADING_HOLD:  return "YAW HOLD";
-        case LINE_GUIDED_PHASE_LINE_OUTER:    return "LINE OUTER";
+        case LINE_GUIDED_PHASE_LINE_PID:      return "LINE PID";
         default:                              return "UNKNOWN";
     }
 }
@@ -183,7 +182,7 @@ static APP_TASK_STATUS LineGuidedTest_Tick(float dt){
     n = LtPutStr(l2, "err ");
     AppFmt_Fixed(&l2[n], out.line_error, 1U);
     n = LtPutStr(l3, "yaw/ref ");
-    AppFmt_Fixed(&l3[n], out.yaw_deg, 1U);
+    AppFmt_Fixed(&l3[n], out.corrected_yaw_deg, 1U);
     while (l3[n] != '\0'){ n++; }
     l3[n++] = '/';
     AppFmt_Fixed(&l3[n], out.heading_reference_deg, 1U);

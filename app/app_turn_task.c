@@ -69,7 +69,7 @@ static void Turn_Render(const TURN_DRIVE_OUTPUT *output)
     length = Turn_AppendFixed(line1, length, output->distance_m, 2U);
     (void)Turn_Append(line1, length, "/2.0");
     length = Turn_Append(line2, 0U, "yaw ");
-    length = Turn_AppendFixed(line2, length, output->yaw_deg, 1U);
+    length = Turn_AppendFixed(line2, length, output->corrected_yaw_deg, 1U);
     length = Turn_Append(line2, length, " tgt ");
     (void)Turn_AppendFixed(line2, length, output->turn_target_deg, 0U);
     length = Turn_Append(line3, 0U, "L ");
@@ -88,7 +88,8 @@ static void Turn_SendTelemetry(uint32_t now_ms,
                                const TURN_DRIVE_OUTPUT *output)
 {
     DebugUart_Printf(
-        "[TRN] t=%lu m=%u p=%u imu=%u x=%.3f post=%.3f yaw=%.2f ref=%.2f tgt=%.2f "
+        "[TRN] t=%lu m=%u p=%u imu=%u x=%.3f post=%.3f yaw=%.2f cyaw=%.2f "
+        "yoff=%.2f ref=%.2f tgt=%.2f "
         "dl=%.1f dr=%.1f red=%.1f iyaw=%.2f gz=%.2f\r\n",
         (unsigned long)now_ms,
         (unsigned int)output->mode,
@@ -97,6 +98,8 @@ static void Turn_SendTelemetry(uint32_t now_ms,
         (double)output->distance_m,
         (double)output->post_turn_distance_m,
         (double)output->yaw_deg,
+        (double)output->corrected_yaw_deg,
+        (double)output->yaw_correction_deg,
         (double)output->heading_reference_deg,
         (double)output->turn_target_deg,
         (double)output->duty_left_percent,

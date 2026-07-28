@@ -30,7 +30,6 @@ static const TURN_DRIVE_CONFIG s_full_config = {
 
 static TURN_DRIVE_OUTPUT s_output;
 static const TURN_DRIVE_CONFIG *s_config;
-static PID_CONTROLLER s_integrated_heading_pid;
 static PID_CONTROLLER s_heading_pid;
 static YAW_ESTIMATOR s_yaw_estimator;
 static uint32_t s_integrated_phase_start_ms;
@@ -61,7 +60,6 @@ static void TurnDrive_InitPid(void)
     if (s_output.mode == TURN_DRIVE_MODE_FULL){
         heading_config.output_limit = TURN_DRIVE_FULL_HEADING_OUTPUT_LIMIT;
     }
-    PID_Init(&s_integrated_heading_pid, &heading_config);
     PID_Init(&s_heading_pid, &heading_config);
 }
 
@@ -77,6 +75,8 @@ static bool TurnDrive_UpdateImu(void)
 
     s_output.yaw_deg = Kinematics_NormalizeAngleDeg(
         TURN_DRIVE_YAW_SIGN * sample.data.attitude_deg.yaw);
+    s_output.corrected_yaw_deg = Kinematics_NormalizeAngleDeg(
+        s_output.yaw_deg + s_output.yaw_correction_deg);
     s_output.gyro_z_deg_s =
         TURN_DRIVE_GYRO_Z_SIGN * sample.data.gyro_deg_s.z;
     s_imu_sample_ms = sample.timestamp_ms;
@@ -95,8 +95,10 @@ static void TurnDrive_EnterIntegratedStraight(void)
         YawEstimator_GetIntegrated(&s_yaw_estimator);
     s_output.heading_reference_deg =
         YawEstimator_GetInitialFused(&s_yaw_estimator);
+    s_output.yaw_correction_deg = 0.0f;
+    s_output.corrected_yaw_deg = s_output.yaw_deg;
     s_output.phase = TURN_DRIVE_PHASE_INTEGRATED_STRAIGHT;
-    PID_Reset(&s_integrated_heading_pid);
+    PID_Reset(&s_heading_pid);
 }
 
 static void TurnDrive_EnterLeftTurn(void)
@@ -134,6 +136,10 @@ static void TurnDrive_UpdateIntegratedHeading(float dt_s)
     }
     s_output.integrated_heading_deg =
         YawEstimator_GetIntegrated(&s_yaw_estimator);
+    s_output.yaw_correction_deg = Kinematics_AngleDiffDeg(
+        s_output.integrated_heading_deg, s_output.yaw_deg);
+    s_output.corrected_yaw_deg = Kinematics_NormalizeAngleDeg(
+        s_output.yaw_deg + s_output.yaw_correction_deg);
 }
 
 static BSP_STATUS TurnDrive_UpdatePhase(float dt_s)
@@ -150,12 +156,7 @@ static BSP_STATUS TurnDrive_UpdatePhase(float dt_s)
             TurnDrive_UpdateIntegratedHeading(dt_s);
             if ((BSP_Time_GetMs() - s_integrated_phase_start_ms) >=
                 TURN_DRIVE_INTEGRATED_PHASE_DURATION_MS){
-                s_output.heading_reference_deg = Kinematics_NormalizeAngleDeg(
-                    YawEstimator_GetInitialFused(&s_yaw_estimator) +
-                    YawEstimator_GetFusionOffset(&s_yaw_estimator,
-                                                  s_output.yaw_deg));
                 s_output.phase = TURN_DRIVE_PHASE_STRAIGHT;
-                PID_Reset(&s_heading_pid);
             }
             return BSP_STATUS_OK;
         case TURN_DRIVE_PHASE_STRAIGHT:
@@ -175,7 +176,7 @@ static BSP_STATUS TurnDrive_UpdatePhase(float dt_s)
                 return BSP_STATUS_TIMEOUT;
             }
             if (Kinematics_AngleDiffDeg(s_output.turn_target_deg,
-                                        s_output.yaw_deg) <=
+                                        s_output.corrected_yaw_deg) <=
                 TURN_DRIVE_TURN_COMPLETE_TOLERANCE_DEG){
                 TurnDrive_EnterPostTurnStraight();
             }
@@ -225,7 +226,7 @@ static BSP_STATUS TurnDrive_ApplyHeading(float heading_reference_deg,
                                          float dt_s)
 {
     float heading_error_deg = Kinematics_AngleDiffDeg(
-        heading_reference_deg, s_output.yaw_deg);
+        heading_reference_deg, s_output.corrected_yaw_deg);
     float correction_percent = PID_Update(&s_heading_pid,
                                           heading_error_deg, 0.0f, dt_s);
     return TurnDrive_ApplyCorrection(correction_percent);
@@ -235,8 +236,6 @@ static BSP_STATUS TurnDrive_Apply(float dt_s)
 {
     float elapsed_ratio;
     float left_duty_percent;
-    float heading_error_deg;
-    float correction_percent;
     BSP_STATUS status;
 
     s_output.turn_reduction_percent = 0.0f;
@@ -246,12 +245,7 @@ static BSP_STATUS TurnDrive_Apply(float dt_s)
         case TURN_DRIVE_PHASE_COMPLETE:
             return Chassis_SetDuty(0.0f, 0.0f);
         case TURN_DRIVE_PHASE_INTEGRATED_STRAIGHT:
-            heading_error_deg = Kinematics_AngleDiffDeg(
-                YawEstimator_GetInitialFused(&s_yaw_estimator),
-                s_output.integrated_heading_deg);
-            correction_percent = PID_Update(&s_integrated_heading_pid,
-                                            heading_error_deg, 0.0f, dt_s);
-            return TurnDrive_ApplyCorrection(correction_percent);
+            return TurnDrive_ApplyHeading(s_output.heading_reference_deg, dt_s);
         case TURN_DRIVE_PHASE_STRAIGHT:
             return TurnDrive_ApplyHeading(s_output.heading_reference_deg, dt_s);
         case TURN_DRIVE_PHASE_LEFT_DECELERATE:

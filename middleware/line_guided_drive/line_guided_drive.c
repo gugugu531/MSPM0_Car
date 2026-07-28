@@ -1,6 +1,6 @@
 /**
  * @file  line_guided_drive.c
- * @brief 80% 直接起步的 Yahboom 循线外环 + 航向内环控制器实现。
+ * @brief 80% 直接起步的 Yahboom 灰度 PID / 航向 PID 切换控制器实现。
  */
 #include "line_guided_drive.h"
 
@@ -14,26 +14,31 @@
 #include "yaw_estimator.h"
 
 static LINE_GUIDED_OUTPUT s_output;
-static PID_CONTROLLER s_rate_pid;
+static PID_CONTROLLER s_line_pid;
 static PID_CONTROLLER s_heading_pid;
 static YAW_ESTIMATOR s_yaw_estimator;
 static uint32_t s_startup_begin_ms;
 static uint32_t s_last_imu_sample_ms;
 static uint32_t s_last_imu_sample_count;
 static float s_filtered_line_error;
+static bool s_yaw_correction_started;
+static bool s_yaw_correction_frozen;
 
 static void LineGuidedDrive_ResetControl(void)
 {
-    PID_Reset(&s_rate_pid);
+    PID_Reset(&s_line_pid);
     PID_Reset(&s_heading_pid);
     YawEstimator_Reset(&s_yaw_estimator);
     s_startup_begin_ms = 0U;
     s_last_imu_sample_ms = 0U;
     s_last_imu_sample_count = 0U;
     s_filtered_line_error = 0.0f;
+    s_yaw_correction_started = false;
+    s_yaw_correction_frozen = false;
     s_output.phase = LINE_GUIDED_PHASE_WAIT_IMU;
     s_output.integrated_heading_deg = 0.0f;
-    s_output.startup_fusion_offset_deg = 0.0f;
+    s_output.yaw_correction_deg = 0.0f;
+    s_output.corrected_yaw_deg = s_output.yaw_deg;
     s_output.heading_reference_deg = 0.0f;
     s_output.correction_percent = 0.0f;
 }
@@ -41,9 +46,7 @@ static void LineGuidedDrive_ResetControl(void)
 static void LineGuidedDrive_EnterHeadingHold(float entry_yaw_deg)
 {
     s_output.phase = LINE_GUIDED_PHASE_HEADING_HOLD;
-    /* 每次进入角度模式都捕获当时 B，并叠加起步结束时冻结的 B1-A1。 */
-    s_output.heading_reference_deg = Kinematics_NormalizeAngleDeg(
-        entry_yaw_deg + s_output.startup_fusion_offset_deg);
+    s_output.heading_reference_deg = entry_yaw_deg;
     PID_Reset(&s_heading_pid);
 }
 
@@ -76,24 +79,28 @@ static bool LineGuidedDrive_UpdateImu(JY61P_I2C_SAMPLE *sample)
         LINE_GUIDED_RATE_GYRO_SIGN * sample->data.gyro_deg_s.z;
     s_output.yaw_deg = Kinematics_NormalizeAngleDeg(
         LINE_GUIDED_HEADING_YAW_SIGN * sample->data.attitude_deg.yaw);
+    s_output.corrected_yaw_deg = Kinematics_NormalizeAngleDeg(
+        s_output.yaw_deg + s_output.yaw_correction_deg);
     s_output.imu_ready = true;
     return true;
 }
 
-static void LineGuidedDrive_UpdateStartup(const JY61P_I2C_SAMPLE *sample)
+static void LineGuidedDrive_UpdateYawCorrection(const JY61P_I2C_SAMPLE *sample)
 {
-    if (s_output.phase == LINE_GUIDED_PHASE_WAIT_IMU){
+    if (!s_yaw_correction_started){
         YawEstimator_Start(&s_yaw_estimator, s_output.yaw_deg);
         s_output.integrated_heading_deg =
             YawEstimator_GetIntegrated(&s_yaw_estimator);
+        s_output.heading_reference_deg = s_output.yaw_deg;
+        s_output.yaw_correction_deg = 0.0f;
+        s_output.corrected_yaw_deg = s_output.yaw_deg;
         s_startup_begin_ms = BSP_Time_GetMs();
         s_last_imu_sample_ms = sample->timestamp_ms;
         s_last_imu_sample_count = sample->sample_count;
-        s_output.phase = LINE_GUIDED_PHASE_STARTUP_RATE;
-        PID_Reset(&s_rate_pid);
+        s_yaw_correction_started = true;
     }
 
-    if ((s_output.phase == LINE_GUIDED_PHASE_STARTUP_RATE) &&
+    if (!s_yaw_correction_frozen &&
         (sample->sample_count != s_last_imu_sample_count)){
         float sample_dt_s =
             (float)(sample->timestamp_ms - s_last_imu_sample_ms) * 0.001f;
@@ -106,51 +113,56 @@ static void LineGuidedDrive_UpdateStartup(const JY61P_I2C_SAMPLE *sample)
         s_last_imu_sample_count = sample->sample_count;
     }
 
-    if ((s_output.phase == LINE_GUIDED_PHASE_STARTUP_RATE) &&
+    if (!s_yaw_correction_frozen){
+        s_output.yaw_correction_deg = Kinematics_AngleDiffDeg(
+            s_output.integrated_heading_deg, s_output.yaw_deg);
+        s_output.corrected_yaw_deg = Kinematics_NormalizeAngleDeg(
+            s_output.yaw_deg + s_output.yaw_correction_deg);
+    }
+
+    if (!s_yaw_correction_frozen &&
         ((uint32_t)(BSP_Time_GetMs() - s_startup_begin_ms) >=
-         LINE_GUIDED_STARTUP_RATE_DURATION_MS)){
-        s_output.startup_fusion_offset_deg = YawEstimator_GetFusionOffset(
-            &s_yaw_estimator, s_output.yaw_deg);
-        LineGuidedDrive_EnterHeadingHold(s_output.yaw_deg);
+         LINE_GUIDED_YAW_CORRECTION_DURATION_MS)){
+        s_yaw_correction_frozen = true;
     }
 }
 
-static void LineGuidedDrive_UpdateCruisePhase(void)
+static float LineGuidedDrive_UpdateControlMode(float dt_s)
 {
     bool outer_line_detected =
         (s_output.black_mask & LINE_GUIDED_OUTER_SENSOR_MASK) != 0U;
 
     if (outer_line_detected){
-        if (s_output.phase != LINE_GUIDED_PHASE_LINE_OUTER){
-            s_output.phase = LINE_GUIDED_PHASE_LINE_OUTER;
+        if (s_output.phase != LINE_GUIDED_PHASE_LINE_PID){
+            s_output.phase = LINE_GUIDED_PHASE_LINE_PID;
             s_filtered_line_error = s_output.line_error;
-            PID_Reset(&s_heading_pid);
+            PID_Reset(&s_line_pid);
         } else{
             s_filtered_line_error = Filter_LowpassEma(
                 s_filtered_line_error, s_output.line_error,
                 LINE_GUIDED_OUTER_ERROR_LPF_ALPHA);
         }
 
-        float heading_offset = Kinematics_Clamp(
-            LINE_GUIDED_OUTER_HEADING_KP * s_filtered_line_error,
-            -LINE_GUIDED_OUTER_HEADING_LIMIT_DEG,
-            LINE_GUIDED_OUTER_HEADING_LIMIT_DEG);
-        /* 外环每拍相对当前航向给出目标偏置，持续误差会持续要求转向。 */
-        s_output.heading_reference_deg = Kinematics_NormalizeAngleDeg(
-            s_output.yaw_deg + heading_offset);
-    } else if (s_output.phase == LINE_GUIDED_PHASE_LINE_OUTER){
-        LineGuidedDrive_EnterHeadingHold(s_output.yaw_deg);
+        return PID_Update(&s_line_pid, s_filtered_line_error, 0.0f, dt_s);
     }
+
+    if (s_output.phase != LINE_GUIDED_PHASE_HEADING_HOLD){
+        LineGuidedDrive_EnterHeadingHold(s_output.corrected_yaw_deg);
+    }
+
+    float heading_error = Kinematics_AngleDiffDeg(
+        s_output.heading_reference_deg, s_output.corrected_yaw_deg);
+    return PID_Update(&s_heading_pid, heading_error, 0.0f, dt_s);
 }
 
 void LineGuidedDrive_Init(void)
 {
-    const PID_CONFIG rate_config = {
-        .kp = LINE_GUIDED_RATE_PID_KP,
-        .ki = LINE_GUIDED_RATE_PID_KI,
-        .kd = LINE_GUIDED_RATE_PID_KD,
-        .integral_limit = LINE_GUIDED_RATE_PID_INTEGRAL_LIMIT,
-        .output_limit = LINE_GUIDED_RATE_PID_OUTPUT_LIMIT,
+    const PID_CONFIG line_config = {
+        .kp = LINE_GUIDED_LINE_PID_KP,
+        .ki = LINE_GUIDED_LINE_PID_KI,
+        .kd = LINE_GUIDED_LINE_PID_KD,
+        .integral_limit = LINE_GUIDED_LINE_PID_INTEGRAL_LIMIT,
+        .output_limit = LINE_GUIDED_LINE_PID_OUTPUT_LIMIT,
         .mode = PID_MODE_POSITION,
     };
     const PID_CONFIG heading_config = {
@@ -163,7 +175,7 @@ void LineGuidedDrive_Init(void)
     };
 
     s_output = (LINE_GUIDED_OUTPUT){0};
-    PID_Init(&s_rate_pid, &rate_config);
+    PID_Init(&s_line_pid, &line_config);
     PID_Init(&s_heading_pid, &heading_config);
     LineGuidedDrive_ResetControl();
     Chassis_ResetDistance();
@@ -196,20 +208,8 @@ BSP_STATUS LineGuidedDrive_Update(uint8_t detected_mask,
         return Chassis_SetDuty(0.0f, 0.0f);
     }
 
-    LineGuidedDrive_UpdateStartup(&sample);
-    if (s_output.phase != LINE_GUIDED_PHASE_STARTUP_RATE){
-        LineGuidedDrive_UpdateCruisePhase();
-    }
-
-    if (s_output.phase == LINE_GUIDED_PHASE_STARTUP_RATE){
-        s_output.correction_percent = PID_Update(
-            &s_rate_pid, 0.0f, s_output.gyro_z_deg_s, dt_s);
-    } else{
-        float heading_error = Kinematics_AngleDiffDeg(
-            s_output.heading_reference_deg, s_output.yaw_deg);
-        s_output.correction_percent = PID_Update(
-            &s_heading_pid, heading_error, 0.0f, dt_s);
-    }
+    LineGuidedDrive_UpdateYawCorrection(&sample);
+    s_output.correction_percent = LineGuidedDrive_UpdateControlMode(dt_s);
 
     KINEMATICS_DIFFERENTIAL_OUTPUT duty = Kinematics_DifferentialMix(
         LINE_GUIDED_BASE_DUTY_PERCENT,

@@ -93,9 +93,9 @@ typedef enum {
     STRAIGHT_DRIVE_MODE_RATE_THEN_HEADING,
     /** 直接输出 80%，前 1 s 编码器等路径闭环，随后保持切换时刻的航向角。 */
     STRAIGHT_DRIVE_MODE_ENCODER_THEN_HEADING,
-    /** 80% 对照版：前 500 ms 按控制周期积分 gz，随后以 B0+(B1-A1) 为参考角。 */
+    /** 80% 修正 yaw 版：参考角固定 B0，前 500 ms 动态更新 A-B 修正量，随后冻结。 */
     STRAIGHT_DRIVE_MODE_INTEGRATED_THEN_HEADING,
-    /** 100%速度优先版：按 IMU 新样本实际间隔积分，随后以 B0+(B1-A1) 为参考角。 */
+    /** 100%速度优先版：参考角固定 B0，按新样本更新 A-B 修正量并在 500 ms 后冻结。 */
     STRAIGHT_DRIVE_MODE_FULL_INTEGRATED_THEN_HEADING
 } STRAIGHT_DRIVE_MODE;
 
@@ -112,7 +112,12 @@ typedef struct {
     float speed_right_mps;
     float distance_left_m;
     float distance_right_m;
+    /** JY61P 输出并按安装方向修正后的融合 yaw，单位 deg。 */
     float yaw_deg;
+    /** 添加 yaw_correction_deg 后供积分/yaw 模式航向 PID 使用的 yaw，单位 deg。 */
+    float corrected_yaw_deg;
+    /** 积分航向 A 与融合 yaw B 的差值；积分/yaw 模式在 500 ms 后冻结，单位 deg。 */
+    float yaw_correction_deg;
     float gyro_z_deg_s;
     /** 启动阶段由 B0 起算、再对 gz 纯积分得到的绝对航向角 A，单位 deg。 */
     float integrated_heading_deg;

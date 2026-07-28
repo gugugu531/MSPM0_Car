@@ -467,10 +467,10 @@ static APP_TASK_STATUS ChkYawAb_Tick(float dt){
     char l5[20];
     uint8_t n;
 
-    n = PutStr(l1, "A ");
+    n = PutStr(l1, "Int ");
     AppFmt_Fixed(&l1[n], YawEstimator_GetIntegrated(&yab_estimator), 2U);
-    n = PutStr(l2, "B "); AppFmt_Fixed(&l2[n], yab_fused_deg, 2U);
-    n = PutStr(l3, "B-A ");
+    n = PutStr(l2, "Fus "); AppFmt_Fixed(&l2[n], yab_fused_deg, 2U);
+    n = PutStr(l3, "Diff ");
     AppFmt_Fixed(&l3[n], YawEstimator_GetFusionOffset(
         &yab_estimator, yab_fused_deg), 2U);
     n = PutStr(l4, "gz "); AppFmt_Fixed(&l4[n], yab_gyro_z_deg_s, 2U);
