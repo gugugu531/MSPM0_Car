@@ -23,6 +23,8 @@ static uint32_t s_integrated_last_sample_count;
 static uint32_t s_imu_sample_ms;
 static uint32_t s_imu_sample_count;
 static YAW_ESTIMATOR s_yaw_estimator;
+/** 与融合 yaw 同坐标系的角速度，仅供纯积分航向使用。 */
+static float s_integration_gyro_z_deg_s;
 
 /** 两个 A/B 实验共用阶段管理；80% 版用固定周期积分生成动态 yaw 修正量。 */
 static bool StraightDrive_IsIntegratedHeadingMode(void)
@@ -122,6 +124,7 @@ static void StraightDrive_UpdateImu(void)
         !JY61P_I2C_GetSnapshot(&sample)){
         s_output.imu_ready = false;
         s_output.correction_percent = 0.0f;
+        s_integration_gyro_z_deg_s = 0.0f;
         if ((s_output.mode == STRAIGHT_DRIVE_MODE_RAMP_HEADING) ||
             (s_output.mode == STRAIGHT_DRIVE_MODE_RATE_THEN_HEADING) ||
             (s_output.mode == STRAIGHT_DRIVE_MODE_ENCODER_THEN_HEADING) ||
@@ -147,6 +150,8 @@ static void StraightDrive_UpdateImu(void)
 
     s_output.gyro_z_deg_s =
         STRAIGHT_DRIVE_RATE_GYRO_SIGN * sample.data.gyro_deg_s.z;
+    s_integration_gyro_z_deg_s =
+        STRAIGHT_DRIVE_INTEGRATION_GYRO_SIGN * sample.data.gyro_deg_s.z;
     s_output.yaw_deg = Kinematics_NormalizeAngleDeg(
         STRAIGHT_DRIVE_HEADING_YAW_SIGN * sample.data.attitude_deg.yaw);
     if (StraightDrive_IsIntegratedHeadingMode()){
@@ -205,7 +210,7 @@ static void StraightDrive_UpdateStartup(float dt_s)
                         (float)(s_imu_sample_ms - s_integrated_last_sample_ms) *
                         0.001f;
                     YawEstimator_Integrate(&s_yaw_estimator,
-                                           s_output.gyro_z_deg_s,
+                                           s_integration_gyro_z_deg_s,
                                            sample_dt_s);
                     s_output.integrated_heading_deg =
                         YawEstimator_GetIntegrated(&s_yaw_estimator);
@@ -214,7 +219,7 @@ static void StraightDrive_UpdateStartup(float dt_s)
                 }
             } else{
                 YawEstimator_Integrate(&s_yaw_estimator,
-                                       s_output.gyro_z_deg_s, dt_s);
+                                       s_integration_gyro_z_deg_s, dt_s);
                 s_output.integrated_heading_deg =
                     YawEstimator_GetIntegrated(&s_yaw_estimator);
             }
@@ -402,6 +407,7 @@ void StraightDrive_Init(STRAIGHT_DRIVE_MODE mode)
     s_integrated_phase_started = false;
     s_imu_sample_ms = 0U;
     s_imu_sample_count = 0U;
+    s_integration_gyro_z_deg_s = 0.0f;
     YawEstimator_Reset(&s_yaw_estimator);
     s_integrated_last_sample_ms = 0U;
     s_integrated_last_sample_count = 0U;

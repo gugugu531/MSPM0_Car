@@ -77,8 +77,10 @@ extern "C" {
 /** 100%模式的差速修正上限；速度优先混控下快侧 100%、最慢侧 80%。 */
 #define STRAIGHT_DRIVE_FULL_HEADING_OUTPUT_LIMIT    10.0f
 
-/** JY61P z 轴角速度反馈符号；实车验证应保持原始方向。 */
+/** JY61P z 轴角速度闭环反馈符号；实车验证应保持原始方向。不得用于航向积分。 */
 #define STRAIGHT_DRIVE_RATE_GYRO_SIGN               (1.0f)
+/** 纯积分航向使用的 gz 符号；须与修正后的融合 yaw 采用同一正方向。 */
+#define STRAIGHT_DRIVE_INTEGRATION_GYRO_SIGN        (-1.0f)
 /** JY61P yaw 反馈符号；当前安装方向下需反相以构成负反馈。 */
 #define STRAIGHT_DRIVE_HEADING_YAW_SIGN             (-1.0f)
 
@@ -118,6 +120,7 @@ typedef struct {
     float corrected_yaw_deg;
     /** 积分航向 A 与融合 yaw B 的差值；积分/yaw 模式在 500 ms 后冻结，单位 deg。 */
     float yaw_correction_deg;
+    /** 经角速度闭环极性校正的 gz；不代表航向积分坐标系。 */
     float gyro_z_deg_s;
     /** 启动阶段由 B0 起算、再对 gz 纯积分得到的绝对航向角 A，单位 deg。 */
     float integrated_heading_deg;

@@ -78,7 +78,7 @@ static bool TurnDrive_UpdateImu(void)
     s_output.corrected_yaw_deg = Kinematics_NormalizeAngleDeg(
         s_output.yaw_deg + s_output.yaw_correction_deg);
     s_output.gyro_z_deg_s =
-        TURN_DRIVE_GYRO_Z_SIGN * sample.data.gyro_deg_s.z;
+        TURN_DRIVE_INTEGRATION_GYRO_SIGN * sample.data.gyro_deg_s.z;
     s_imu_sample_ms = sample.timestamp_ms;
     s_imu_sample_count = sample.sample_count;
     s_output.imu_ready = true;

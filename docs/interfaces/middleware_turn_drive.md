@@ -13,4 +13,4 @@
 
 `turn_drive.h` 集中定义两种模式的基础占空比、左轮减速时长和终点占空比，以及直行距离、左转角、IMU 最大时延与航向 PID。左转先线性降低左轮占空比，随后固定左轮 `0%`、右轮保持对应基础占空比，并调用 `TB6612FNG_Brake(LEFT)` 抱死左轮。满速模式使用 `YawEstimator`、JY61P 一致快照和速度优先混控，与 `100 Int->Yaw` 对齐。
 
-`TURN_DRIVE_LEFT_YAW_DELTA_DEG` 设为 `-90°`，与当前逻辑 yaw 的正方向和物理左转方向相反的安装关系匹配。JY61P 无完整新鲜样本时，启动前保持零输出；运行中丢失则任务进入可恢复故障，框架主动刹车。
+`TURN_DRIVE_LEFT_YAW_DELTA_DEG` 设为 `-90°`，与当前逻辑 yaw 的正方向和物理左转方向相反的安装关系匹配。融合 yaw 与积分 gz 分别使用 `TURN_DRIVE_YAW_SIGN=-1.0f` 和 `TURN_DRIVE_INTEGRATION_GYRO_SIGN=-1.0f`，保证 A/B 同向；该积分符号不参与直行模块的 `gz -> 0` 角速度闭环。JY61P 无完整新鲜样本时，启动前保持零输出；运行中丢失则任务进入可恢复故障，框架主动刹车。

@@ -54,8 +54,8 @@ OLED 显示指令、实际左右占空比与编码器速度；陀螺模式额外
 - `vl/vr`：左/右轮线速度。
 - `xl/xr`：左/右轮累计距离。
 - `yaw/gz`：分别经 `STRAIGHT_DRIVE_HEADING_YAW_SIGN` 和
-  `STRAIGHT_DRIVE_RATE_GYRO_SIGN`
-  校正的航向角与 z 轴角速度。
+  `STRAIGHT_DRIVE_RATE_GYRO_SIGN` 校正的融合航向角与角速度闭环反馈。A/B 纯积分另用
+  `STRAIGHT_DRIVE_INTEGRATION_GYRO_SIGN`，避免改变已验证的角速度闭环极性。
 - `iyaw`：从启动时融合角 `B0` 起算的纯 `gz` 积分角 `A`；非积分模式为 0。
 - `corr`：当前闭环给出的差速修正；开环和速度模式为 0。
 
@@ -123,9 +123,10 @@ reference = normalize(B0 + shortest_angle(B1 - A1))
   为 `±100%`。
 - 角速度、累计路程差与航向 PID 默认为 P 控制，完整 `Kp/Ki/Kd`、积分和输出限幅宏集中在
   `middleware/straight_drive/straight_drive.h`，须根据实车整定。
-- yaw 和 gz 使用独立符号宏。实车观察到原始 yaw 会使巡航角环先掉头约
+- yaw、角速度闭环反馈和航向积分 gz 使用独立符号宏。实车观察到原始 yaw 会使巡航角环先掉头约
   `180°`，因此 `STRAIGHT_DRIVE_HEADING_YAW_SIGN=-1.0f`；但 gz 同步反相后角速度模式会持续
-  转圈，因此 `STRAIGHT_DRIVE_RATE_GYRO_SIGN=1.0f`。后续更换 IMU 安装方向时应分别验证两个宏。
+  转圈，因此 `STRAIGHT_DRIVE_RATE_GYRO_SIGN=1.0f`。A/B 积分必须与修正后的融合 yaw 同向，
+  单独使用 `STRAIGHT_DRIVE_INTEGRATION_GYRO_SIGN=-1.0f`。后续更换 IMU 安装方向时应分别验证。
 
 维护风险和后续重构边界见 [`../todo.md`](../todo.md#直行控制与-jy61p-数据链维护债务)。app
 任务不得复制 A/B 解算、阶段切换或混控算法；这些控制策略继续由 `straight_drive` 单点拥有。

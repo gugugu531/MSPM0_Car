@@ -22,7 +22,8 @@ extern "C" {
 #define TURN_DRIVE_INTEGRATED_PHASE_DURATION_MS        500U
 #define TURN_DRIVE_IMU_MAX_AGE_MS                      60U
 #define TURN_DRIVE_YAW_SIGN                            (-1.0f)
-#define TURN_DRIVE_GYRO_Z_SIGN                         (1.0f)
+/** 纯积分航向使用的 gz 符号，与 TURN_DRIVE_YAW_SIGN 同向。 */
+#define TURN_DRIVE_INTEGRATION_GYRO_SIGN               (-1.0f)
 #define TURN_DRIVE_TURN_COMPLETE_TOLERANCE_DEG         3.0f
 #define TURN_DRIVE_TURN_TIMEOUT_MS                     5000U
 #define TURN_DRIVE_HEADING_KP                          1.0f
@@ -51,6 +52,7 @@ typedef struct {
     float yaw_deg;
     float corrected_yaw_deg;
     float yaw_correction_deg;
+    /** 已转换到逻辑航向坐标系、仅供 A/B 积分的 gz。 */
     float gyro_z_deg_s;
     float integrated_heading_deg;
     float heading_reference_deg;

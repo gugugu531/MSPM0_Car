@@ -76,7 +76,7 @@ static bool LineGuidedDrive_UpdateImu(JY61P_I2C_SAMPLE *sample)
     }
 
     s_output.gyro_z_deg_s =
-        LINE_GUIDED_RATE_GYRO_SIGN * sample->data.gyro_deg_s.z;
+        LINE_GUIDED_INTEGRATION_GYRO_SIGN * sample->data.gyro_deg_s.z;
     s_output.yaw_deg = Kinematics_NormalizeAngleDeg(
         LINE_GUIDED_HEADING_YAW_SIGN * sample->data.attitude_deg.yaw);
     s_output.corrected_yaw_deg = Kinematics_NormalizeAngleDeg(
