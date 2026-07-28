@@ -4,7 +4,7 @@
 # GC2093 以 1280x720@90fps 工作：通道0输出 800x480 YUV420SP 并直绑 LCD，
 # 通道2输出 320x192 RGB888 供 OpenCV。两通道共享同一组 5:3 中心裁剪参数。
 #
-# 识别链：RGB->HSV 双红色掩膜->形态学->多水平 ROI 轮廓->连续路径->x(y)拟合。
+# 识别链：RGB->HSV 双红色掩膜->形态学->多水平 ROI 轮廓->连续路径->地面投影拟合。
 # 黑线由 S/V 阈值排除；红色横线产生的宽轮廓被拒绝，不参与轨迹拟合。
 # ------------------------------------------------------------------------
 import gc
@@ -33,6 +33,7 @@ IMAGE_HEIGHT = 192
 LCD_WIDTH = 800
 LCD_HEIGHT = 480
 CAMERA_ROTATED_180 = False
+AUTO_FOCUS_ENABLED = True
 
 # ===== HSV 红色阈值（OpenCV: H 0..179, S/V 0..255） =====
 # 红色跨越色相首尾，因此使用两个区间。S 下限排除白/灰，V 下限排除黑线。
@@ -60,8 +61,27 @@ MAX_VERTICAL_HEADING_DEG = 60.0
 NEAR_REFERENCE_Y = 176.0
 FAR_REFERENCE_Y = 72.0
 TRACK_REFERENCE_X = IMAGE_WIDTH * 0.5
+
+# ===== K230 安装几何（米、度；以下数值只是待上车测量的可运行初值） =====
+# 车体坐标原点为轮轴中心地面投影：右为 +X，前为 +Y，上为 +Z。
+# CAMERA_PIVOT_DISTANCE_M 是从转轴沿摄像头光轴向镜头方向的有符号距离。
+K230_PIVOT_AXLE_FORWARD_M = 0.12
+K230_PIVOT_HEIGHT_M = 0.24
+K230_PIVOT_PITCH_DEG = 45.0
+K230_CAMERA_PIVOT_DISTANCE_M = 0.03
+
+# 检测通道镜头内参也必须实测标定；主点和焦距均使用 320x192 检测图坐标。
+CAMERA_FOCAL_X_PX = 228.5
+CAMERA_FOCAL_Y_PX = 228.5
+CAMERA_PRINCIPAL_X_PX = IMAGE_WIDTH * 0.5
+CAMERA_PRINCIPAL_Y_PX = IMAGE_HEIGHT * 0.5
+
+TRACK_REFERENCE_LATERAL_M = 0.0
 TRACK_REFERENCE_HEADING_DEG = 0.0
-POSITION_NORMALIZATION_PX = IMAGE_WIDTH * 0.5
+POSITION_NORMALIZATION_M = 0.20
+MIN_GROUND_FORWARD_M = 0.02
+MAX_GROUND_FORWARD_M = 3.00
+MAX_GROUND_FIT_RESIDUAL_M = 0.030
 
 # LOCK 时只在预测轨迹附近搜索；连续丢失后恢复全宽 SEARCH。
 LOCK_SEARCH_HALF_WIDTH = 72
@@ -102,6 +122,15 @@ last_near_x = TRACK_REFERENCE_X
 filter_ready = False
 filtered_position = 0.0
 filtered_heading = 0.0
+
+camera_pitch_rad = math.radians(K230_PIVOT_PITCH_DEG)
+camera_sin_pitch = math.sin(camera_pitch_rad)
+camera_cos_pitch = math.cos(camera_pitch_rad)
+camera_forward_m = (K230_PIVOT_AXLE_FORWARD_M +
+                    K230_CAMERA_PIVOT_DISTANCE_M * camera_cos_pitch)
+camera_height_m = (K230_PIVOT_HEIGHT_M -
+                   K230_CAMERA_PIVOT_DISTANCE_M * camera_sin_pitch)
+focus_status = "AF OFF"
 
 
 def clamp(value, low, high):
@@ -241,6 +270,66 @@ def fit_x_from_y(points):
     return slope, intercept, residual
 
 
+def pixel_to_ground(y, x):
+    """把检测图像点投影到轮轴中心地面坐标，返回 (forward_m, lateral_m)。"""
+    normalized_x = (x - CAMERA_PRINCIPAL_X_PX) / CAMERA_FOCAL_X_PX
+    normalized_y = (y - CAMERA_PRINCIPAL_Y_PX) / CAMERA_FOCAL_Y_PX
+    ray_down = camera_sin_pitch + normalized_y * camera_cos_pitch
+    if ray_down <= 1.0e-6:
+        return None
+
+    ray_forward = camera_cos_pitch - normalized_y * camera_sin_pitch
+    distance_scale = camera_height_m / ray_down
+    forward_m = camera_forward_m + distance_scale * ray_forward
+    lateral_m = distance_scale * normalized_x
+    if (forward_m < MIN_GROUND_FORWARD_M or
+            forward_m > MAX_GROUND_FORWARD_M):
+        return None
+    return forward_m, lateral_m
+
+
+def project_track_to_ground(points):
+    ground_points = []
+    for y, x in points:
+        ground_point = pixel_to_ground(y, x)
+        if ground_point is not None:
+            ground_points.append(ground_point)
+    return ground_points
+
+
+def request_auto_focus():
+    global focus_status
+    if not AUTO_FOCUS_ENABLED:
+        focus_status = "AF OFF"
+        return
+
+    try:
+        enabled = sensor.auto_focus(True)
+        focus_status = "AF SET" if enabled else "AF FAIL"
+        print("vision_focus request=%s" % focus_status)
+    except Exception as exc:
+        focus_status = "AF N/A"
+        print("vision_focus request unavailable: %s" % exc)
+
+
+def check_auto_focus_capability():
+    global focus_status
+    if not AUTO_FOCUS_ENABLED or focus_status != "AF SET":
+        return
+
+    try:
+        focus_caps = sensor.focus_caps()
+        if focus_caps and focus_caps[0]:
+            focus_status = "AF ON"
+        else:
+            focus_status = "AF FIXED"
+        print("vision_focus status=%s caps=%s" %
+              (focus_status, focus_caps))
+    except Exception as exc:
+        focus_status = "AF N/A"
+        print("vision_focus capability unavailable: %s" % exc)
+
+
 def make_red_mask(rgb_img):
     rgb = rgb_img.to_numpy_ref()
     hsv = cv2.cvtColor(rgb, cv2.COLOR_RGB2HSV)
@@ -257,29 +346,38 @@ def detect_track(mask):
     global last_slope, last_intercept, last_near_x
 
     points = select_track_points(mask)
-    fit = fit_x_from_y(points) if len(points) >= MIN_FIT_POINTS else None
-    if fit is None or fit[2] > MAX_FIT_RESIDUAL_PX:
+    pixel_fit = fit_x_from_y(points) if len(points) >= MIN_FIT_POINTS else None
+    if pixel_fit is None or pixel_fit[2] > MAX_FIT_RESIDUAL_PX:
         track_lost_count += 1
         if track_lost_count > LOST_TO_SEARCH_FRAMES:
             track_locked = False
             last_slope = 0.0
             last_intercept = last_near_x
-        return False, 0.0, 0.0, 0, points, fit
+        return False, 0.0, 0.0, 0, points, pixel_fit, None, 0.0
 
-    slope, intercept, residual = fit
+    slope, intercept, residual = pixel_fit
     near_x = slope * NEAR_REFERENCE_Y + intercept
-    far_x = slope * FAR_REFERENCE_Y + intercept
-    heading_raw = math.degrees(math.atan2(
-        far_x - near_x, NEAR_REFERENCE_Y - FAR_REFERENCE_Y))
+    ground_points = project_track_to_ground(points)
+    ground_fit = (fit_x_from_y(ground_points)
+                  if len(ground_points) >= MIN_FIT_POINTS else None)
+    if ground_fit is None or ground_fit[2] > MAX_GROUND_FIT_RESIDUAL_M:
+        track_lost_count += 1
+        return False, 0.0, 0.0, 0, points, pixel_fit, ground_fit, 0.0
+
+    ground_slope, ground_intercept, ground_residual = ground_fit
+    lateral_error_m = ground_intercept - TRACK_REFERENCE_LATERAL_M
+    heading_raw = math.degrees(math.atan(ground_slope))
     if abs(heading_raw) > MAX_VERTICAL_HEADING_DEG:
         track_lost_count += 1
-        return False, 0.0, 0.0, 0, points, fit
+        return False, 0.0, 0.0, 0, points, pixel_fit, ground_fit, 0.0
 
-    position = clamp((near_x - TRACK_REFERENCE_X) /
-                     POSITION_NORMALIZATION_PX, -1.0, 1.0)
+    position = clamp(lateral_error_m / POSITION_NORMALIZATION_M, -1.0, 1.0)
     heading = clamp(heading_raw - TRACK_REFERENCE_HEADING_DEG, -90.0, 90.0)
     support = min(1.0, len(points) / float(len(SCAN_ROWS)))
-    quality = clamp(1.0 - residual / MAX_FIT_RESIDUAL_PX, 0.0, 1.0)
+    pixel_quality = clamp(1.0 - residual / MAX_FIT_RESIDUAL_PX, 0.0, 1.0)
+    ground_quality = clamp(1.0 - ground_residual /
+                           MAX_GROUND_FIT_RESIDUAL_M, 0.0, 1.0)
+    quality = min(pixel_quality, ground_quality)
     confidence = int((0.72 * support + 0.28 * quality) * 255.0)
 
     last_slope = slope
@@ -287,14 +385,22 @@ def detect_track(mask):
     last_near_x = clamp(near_x, 0.0, IMAGE_WIDTH - 1.0)
     track_locked = True
     track_lost_count = 0
-    return True, position, heading, confidence, points, fit
+    return (True, position, heading, confidence, points, pixel_fit,
+            ground_fit, lateral_error_m)
 
 
 def camera_init():
     global sensor, uart, display_img, morph_kernel
 
+    if (CAMERA_FOCAL_X_PX <= 0.0 or CAMERA_FOCAL_Y_PX <= 0.0 or
+            POSITION_NORMALIZATION_M <= 0.0 or camera_height_m <= 0.0 or
+            K230_PIVOT_PITCH_DEG < 0.0 or K230_PIVOT_PITCH_DEG > 90.0):
+        raise ValueError("invalid K230 mounting geometry or camera intrinsics")
+
     sensor = Sensor(width=SENSOR_WIDTH, height=SENSOR_HEIGHT, fps=SENSOR_FPS)
     sensor.reset()
+    # 官方 API 要求硬件自动对焦在 sensor.run() 之前开启。
+    request_auto_focus()
     if CAMERA_ROTATED_180:
         sensor.set_hmirror(True)
         sensor.set_vflip(True)
@@ -328,6 +434,8 @@ def camera_init():
         display_img = image.Image(LCD_WIDTH, LCD_HEIGHT, image.ARGB8888)
 
     sensor.run()
+    # v1.8 01Studio 实测 focus_caps() 需在 run() 后读取。
+    check_auto_focus_capability()
 
     morph_kernel = cv2.getStructuringElement(
         cv2.MORPH_RECT, (MORPH_KERNEL_WIDTH, MORPH_KERNEL_HEIGHT))
@@ -344,6 +452,10 @@ def camera_init():
           (SENSOR_WIDTH, SENSOR_HEIGHT, SENSOR_FPS,
            display_width, display_height, detect_width, detect_height,
            UART_ENABLED))
+    print("vision_geometry pivot_y=%.3f pivot_h=%.3f pitch=%.1f arm=%.3f camera_y=%.3f camera_h=%.3f" %
+          (K230_PIVOT_AXLE_FORWARD_M, K230_PIVOT_HEIGHT_M,
+           K230_PIVOT_PITCH_DEG, K230_CAMERA_PIVOT_DISTANCE_M,
+           camera_forward_m, camera_height_m))
 
 
 def camera_deinit():
@@ -355,7 +467,8 @@ def camera_deinit():
     # 按项目要求不关闭 Display，停止/异常时保留最后一帧和 OSD。
 
 
-def draw_overlay(valid, position, heading, confidence, points, fit,
+def draw_overlay(valid, position, heading, confidence, lateral_error_m,
+                 points, fit,
                  fps, capture_ms, mask_ms, track_ms):
     if not DISPLAY_LCD or display_img is None:
         return
@@ -377,15 +490,16 @@ def draw_overlay(valid, position, heading, confidence, points, fit,
                               color=(0, 255, 0), thickness=3)
 
     if valid:
-        status = ("LOCK p%.3f h%.2f c%d" %
-                  (position, heading, confidence))
+        status = ("LOCK e%+.3fm p%+.2f h%+.1f c%d" %
+                  (lateral_error_m, position, heading, confidence))
     else:
         status = "SEARCH RED VERTICAL"
     display_img.draw_string_advanced(12, 12, 27, status,
                                      color=(255, 255, 255))
     display_img.draw_string_advanced(
-        12, 48, 22, "FPS %.1f cap%d mask%d track%d" %
-        (fps, capture_ms, mask_ms, track_ms), color=(255, 255, 0))
+        12, 48, 22, "%s FPS %.1f cap%d mask%d track%d" %
+        (focus_status, fps, capture_ms, mask_ms, track_ms),
+        color=(255, 255, 0))
     # v1.8 PipeLine 的单 OSD 配置对应 OSD3。
     Display.show_image(display_img, 0, 0, Display.LAYER_OSD3)
 
@@ -415,7 +529,8 @@ def main():
             mask_ms = time.ticks_diff(time.ticks_ms(), mask_start_ms)
 
             track_start_ms = time.ticks_ms()
-            valid, position, heading, confidence, points, fit = detect_track(mask)
+            (valid, position, heading, confidence, points, fit,
+             ground_fit, lateral_error_m) = detect_track(mask)
             track_ms = time.ticks_diff(time.ticks_ms(), track_start_ms)
 
             if valid:
@@ -432,6 +547,9 @@ def main():
                 filtered_heading = 0.0
 
             send_frame(valid, filtered_position, filtered_heading, confidence)
+            filtered_lateral_error_m = (
+                filtered_position * POSITION_NORMALIZATION_M +
+                TRACK_REFERENCE_LATERAL_M) if valid else 0.0
 
             frame_count += 1
             fps_window_count += 1
@@ -444,14 +562,17 @@ def main():
 
             if frame_count % DISPLAY_INTERVAL == 0:
                 draw_overlay(valid, filtered_position, filtered_heading,
-                             confidence, points, fit, fps,
+                             confidence, filtered_lateral_error_m,
+                             points, fit, fps,
                              capture_ms, mask_ms, track_ms)
 
             if frame_count % LOG_INTERVAL == 0:
                 residual = fit[2] if fit is not None else -1.0
-                print("vision_v18 valid=%d pos=%.3f heading=%.2f conf=%d points=%d residual=%.2f fps=%.1f cap=%d mask=%d track=%d" %
-                      (valid, filtered_position, filtered_heading,
-                       confidence, len(points), residual, fps,
+                ground_residual = ground_fit[2] if ground_fit is not None else -1.0
+                print("vision_v18 valid=%d lateral_m=%+.3f pos=%+.3f heading=%+.2f conf=%d points=%d px_res=%.2f ground_res=%.3f fps=%.1f cap=%d mask=%d track=%d" %
+                      (valid, filtered_lateral_error_m, filtered_position,
+                       filtered_heading, confidence, len(points), residual,
+                       ground_residual, fps,
                        capture_ms, mask_ms, track_ms))
                 gc.collect()
 

@@ -21,7 +21,7 @@ extern "C" {
 #define VISION_LINE_BASE_DUTY_PERCENT          80.0f
 #define VISION_LINE_STARTUP_DURATION_MS        1000U
 
-/** K230 误差融合为目标角速度：位置已归一化到 [-1,1]，方向单位 deg。 */
+/** K230 已把轨迹外推到轮轴中心；位置归一化到 [-1,1]，方向单位 deg。 */
 #define VISION_LINE_POSITION_RATE_KP           55.0f
 #define VISION_LINE_HEADING_RATE_KP             1.4f
 #define VISION_LINE_OMEGA_LIMIT_DEG_S         100.0f
