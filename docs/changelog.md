@@ -1,6 +1,26 @@
 # 变更记录
 
 ## 未发布
+- **OLED 整帧刷新由阻塞 I2C 改为 DMA**（`bsp/oled`）。`OLED_Flush()` 起完 1025 字节事务即返回，
+  400kHz 下约 23ms 的传输全部交给 DMA，CPU 空出来——针对上一条遗留项「OLED 阻塞刷屏仍在控制拍内」。
+  - **配置走 `G3507.syscfg` 并用 SysConfig CLI 1.27.0（与文件头版本一致）重生成**：OLED 的
+    `DMAEvent1 = CONTROLLER_TXFIFO_TRIGGER` + `DMA_CHANNEL_EVENT1`（CH0，命名 `DMA_CH_OLED_TX`），
+    `intController = [ARBITRATION_LOST, NACK, STOP]`、`interruptPriority = 3`，
+    TX FIFO 触发阈值 `EMPTY → BYTES_1`（在 FIFO 抽干前补数据，免得控制器拉伸 SCL）。
+    生成 `DMA_CH_OLED_TX_CHAN_ID` / `OLED_INST_DMA_TRIGGER` 两个宏供驱动使用，
+    `SYSCFG_DL_DMA_init()` 进入 `SYSCFG_DL_init()`。
+  - `bsp/oled` 只做生成代码不覆盖的部分：目的地址指向 `MTXDATA`、`NVIC_EnableIRQ()`，
+    每帧填源地址与长度。启动顺序为先使能 DMA 通道再拉起始位，让 FIFO 先填上。
+  - 新增 1KB DMA 发送缓冲与绘制缓冲分离（双缓冲）。Flush 返回后 DMA 仍在读发送缓冲，
+    共用一块内存会让后续绘制改到正在传输的字节上，屏幕撕裂。ZI 增加 1KB。
+  - 收尾走 `I2C1_IRQHandler`（优先级 3，最低）：`STOP` 表示整帧真的发完；`NACK`/仲裁丢失
+    置错误标志并复位控制器。`OLED_WaitFlushDone()` 另并行轮询硬件状态，
+    使 `__enable_irq()` 之前的 `OLED_Init()` 阶段同样能判出完成。
+  - 异常（NACK/仲裁丢失/总线错误/自旋超时）一律停通道、复位事务、清 FIFO 后放回空闲，
+    单次故障不会永久锁死 OLED；DMA 起不来时退回阻塞整帧发送，不丢帧。
+  - 新增 `OLED_IsFlushBusy()` / `OLED_WaitFlushDone()`，`middleware/ui` 同步透传为
+    `Ui_IsFlushBusy()` / `Ui_WaitFlushDone()`。
+  - Keil/AC6 构建 `0 Error(s), 0 Warning(s)`。**尚未上板验证。**
 - **速度闭环由「纯 PI」改为「前馈 + PI 残差修正」**，依据 2026-07-29 上板遥测（14153 拍）：
   - 前馈用 Duty Sweep 实测的占空比→稳态轮速曲线反解，左右轮分开标定（`CHASSIS_FF_*`，
     10%~80% 区间拟合残差 < 2.4%），承担主出力；PI 只补残差。

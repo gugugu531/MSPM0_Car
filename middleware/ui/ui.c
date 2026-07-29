@@ -49,6 +49,14 @@ void Ui_Flush(void){
     OLED_Flush();
 }
 
+bool Ui_IsFlushBusy(void){
+    return OLED_IsFlushBusy();
+}
+
+bool Ui_WaitFlushDone(void){
+    return OLED_WaitFlushDone();
+}
+
 void Ui_Clear(void){
     OLED_Clear();
 }

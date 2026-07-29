@@ -64,6 +64,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_init(void)
     SYSCFG_DL_Gray_JY61P_I2C_init();
     SYSCFG_DL_Debug_Ex_init();
     SYSCFG_DL_Rpi_UART_init();
+    SYSCFG_DL_DMA_init();
     SYSCFG_DL_SYSTICK_init();
     /* Ensure backup structures have no valid state */
 	gMotor_LeftBackup.backupRdy 	= false;
@@ -117,6 +118,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_UART_Main_reset(Rpi_UART_INST);
 
 
+
     DL_GPIO_enablePower(GPIOA);
     DL_GPIO_enablePower(GPIOB);
     DL_TimerA_enablePower(Motor_Left_INST);
@@ -128,6 +130,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_I2C_enablePower(Gray_JY61P_I2C_INST);
     DL_UART_Main_enablePower(Debug_Ex_INST);
     DL_UART_Main_enablePower(Rpi_UART_INST);
+
 
     delay_cycles(POWER_STARTUP_DELAY);
 }
@@ -491,10 +494,20 @@ SYSCONFIG_WEAK void SYSCFG_DL_OLED_init(void) {
     DL_I2C_resetControllerTransfer(OLED_INST);
     /* Set frequency to 400000 Hz*/
     DL_I2C_setTimerPeriod(OLED_INST, 7);
-    DL_I2C_setControllerTXFIFOThreshold(OLED_INST, DL_I2C_TX_FIFO_LEVEL_EMPTY);
+    DL_I2C_setControllerTXFIFOThreshold(OLED_INST, DL_I2C_TX_FIFO_LEVEL_BYTES_1);
     DL_I2C_setControllerRXFIFOThreshold(OLED_INST, DL_I2C_RX_FIFO_LEVEL_BYTES_1);
     DL_I2C_enableControllerClockStretching(OLED_INST);
 
+    /* Configure Interrupts */
+    DL_I2C_enableInterrupt(OLED_INST,
+                           DL_I2C_INTERRUPT_CONTROLLER_ARBITRATION_LOST |
+                           DL_I2C_INTERRUPT_CONTROLLER_NACK |
+                           DL_I2C_INTERRUPT_CONTROLLER_STOP);
+
+    NVIC_SetPriority(OLED_INST_INT_IRQN, 3);
+    /* Configure DMA Event 1 */
+    DL_I2C_enableDMAEvent(OLED_INST, DL_I2C_EVENT_ROUTE_1,
+                          DL_I2C_DMA_INTERRUPT_CONTROLLER_TXFIFO_TRIGGER);
 
     /* Enable module */
     DL_I2C_enableController(OLED_INST);
@@ -599,6 +612,26 @@ SYSCONFIG_WEAK void SYSCFG_DL_Rpi_UART_init(void)
 
     DL_UART_Main_enable(Rpi_UART_INST);
 }
+
+static const DL_DMA_Config gDMA_CH_OLED_TXConfig = {
+    .transferMode   = DL_DMA_SINGLE_TRANSFER_MODE,
+    .extendedMode   = DL_DMA_NORMAL_MODE,
+    .destIncrement  = DL_DMA_ADDR_UNCHANGED,
+    .srcIncrement   = DL_DMA_ADDR_INCREMENT,
+    .destWidth      = DL_DMA_WIDTH_BYTE,
+    .srcWidth       = DL_DMA_WIDTH_BYTE,
+    .trigger        = OLED_INST_DMA_TRIGGER,
+    .triggerType    = DL_DMA_TRIGGER_TYPE_EXTERNAL,
+};
+
+SYSCONFIG_WEAK void SYSCFG_DL_DMA_CH_OLED_TX_init(void)
+{
+    DL_DMA_initChannel(DMA, DMA_CH_OLED_TX_CHAN_ID , (DL_DMA_Config *) &gDMA_CH_OLED_TXConfig);
+}
+SYSCONFIG_WEAK void SYSCFG_DL_DMA_init(void){
+    SYSCFG_DL_DMA_CH_OLED_TX_init();
+}
+
 
 SYSCONFIG_WEAK void SYSCFG_DL_SYSTICK_init(void)
 {

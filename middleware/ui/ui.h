@@ -8,10 +8,12 @@
  *   - 绘制原语 (Ui_Clear/Ui_ClearLine/Ui_DrawText/Ui_DrawTitle/Ui_DrawContentLine/
  *     Ui_UpdateText) 只写帧缓冲、不 Flush, 需批量绘制后自行调用 Ui_Flush() 显示。
  * 多行更新优先用 Ui_Render*(一次 Flush), 避免逐行 Ui_UpdateContentLine 触发多次整帧刷新。
+ * Flush 本身是非阻塞的(整帧走 DMA), 但两次 Flush 间隔短于一帧传输时间时, 后一次会等前一次。
  */
 #ifndef UI_H
 #define UI_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -66,8 +68,22 @@ void Ui_Init(void);
 /**
  * @brief 把帧缓冲整帧刷新到屏幕。
  * @note 供批量调用绘制原语后手动显示；透传 bsp/oled 的 OLED_Flush()，使上层无需直接依赖 oled.h。
+ * @note 非阻塞：整帧由 DMA 后台搬运（400kHz 下约 23ms），返回后可立刻继续绘制。
+ *       上一帧未发完时本函数会先等它结束。
  */
 void Ui_Flush(void);
+
+/**
+ * @brief 查询是否还有整帧传输在途。
+ * @note 透传 OLED_IsFlushBusy()。返回 true 时调用 Ui_Flush() 会阻塞等待。
+ */
+bool Ui_IsFlushBusy(void);
+
+/**
+ * @brief 阻塞等待在途的整帧传输结束。
+ * @note 透传 OLED_WaitFlushDone()。返回 false 表示该帧以总线异常/超时收场。
+ */
+bool Ui_WaitFlushDone(void);
 
 /**
  * @brief 清空整屏。

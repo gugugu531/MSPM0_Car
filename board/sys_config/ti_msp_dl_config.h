@@ -207,6 +207,11 @@ extern "C" {
 
 
 
+/* Defines for DMA_CH_OLED_TX */
+#define DMA_CH_OLED_TX_CHAN_ID                                               (0)
+#define OLED_INST_DMA_TRIGGER                                 (DMA_I2C1_TX_TRIG)
+
+
 /* Port definition for Pin Group LED */
 #define LED_PORT                                                         (GPIOA)
 
@@ -300,6 +305,7 @@ void SYSCFG_DL_OLED_init(void);
 void SYSCFG_DL_Gray_JY61P_I2C_init(void);
 void SYSCFG_DL_Debug_Ex_init(void);
 void SYSCFG_DL_Rpi_UART_init(void);
+void SYSCFG_DL_DMA_init(void);
 
 void SYSCFG_DL_SYSTICK_init(void);
 

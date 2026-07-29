@@ -106,6 +106,18 @@ typedef struct {
 
 初始化 UI 底层显示，内部调用 `OLED_Init()`。
 
+### `void Ui_Flush(void)`
+
+把帧缓冲整帧刷新到屏幕，透传 `OLED_Flush()`。**非阻塞**：整帧由 DMA 后台搬运（400kHz 下约 23ms），返回后可立刻继续绘制。上一帧未发完时本函数会先等它结束，因此两次刷屏间隔短于一帧传输时间时后一次仍会阻塞。
+
+### `bool Ui_IsFlushBusy(void)`
+
+查询是否还有整帧传输在途，透传 `OLED_IsFlushBusy()`。返回 `true` 时调用 `Ui_Flush()` 会阻塞等待。
+
+### `bool Ui_WaitFlushDone(void)`
+
+阻塞等待在途的整帧传输结束，透传 `OLED_WaitFlushDone()`。返回 `false` 表示该帧以总线异常或超时收场。
+
 ### `void Ui_Clear(void)`
 
 清空屏幕。
