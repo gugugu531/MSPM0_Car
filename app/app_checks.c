@@ -11,7 +11,7 @@
 #include "bsp_common.h"
 #include "debug_uart.h"
 #include "chassis.h"
-#include "ganv_gray.h"
+#include "yahboom_track.h"
 #include "hall_encoder.h"
 #include "step_motor.h"
 #include "wit_sdk.h"
@@ -34,8 +34,8 @@ static uint8_t PutStr(char *buf, const char *s){
     return i;
 }
 
-/* ============================ 灰度 I2C（感为，I2C0） ============================ */
-/* 与 JY61P/MPU6050 共 I2C0：进入时挂起 JY61P、退出时恢复。 */
+/* ============================ 灰度 I2C（Yahboom，I2C0） ============================ */
+/* 与 JY61P 共 I2C0：进入时挂起 JY61P、退出时恢复。 */
 
 static uint32_t gi_last_ui;
 static uint32_t gi_ok_cnt;    /* 累计读取成功次数。 */
@@ -43,7 +43,7 @@ static uint32_t gi_err_cnt;   /* 累计读取失败次数。 */
 
 static void ChkGrayI2c_Enter(void){
     JY61P_I2C_SetSuspended(true);    /* 让出 I2C0 */
-    (void)GanvGray_Init();           /* 上电 ping 同步；同时清零驱动内部诊断计数 */
+    (void)YahboomTrack_Init();       /* 探测在线；同时清零驱动内部诊断计数 */
     gi_ok_cnt     = 0U;
     gi_err_cnt    = 0U;
     gi_last_ui    = 0U;
@@ -58,19 +58,19 @@ static APP_TASK_STATUS ChkGrayI2c_Tick(float dt){
     gi_last_ui = now;
 
     uint8_t mask = 0U;
-    BSP_STATUS st = GanvGray_ReadDigital(&mask);
+    BSP_STATUS st = YahboomTrack_ReadDetectedMask(&mask);
     if (st == BSP_STATUS_OK){ gi_ok_cnt++; } else { gi_err_cnt++; }
 
-    char bits[GANV_GRAY_CHANNEL_COUNT + 1U];
+    char bits[YAHBOOM_TRACK_CHANNEL_COUNT + 1U];
     uint8_t active = 0U;
-    for (uint8_t i = 0U; i < GANV_GRAY_CHANNEL_COUNT; i++){
-        bool on = ((mask & (uint8_t)(1U << i)) != 0U);   /* bit0=第1路 */
+    for (uint8_t i = 0U; i < YAHBOOM_TRACK_CHANNEL_COUNT; i++){
+        bool on = ((mask & (uint8_t)(1U << i)) != 0U);   /* bit0=X1 */
         bits[i] = on ? '1' : '0';
         if (on){
             active++;
         }
     }
-    bits[GANV_GRAY_CHANNEL_COUNT] = '\0';
+    bits[YAHBOOM_TRACK_CHANNEL_COUNT] = '\0';
 
     char l2[16];
     char l3[16];
@@ -92,11 +92,11 @@ static APP_TASK_STATUS ChkGrayI2c_Tick(float dt){
     n += PutStr(&l3[n], " er ");
     AppFmt_I32(&l3[n], (int32_t)gi_err_cnt);
 
-    /* 诊断：W=写命令阶段累计失败 R=读数据阶段累计失败 s=最近失败码(超时=-4 / NACK=-1)。 */
+    /* 诊断：W=写寄存器累计失败 R=读寄存器累计失败 s=最近失败码(超时=-4 / NACK=-1)。 */
     uint32_t wr_fail = 0U;
     uint32_t rd_fail = 0U;
     int32_t  last_status = 0;
-    GanvGray_GetDiag(&wr_fail, &rd_fail, &last_status);
+    YahboomTrack_GetDiag(&rd_fail, &wr_fail, &last_status);   /* 注意形参序为 read, write */
     n = PutStr(l4, "W");
     AppFmt_I32(&l4[n], (int32_t)wr_fail);
     while (l4[n] != '\0'){ n++; }

@@ -2,7 +2,7 @@
  * @file  app_line_task.c
  * @brief 循迹任务实现。
  *
- * 循迹闭环由 line_follow 完成。感为 8 路灰度与 JY61P 共用 I2C0，本任务负责总线
+ * 循迹闭环由 line_follow 完成。Yahboom 8 路循线与 JY61P 共用 I2C0，本任务负责总线
  * 时间片：只在 JY61P 异步事务空闲时切换总线所有权。
  */
 #include "app_line_task.h"
@@ -15,7 +15,7 @@
 #include "app_fmt.h"
 #include "bsp_time.h"
 #include "bsp_common.h"
-#include "ganv_gray.h"
+#include "yahboom_track.h"
 
 #include <stddef.h>
 #include <stdbool.h>
@@ -33,12 +33,12 @@ static bool lt_sensor_ready;
 static BSP_STATUS lt_sensor_init_status;
 
 /*
- * 感为灰度是阻塞驱动，JY61P 是中断状态机。app 层负责共享 I2C0 的时间片：
+ * Yahboom 循线是阻塞驱动，JY61P 是中断状态机。app 层负责共享 I2C0 的时间片：
  * 只在 JY61P 完全空闲时挂起它、完成一次灰度读取，再恢复并启动下一帧 IMU。
  */
 static void LineSensor_Enter(void){
     JY61P_I2C_SetSuspended(true);
-    lt_sensor_init_status = GanvGray_Init();
+    lt_sensor_init_status = YahboomTrack_Init();
     JY61P_I2C_Init();
 
     lt_detected_mask = 0U;
@@ -52,8 +52,8 @@ static bool LineSensor_Tick(uint8_t *detected_mask){
     if ((lt_sensor_init_status == BSP_STATUS_OK) && JY61P_I2C_IsIdle()){
         uint8_t latest_mask;
         JY61P_I2C_SetSuspended(true);
-        /* 感为语义与 line_follow 掩码约定一致: bit0=X1 … bit7=X8, 1=检测到黑线。 */
-        BSP_STATUS status = GanvGray_ReadDigital(&latest_mask);
+        /* ReadDetectedMask 已归一化为 line_follow 约定: bit0=X1 … bit7=X8, 1=检测到黑线。 */
+        BSP_STATUS status = YahboomTrack_ReadDetectedMask(&latest_mask);
         JY61P_I2C_SetSuspended(false);
         if (status == BSP_STATUS_OK){
             lt_detected_mask = latest_mask;

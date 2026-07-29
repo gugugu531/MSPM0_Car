@@ -17,8 +17,8 @@
 | 子系统 | 器件 | 接口 | 驱动 |
 |--------|------|------|------|
 | 底盘轮 | 直流电机 ×2 + 霍尔编码器 | PWM/GPIO | `bsp/motor` (TB6612) |
-| 姿态 | JY61P (WIT 协议) | I2C0（与感为灰度共总线） | `bsp/imu` (wit_sdk, 中断驱动) |
-| 循迹 | 感为 8 路灰度 | I2C0（地址 `0x4F`，与 JY61P 共总线） | `bsp/ganv_gray` |
+| 姿态 | JY61P (WIT 协议) | I2C0（与 Yahboom 循线共总线） | `bsp/imu` (wit_sdk, 中断驱动) |
+| 循迹 | Yahboom 8 路循线 | I2C0（地址 `0x12`，与 JY61P 共总线） | `bsp/yahboom_track` |
 | 摆杆执行器 | 步进电机 | STEP PA29(TIMG6) / DIR PB14 / EN PB11 | `bsp/step_motor` |
 | 显示/输入 | OLED / 按键 | I2C1/GPIO | `bsp/oled`, `bsp/key` |
 | 调试遥测 | Debug_Ex | UART1 115200（PA8 TX / PA9 RX） | `bsp/debug_uart` |
@@ -69,8 +69,8 @@ app ─► middleware ─► {core (纯计算), bsp}
 2. 运行 SysConfig CLI 重生成 `ti_msp_dl_config.c/h`
 3. 检查生成代码（勿手改生成文件）
 
-> I2C0 实例在 syscfg 中名为 `MPU6050_JY61P_Tracking`（历史命名，未重命名以免牵连重生成），
-> 现由 JY61P / MPU6050 / 感为灰度 / Yahboom 循线模块共用。SR04 的 GPIO 定义为历史残留，未使用。
+> I2C0 实例在 syscfg 中名为 `Gray_JY61P_I2C`，由 JY61P（`0x50`）与 Yahboom 循线（`0x12`）共用；
+> 两者须由上层分时，见 `app/app_line_task.c` 的 `LineSensor_Tick()`。
 
 ### 编译
 ```

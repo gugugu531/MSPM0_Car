@@ -157,7 +157,7 @@ void LineFollow_Reset(void);
  * @brief 使用归一化黑线检测掩码推进完整巡线闭环并驱动底盘。
  * @param detected_mask bit0..7 对应 X1..X8；1=检测到黑线。
  * @param dt_s 控制周期，单位 s。
- * @note 这是感为等 I2C 观测源应使用的唯一入口，不在本层访问总线。
+ * @note 这是 Yahboom 等 I2C 观测源应使用的唯一入口，不在本层访问总线。
  *       JY61P 的初始化和 JY61P_I2C_Poll() 调度由 app 任务负责。
  */
 BSP_STATUS LineFollow_UpdateDetectedMask(uint8_t detected_mask, float dt_s);

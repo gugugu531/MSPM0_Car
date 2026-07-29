@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-/** 循迹：使用感为 8 路灰度观测，跑 line_follow 完整闭环。 */
+/** 循迹：使用 Yahboom 8 路循线观测，跑 line_follow 完整闭环。 */
 extern const APP_TASK_DESC APP_LINE_FOLLOW_TEST;
 
 #ifdef __cplusplus

@@ -15,7 +15,7 @@
 - `app_menu.h`：菜单树类型 `MENU_NODE`/`MENU_ITEM` 与 `Menu_Tick` 导航；`app_menu_def.c` 定义菜单树实例 `APP_ROOT_MENU`。
 - `app_checks.h`：外设自检任务描述符 `APP_CHK_*`（JY61P / Gray I2C / TB6612 / Encoder /
   Speed PID / Duty Sweep）。
-- `app_line_task.h`：感为灰度循迹任务，以及与 JY61P 共享 I2C0 的分时调度（挂根菜单）。
+- `app_line_task.h`：Yahboom 循线循迹任务，以及与 JY61P 共享 I2C0 的分时调度（挂根菜单）。
 
 ## core
 
@@ -41,21 +41,18 @@
 - `wit_sdk.h`：JY61P（WIT 协议）I2C0 中断驱动、数据解析和结构体读取接口，详细说明见 `docs/interfaces/bsp_wit_sdk.md`。
 - `tb6612fng.h`：TB6612FNG 双路直流电机驱动芯片接口，详细说明见 `docs/interfaces/bsp_tb6612fng.md`。
 - `hall_encoder.h`：左右双轮霍尔编码器计数、速度和距离估计接口（按 `HALL_ENCODER_ID` 选轮），详细说明见 `docs/interfaces/bsp_hall_encoder.md`。
-- `ganv_gray.h`：感为 8 路灰度传感器 I2C 驱动（I2C0，默认地址 `0x4F`），详细说明见 `docs/interfaces/bsp_ganv_gray.md`。
+- `yahboom_track.h`：Yahboom 8 路循线模块 I2C 驱动（I2C0，地址 `0x12`），详细说明见 `docs/interfaces/bsp_yahboom_track.md`。
 - `step_motor.h`：摆杆步进电机开环控制（STEP=PA29/TIMG6，DIR=PB14，EN=PB11），含速度限幅与开环位置限位，详细说明见 `docs/interfaces/bsp_step_motor.md`。
 - `debug_uart.h`：调试串口（Debug_Ex/UART1，115200）非阻塞收发——TX 遥测环形缓冲与 RX 视觉板字节流。
 
-### 三种灰度接口的位序与极性
+### 灰度接口的位序与极性
 
-三种驱动保留各自硬件/协议语义，当前没有一个跨驱动统一的 `mask` ABI。调用方不得只根据
-“灰度掩码”名称假设位序和极性：
+驱动的两个读接口保留了不同语义，调用方不得只根据“灰度掩码”名称假设位序和极性：
 
 | 接口 | 位序 | 置 `1` 的含义 |
 |---|---|---|
-| `GrayscaleSensor_ReadMask()` | `bit0=逻辑通道0` … `bit7=逻辑通道7` | 未检测到黑线（实机输入电平语义） |
-| `GanvGray_ReadDigital()` | `bit0=第1路` … `bit7=第8路` | 该路检测到，设备端 LED 亮 |
 | `YahboomTrack_ReadRaw()` | `bit7=X1` … `bit0=X8` | 白底，设备端 LED 灭 |
 | `YahboomTrack_ReadDetectedMask()` | `bit0=X1` … `bit7=X8` | 检测到黑线 |
 
-当前两个实际循迹任务均调用 `YahboomTrack_ReadDetectedMask()`，并把“黑线置 1”的归一化掩码
-传入 middleware。`LineFollow_Update()` 仍保留为 GPIO 兼容入口，但菜单任务不再调用它。
+循迹任务只调用 `YahboomTrack_ReadDetectedMask()`，把“黑线置 1”的归一化掩码传入
+`LineFollow_UpdateDetectedMask()`；middleware 侧不感知设备协议。

@@ -29,13 +29,13 @@ SDK 的命名、串口协议解析、寄存器定义和已有全局变量，同�
 
 ## 当前 I2C0 接口
 
-当前 JY61P 使用 `MPU6050_JY61P_Tracking_INST`（I2C0，PA0/PA1，400kHz），7 位地址
+当前 JY61P 使用 `Gray_JY61P_I2C_INST`（I2C0，PA0/PA1，400kHz），7 位地址
 `0x50`。采集采用非阻塞状态机：线程上下文调用 `JY61P_I2C_Poll()` 发起
 “读 angle → 读 gyro”链，`I2C0_IRQHandler()` 分阶段完成 TX/RX 和数据发布。
 
 - `JY61P_I2C_Init()`：清零诊断和状态机，打开 I2C0 NVIC。
 - `JY61P_I2C_Poll()`：空闲时发起一轮姿态角与角速度读取；忙或总线未空闲时立即返回。
-- `JY61P_I2C_SetSuspended(bool)`：挂起/恢复 JY61P 事务和 I2C0 中断，供 MPU6050、感为灰度
+- `JY61P_I2C_SetSuspended(bool)`：挂起/恢复 JY61P 事务和 I2C0 中断，供 Yahboom 循线
   等同总线阻塞驱动分时。
 - `JY61P_I2C_IsIdle()`：仅当 JY61P 状态机和 I2C0 控制器都空闲时返回 `true`；app 可据此
   安全地给 Yahboom 阻塞读取分配一个短时间片。

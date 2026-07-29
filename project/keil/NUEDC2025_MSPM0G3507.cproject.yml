@@ -17,13 +17,13 @@ project:
         - ../../middleware/ui
         - ../../bsp/common
         - ../../bsp/debug_uart
-        - ../../bsp/ganv_gray
         - ../../bsp/imu
         - ../../bsp/key
         - ../../bsp/motor
         - ../../bsp/oled
         - ../../bsp/step_motor
         - ../../bsp/time
+        - ../../bsp/yahboom_track
         - ../../board/sys_config
         - ../../third_party/mspm0-sdk/source
         - ../../third_party/mspm0-sdk/source/third_party/CMSIS/Core/Include
@@ -115,7 +115,6 @@ project:
     - group: BSP
       files:
         - file: ../../bsp/debug_uart/debug_uart.c
-        - file: ../../bsp/ganv_gray/ganv_gray.c
         - file: ../../bsp/imu/wit_sdk.c
         - file: ../../bsp/key/key.c
         - file: ../../bsp/motor/hall_encoder.c
@@ -123,3 +122,4 @@ project:
         - file: ../../bsp/oled/oled.c
         - file: ../../bsp/step_motor/step_motor.c
         - file: ../../bsp/time/bsp_time.c
+        - file: ../../bsp/yahboom_track/yahboom_track.c

@@ -26,8 +26,8 @@ app ─► middleware ─► bsp
 - `middleware`：组合 core 与 BSP，包括底盘（开环占空比 + 每轮速度闭环）、完整巡线闭环
   （line_follow）、航向辅助循迹（line_guided_drive）、K230 视觉循迹（vision_line_drive）、
   直行闭环（straight_drive）、转向状态机（turn_drive）、UI 和故障处理。
-- `bsp`：直接面向板级外设的驱动，包括直流电机(TB6612)、双轮霍尔编码器、OLED、按键、
-  JY61P IMU、MPU6050、灰度巡线传感器、调试串口与蓝牙串口。
+- `bsp`：直接面向板级外设的驱动，包括直流电机(TB6612)、双轮霍尔编码器、摆杆步进电机、
+  OLED、按键、JY61P IMU、Yahboom 循线传感器与调试串口。
 
 ## 支撑目录
 

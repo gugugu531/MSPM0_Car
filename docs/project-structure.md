@@ -39,7 +39,7 @@
 - `app_task.h`：任务生命周期契约（`APP_TASK_STATUS` + `APP_TASK_DESC` 三钩子），不含具体任务。
 - `app_menu.c/.h` 与 `app_menu_def.c`：菜单树（`MENU_NODE`/`MENU_ITEM`）导航与菜单树实例定义。
 - `app_checks.c/.h`：外设自检任务描述符，挂在 Device Check 子菜单。
-- `app_line_task.c/.h`：感为灰度循迹任务，负责与 JY61P 的 I2C0 分时调度，挂在根菜单。
+- `app_line_task.c/.h`：Yahboom 循线循迹任务，负责与 JY61P 的 I2C0 分时调度，挂在根菜单。
 - `app_fmt.c/.h`：定点数字格式化（不引浮点 printf），供自检显示。
 
 > 外设自检集中在 `app_checks`；功能性任务各占一个 `app_*_task.c/.h`，避免自检文件无限膨胀。
@@ -88,8 +88,7 @@
 - `motor/`（TB6612 直流电机 + 左右双轮霍尔编码器）
 - `oled/`（SSD1306，帧缓冲模型）
 - `grayscale_sensor/`（数字量 GPIO 版 8 路灰度）
-- `ganv_gray/`（感为 8 路灰度，I2C0，与 MPU6050/JY61P 共总线）
-- `yahboom_track/`（Yahboom 8 路循线模块，I2C0，与感为灰度/MPU6050/JY61P 共总线）
+- `yahboom_track/`（Yahboom 8 路循线模块，I2C0，与 JY61P 共总线）
 - `debug_uart/`（Debug_Ex/UART1，非阻塞遥测输出）
 - `bluetooth/`（BlueTooth/UART0，9600 8N1 收发）
 - `time/`

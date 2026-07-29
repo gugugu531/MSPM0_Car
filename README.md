@@ -5,7 +5,7 @@
 > **当前状态**：原 2025E 二维云台/瞄准子系统已整体移除；`app` 已重建为菜单驱动的裸机
 > 协作式调度框架。当前可从 OLED 菜单运行 Yahboom 八路循迹测试、80% 航向循迹实验、K230 红线视觉循迹、
 > 九种直行控制/启动实验、两种前进左转实验，
-> 以及 JY61P、MPU6050、GPIO/感为/Yahboom 三种灰度传感器、TB6612、双轮编码器、
+> 以及 JY61P、Yahboom 8 路循线传感器、TB6612、双轮编码器、
 > 速度 PID、占空比扫描和蓝牙串口等设备检查任务。
 >
 > **视觉循迹状态**：K230 红线识别、LCD/Preview 和约 90 FPS 板端运行已验证，但尚未安装到车上进行
@@ -18,8 +18,8 @@
 |--------|------|------|------|
 | 主控 | MSPM0G3507 (LQFP-64) | — | — |
 | 底盘轮 | 直流电机 ×2 (TB6612FNG) + 霍尔编码器 | PWM / GPIO | `bsp/motor` |
-| 姿态 | JY61P 六轴 (WIT 协议) | I2C0（与感为灰度共总线） | `bsp/imu` (wit_sdk) |
-| 循迹 | 感为 8 路灰度传感器 | I2C0（地址 `0x4F`，与 JY61P 共总线） | `bsp/ganv_gray` |
+| 姿态 | JY61P 六轴 (WIT 协议) | I2C0（与 Yahboom 循线共总线） | `bsp/imu` (wit_sdk) |
+| 循迹 | Yahboom 8 路循线模块 | I2C0（地址 `0x12`，与 JY61P 共总线） | `bsp/yahboom_track` |
 | 摆杆执行器 | 步进电机 + 驱动器 | STEP PA29（TIMG6）/ DIR PB14 / EN PB11 | `bsp/step_motor` |
 | 人机 | OLED + 独立按键 | I2C1 / GPIO | `bsp/oled`, `bsp/key` |
 | 调试遥测 | Debug_Ex | UART1 115200（PA8 TX / PA9 RX） | `bsp/debug_uart` |
@@ -210,7 +210,7 @@ python tools/checks/check_keil_project_sync.py
 python tools/checks/check_docs.py
 ```
 
-- JY61P、MPU6050、感为灰度与 Yahboom 循线模块共用 I2C0；循迹任务只在 JY61P 异步事务
+- JY61P 与 Yahboom 循线模块共用 I2C0；循迹任务只在 JY61P 异步事务
   空闲时短暂读取 Yahboom，其他阻塞式检查任务通过 `JY61P_I2C_SetSuspended()` 独占总线。
 - 不可同时使用无线调试器的虚拟串口和 Ex Uart。
 

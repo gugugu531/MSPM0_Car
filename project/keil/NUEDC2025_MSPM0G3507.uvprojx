@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+﻿<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
 <Project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="project_projx.xsd">
 
   <SchemaVersion>2.1</SchemaVersion>
@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\debug_uart;..\..\bsp\ganv_gray;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\step_motor;..\..\bsp\time;..\..\board\sys_config;..\..\third_party\mspm0-sdk\source;..\..\third_party\mspm0-sdk\source\third_party\CMSIS\Core\Include</IncludePath>
+              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\debug_uart;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\step_motor;..\..\bsp\time;..\..\bsp\yahboom_track;..\..\board\sys_config;..\..\third_party\mspm0-sdk\source;..\..\third_party\mspm0-sdk\source\third_party\CMSIS\Core\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -516,11 +516,6 @@
               <FilePath>..\..\bsp\debug_uart\debug_uart.c</FilePath>
             </File>
             <File>
-              <FileName>ganv_gray.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\ganv_gray\ganv_gray.c</FilePath>
-            </File>
-            <File>
               <FileName>wit_sdk.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\imu\wit_sdk.c</FilePath>
@@ -554,6 +549,11 @@
               <FileName>bsp_time.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\time\bsp_time.c</FilePath>
+            </File>
+            <File>
+              <FileName>yahboom_track.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\yahboom_track\yahboom_track.c</FilePath>
             </File>
           </Files>
         </Group>
