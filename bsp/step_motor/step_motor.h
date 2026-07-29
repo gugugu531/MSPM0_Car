@@ -38,19 +38,29 @@ extern "C" {
 #define STEP_MOTOR_BEAM_PWM_CHANNEL DL_TIMER_CC_0_INDEX
 #define STEP_MOTOR_QEI_TIMER        SMotor_QEI_INST
 
-/* ===== 极性(上板实测后按需翻转)===== */
-/* 使能脚高电平有效;驱动器为低有效则改 0。 */
+/* ===== 极性(三项均已上板实测,换驱动板或改接线后须重验)===== */
+/* 使能脚高电平有效;驱动器为低有效则改 0。已实测:高有效,取 1。 */
 #define STEP_MOTOR_BEAM_ENABLE_HIGH 1U
-/* 正方向对应 DIR 脚高电平;转向相反则改 0。 */
+/* 正方向对应 DIR 脚高电平;转向相反则改 0。已实测:高电平即正向,取 1。 */
 #define STEP_MOTOR_BEAM_POSITIVE_DIR_HIGH 1U
-/* 编码器计数正方向与电机正方向相反时改 1。 */
-#define STEP_MOTOR_ENCODER_INVERT 0U
+/*
+ * 编码器计数正方向与电机正方向相反时改 1。
+ * 实测:est 为正(DIR 正向)时 cnt 为负,故取 1。本宏只翻转 GetEncoderCount /
+ * GetMeasuredPosition / IsEncoderCountingUp,GetEncoderRaw 仍是硬件原值不翻。
+ */
+#define STEP_MOTOR_ENCODER_INVERT 1U
 
 /* ===== 电机与驱动器参数 ===== */
-/* 电机固有步距角,单位 deg。 */
+/* 电机固有步距角,单位 deg。已核对铭牌:1.8deg,即 200 整步/转。 */
 #define STEP_MOTOR_STEP_ANGLE_DEG 1.8f
-/* 驱动器细分数,须与驱动器拨码一致。 */
-#define STEP_MOTOR_MICROSTEP 32.0f
+/*
+ * 驱动器细分数,须与驱动器拨码一致。
+ * 实测值:Device Check 的 TURN 模式令开环角走满 360deg(发出 200x32=6400 个脉冲),
+ * 电机轴实际转了 4 圈 → 每转 6400/4=1600 脉冲 → 1600/(360/1.8)=8 细分。
+ * 已与驱动板拨码开关核对一致(拨码=8),见 STEP_MOTOR_STEP_TIMER_CLK_HZ 处的说明。
+ * 换驱动板或拨拨码后必须重测,固件与硬件不一致不会报错,只会让转速整体差固定倍数。
+ */
+#define STEP_MOTOR_MICROSTEP 8.0f
 /* 速度限幅,单位 deg/s。 */
 #define STEP_MOTOR_MAX_SPEED_DEG_S 240.0f
 
@@ -62,6 +72,10 @@ extern "C" {
  * 这是提交 e621209 上实测可正常驱动步进电机的分频组合(同为 TIMG6 / PA29),
  * 沿用之。曾按 WHEELTEC 官方例程改成 1 MHz(其 CPU 为 80MHz PLL),换算上等价、
  * 分辨率更高,但在本板实测未能正常驱动,故回退。
+ *
+ * 已间接验证:TURN 模式量的是 MICROSTEP 与本值的**比值**——两者任一错了另一个都会
+ * 补偿回来,角度刻度照样准,单靠转圈数分不出是谁错。但拟合出的 8 细分与驱动板拨码
+ * 开关读数一致,说明本值没有被用来吸收误差,62500 Hz 正确。
  *
  * ⚠ 改动 SysConfig 分频后必须同步本值,并核对生成的 SMotor_INST_CLK_FREQ。
  */
@@ -80,10 +94,10 @@ extern "C" {
 /*
  * 编码器每转的 QEI 计数。MSPM0 的 QEI 2-input 模式对 A/B 两路各取上升沿
  * (见 DL_Timer_configQEI 的 CC_TRIG_RISE),即 2 倍频,故本值 = 编码器线数 × 2。
- * ⚠ 默认按 500 线给出,必须用 Device Check 的 Step Motor 页手动转一整圈、读 raw
- *   计数差实测修正,否则 StepMotor_GetMeasuredPosition() 的刻度是错的。
+ * 实测值:Device Check 的 HAND 模式断电手转一整圈,cnt 变化 2000,反推编码器为 1000 线。
+ * 换编码器后必须重测,否则 StepMotor_GetMeasuredPosition() 的刻度是错的。
  */
-#define STEP_MOTOR_ENCODER_COUNTS_PER_REV 1000.0f
+#define STEP_MOTOR_ENCODER_COUNTS_PER_REV 2000.0f
 
 /*
  * 开环估计位置的软限位默认值,单位 deg(电机轴角,非摆杆角)。
