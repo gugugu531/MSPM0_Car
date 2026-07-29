@@ -168,6 +168,8 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
     DL_GPIO_initPeripheralInputFunction(
         GPIO_Debug_Ex_IOMUX_RX, GPIO_Debug_Ex_IOMUX_RX_FUNC);
 
+    DL_GPIO_initDigitalOutput(LED_G_IOMUX);
+
     DL_GPIO_initDigitalOutput(Buzzer_PIN_IOMUX);
 
     DL_GPIO_initDigitalOutputFeatures(Motor_IO_AIN1_IOMUX,
@@ -218,16 +220,16 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_UP,
 		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
 
-    DL_GPIO_initDigitalOutput(LED_G_IOMUX);
-
-    DL_GPIO_initDigitalOutput(SMotor_IO_DIR1_IOMUX);
+    DL_GPIO_initDigitalOutputFeatures(SMotor_IO_DIR1_IOMUX,
+		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
+		 DL_GPIO_DRIVE_STRENGTH_LOW, DL_GPIO_HIZ_DISABLE);
 
     DL_GPIO_initDigitalOutput(SMotor_IO_EN1_IOMUX);
 
-    DL_GPIO_clearPins(GPIOA, Motor_IO_AIN1_PIN |
-		LED_G_PIN);
-    DL_GPIO_enableOutput(GPIOA, Motor_IO_AIN1_PIN |
-		LED_G_PIN);
+    DL_GPIO_clearPins(GPIOA, LED_G_PIN |
+		Motor_IO_AIN1_PIN);
+    DL_GPIO_enableOutput(GPIOA, LED_G_PIN |
+		Motor_IO_AIN1_PIN);
     DL_GPIO_setUpperPinsPolarity(GPIOA, DL_GPIO_PIN_28_EDGE_RISE |
 		DL_GPIO_PIN_22_EDGE_RISE);
     DL_GPIO_setUpperPinsInputFilter(GPIOA, DL_GPIO_PIN_28_INPUT_FILTER_3_CYCLES |

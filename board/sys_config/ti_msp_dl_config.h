@@ -191,6 +191,12 @@ extern "C" {
 
 
 
+/* Port definition for Pin Group LED */
+#define LED_PORT                                                         (GPIOA)
+
+/* Defines for G: GPIOA.23 with pinCMx 53 on package pin 24 */
+#define LED_G_PIN                                               (DL_GPIO_PIN_23)
+#define LED_G_IOMUX                                              (IOMUX_PINCM53)
 /* Port definition for Pin Group Buzzer */
 #define Buzzer_PORT                                                      (GPIOB)
 
@@ -250,12 +256,6 @@ extern "C" {
 #define Key_PIN_4_PORT                                                   (GPIOB)
 #define Key_PIN_4_PIN                                           (DL_GPIO_PIN_25)
 #define Key_PIN_4_IOMUX                                          (IOMUX_PINCM56)
-/* Port definition for Pin Group LED */
-#define LED_PORT                                                         (GPIOA)
-
-/* Defines for G: GPIOA.23 with pinCMx 53 on package pin 24 */
-#define LED_G_PIN                                               (DL_GPIO_PIN_23)
-#define LED_G_IOMUX                                              (IOMUX_PINCM53)
 /* Port definition for Pin Group SMotor_IO */
 #define SMotor_IO_PORT                                                   (GPIOB)
 

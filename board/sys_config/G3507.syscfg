@@ -98,12 +98,13 @@ GPIO4.$name                         = "Buzzer";
 GPIO4.associatedPins[0].$name       = "PIN";
 GPIO4.associatedPins[0].pin.$assign = "PB5";
 
-GPIO5.$name                         = "SMotor_IO";
+GPIO5.$name                              = "SMotor_IO";
 GPIO5.associatedPins.create(2);
-GPIO5.associatedPins[0].$name       = "DIR1";
-GPIO5.associatedPins[0].pin.$assign = "PB14";
-GPIO5.associatedPins[1].$name       = "EN1";
-GPIO5.associatedPins[1].pin.$assign = "PB11";
+GPIO5.associatedPins[0].$name            = "DIR1";
+GPIO5.associatedPins[0].internalResistor = "PULL_DOWN";
+GPIO5.associatedPins[0].pin.$assign      = "PB14";
+GPIO5.associatedPins[1].$name            = "EN1";
+GPIO5.associatedPins[1].pin.$assign      = "PB11";
 
 I2C1.$name                             = "OLED";
 I2C1.basicEnableController             = true;
