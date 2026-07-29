@@ -194,10 +194,11 @@ armasm 语法，因此 MDK 6 有一条 `A1950W` 弃用警告；这是兼容性�
 - `Gray I2C` 进入后显示 8 路数字量二进制、`act` 触发数与 `ok/er`、`W/R/s` 诊断计数；
   断开传感器应显示 `READ FAIL` 且 `er` 递增
 - TB6612 自检短按发单次脉冲、左右轮编码器计数（`encL`/`encR`）随之变化
-- `Step Motor` 须**摆杆脱开或行程内**运行；短按 UP/DOWN 发单次脉冲，`est`(开环积分)
-  与 `qei`(编码器实测) 应同向变化且数值接近，持续偏离即为丢步。ENTER 清零后
-  手动把电机轴精确转一整圈，`cnt` 的变化量即 `STEP_MOTOR_ENCODER_COUNTS_PER_REV`
-  的真实值，据此修正 `bsp/step_motor/step_motor.h`
+- `Step Motor` 须**摆杆脱开或行程内**运行；ENTER 长按在 RUN/TURN/HAND/SWEEP/SPAN
+  五个标定模式间循环。RUN 模式下 `est`(开环积分) 与 `qei`(编码器实测) 应同向变化、
+  `slip` 不发散；HAND 模式自动断电，手转 N 圈后 `cpr` 栏即
+  `STEP_MOTOR_ENCODER_COUNTS_PER_REV` 的实测值。完整流程见
+  `docs/step-motor-calibration.md`
 - `Encoder` 自检整车前进时两轮 `spd` 应同为正（方向符号见 `bsp/motor/hall_encoder.h`）
 - `Speed PID` / `Duty Sweep` 须**抬起车轮**运行；可配合
   `tools/visualizers/speed_pid_viz.py` 看曲线

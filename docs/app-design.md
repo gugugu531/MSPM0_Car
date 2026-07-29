@@ -35,7 +35,7 @@ Main Menu
     ├── Gyro JY61P      (task)   JY61P 陀螺/姿态/温度 + 诊断计数
     ├── Gray I2C        (task)   Yahboom I2C 版(0x12), 8 路数字量 + 成功/失败与 I2C 诊断计数
     ├── TB6612          (task)   短按单次低速脉冲(20%/300ms) + 编码器响应, 抬轮提示
-    ├── Step Motor      (task)   摆杆步进短按脉冲(30deg/s, 400ms), 开环估计角与 QEI 实测角对比, EN 键清零
+    ├── Step Motor      (task)   摆杆步进五模式标定(RUN/TURN/HAND/SWEEP/SPAN), ENTER 长按切模式
     ├── Encoder         (task)   双轮 count/speed/dir
     ├── Speed PID       (task)   双轮速度闭环, 按键给目标 + 目标/实测对比, 整定用, 抬轮提示
     └── Duty Sweep      (task)   开环占空比阶梯, 查各占空比下编码器读速(死区/噪声诊断), 抬轮提示
