@@ -1,6 +1,7 @@
 # bsp/step_motor 接口说明
 
-摆杆执行器的步进电机开环控制。STEP 脉冲由定时器 PWM 产生，DIR/EN 为普通 GPIO。
+摆杆执行器的步进电机**位置式**控制。STEP 脉冲由定时器 PWM 产生，DIR/EN 为普通 GPIO，
+位置反馈来自 QEI 硬件正交计数。
 
 ## 硬件映射
 
@@ -9,72 +10,122 @@
 | STEP | `SMotor_INST` + `DL_TIMER_CC_0_INDEX` | PA29 | TIMG6_CCP0 |
 | DIR | `SMotor_IO_DIR1_PIN` | PB14 | GPIO |
 | EN | `SMotor_IO_EN1_PIN` | PB11 | GPIO |
+| 编码器 A/B | `SMotor_QEI_INST` | PA26 / PA27 | TIMG8（QEI 2-input） |
 
-配套的 `SMotor_QEI`（TIMG8 / PA26 / PA27）当前仅在 SysConfig 中占位保留引脚，
-本驱动不消费，摆杆角度闭环反馈需另行实现。
+## 控制模型：只有位置，没有速度
+
+驱动**不提供速度式接口**。唯一的运动指令是设定目标位置：
+
+```
+MoveToCount(target) ──► 限幅 ──► target_counts
+                                                        │
+        Tick 每 10ms：speed = clamp(KP × 误差角, ±speed_limit)
+                                                        │
+                                                   出脉冲 / 到位停
+```
+
+这样设计的原因是**限幅**：速度指令绕得过位置限幅——给一个方向持续转就出界了，
+只能靠事后守护拽回来；位置指令进门就被夹住，越界的目标根本发不出去。限幅因此
+只需在 `MoveToCount` 一个地方做一次，不可能被绕开。
+
+转速由 `StepMotor_SetSpeedLimit()` 约束——那是**上限**不是指令，误差大时跑到上限，
+接近目标自动减速。
+
+> 自检页里"持续转"的效果用「把目标设到很远处」实现（`SM_FAR_COUNTS`），
+> 途中即匀速；区别只在于这条路径同样受限幅约束。
 
 ## 时钟约束（改配置前必读）
 
-驱动把速度换算成定时器重载值：
+驱动把速度换算成定时器重载值，公式假定定时器时钟为 `STEP_MOTOR_STEP_TIMER_CLK_HZ`
+= 62500 Hz，即 SysConfig 中 `SMotor` 须配 `clockDivider = 8`、`clockPrescale = 64`
+（32MHz / 512），生成的 `SMotor_INST_CLK_FREQ` 应为 `62500`。
 
-```c
-arr = STEP_MOTOR_TIMER_CLOCK_HZ / (step_freq * STEP_MOTOR_TIMER_PRESCALER_FACTOR)
-```
-
-其中 `STEP_MOTOR_TIMER_PRESCALER_FACTOR = 32 × 8 × 2 = 512`，即公式**假定定时器
-实际时钟为 32MHz / 512 = 62500 Hz**。因此 SysConfig 中 `SMotor` 必须配
-`clockDivider = 8`、`clockPrescale = 64`，生成的 `SMotor_INST_CLK_FREQ` 应为 `62500`。
-
-> 二者不一致时不会有编译错误，但转速会整体偏离 —— 例如缺失分频配置时时钟为
-> 32MHz，脉冲频率会高出 512 倍，电机直接堵转。改动任一侧后务必核对
+> 二者不一致时不会有编译错误，只会让转速整体偏离固定倍数。改动任一侧后务必核对
 > `ti_msp_dl_config.h` 中的 `SMotor_INST_CLK_FREQ`。
 
 ## 参数
 
+标定手册见 [`../step-motor-calibration.md`](../step-motor-calibration.md)。
+
 | 宏 | 默认 | 说明 |
 |---|---|---|
 | `STEP_MOTOR_STEP_ANGLE_DEG` | 1.8 | 电机固有步距角 |
-| `STEP_MOTOR_MICROSTEP` | 32 | 细分数，**须与驱动器拨码一致** |
-| `STEP_MOTOR_MAX_SPEED_DEG_S` | 240 | 速度限幅 |
-| `STEP_MOTOR_MIN/MAX_POSITION_DEG` | ∓30 | 开环估计位置限位，**电机轴角非摆杆角** |
-| `STEP_MOTOR_BEAM_ENABLE_HIGH` | 1 | 使能脚高有效；驱动器低有效时改 0 |
-| `STEP_MOTOR_BEAM_POSITIVE_DIR_HIGH` | 1 | 正方向对应 DIR 高电平；上板确认转向后按需翻转 |
+| `STEP_MOTOR_MICROSTEP` | 8.0 | 细分数，**须与驱动器拨码一致**（已实测） |
+| `STEP_MOTOR_ENCODER_COUNTS_PER_REV` | 2000 | QEI 每转计数（2 倍频，已实测） |
+| `STEP_MOTOR_MAX_SPEED_DEG_S` | 240 | 速度硬上限 |
+| `STEP_MOTOR_SERVO_KP` | 3.0 | 伺服比例增益，1/s |
+| `STEP_MOTOR_POSITION_TOLERANCE_COUNTS` | 5 | 到位容差 |
+| `STEP_MOTOR_SERVO_MIN_SPEED_DEG_S` | 5.0 | 末端最低出力速度，防蠕动 |
+| `STEP_MOTOR_SERVO_DEFAULT_SPEED_LIMIT_DEG_S` | 90 | 速度上限的上电默认值 |
+| `STEP_MOTOR_ENC_SOFT_MIN/MAX_COUNTS` | 由 HARD ∓ MARGIN 推出 | **唯一生效的行程边界** |
+| `STEP_MOTOR_ENC_LIMIT_ENABLED` | 1 | 限位总开关，全程有效；**标定前保持 0** |
+| `STEP_MOTOR_STARTUP_LIFT_*` | 见头文件 | 上电自动抬升一组 |
+| `STEP_MOTOR_GUARD_RECOVER_*` | 见头文件 | 越界纠正一组 |
+| `STEP_MOTOR_TICK_PERIOD_MS` | 10 | Tick 调用周期，改大须同步加大 MARGIN |
+| `STEP_MOTOR_BEAM_ENABLE_HIGH` / `POSITIVE_DIR_HIGH` / `ENCODER_INVERT` | 1 / 1 / 1 | 三项极性，均已上板实测 |
 
 ## 接口
 
+共 **16 个**，单通道无参——只有摆杆一路步进电机，接口不带通道参数。
+
 ```c
-BSP_STATUS StepMotor_Init(void);
-BSP_STATUS StepMotor_SetSpeed(STEP_MOTOR_CHANNEL channel, float speed_deg_per_s);
-BSP_STATUS StepMotor_RunFor(STEP_MOTOR_CHANNEL channel, float speed_deg_per_s, uint32_t duration_ms);
-BSP_STATUS StepMotor_Stop(STEP_MOTOR_CHANNEL channel);
-BSP_STATUS StepMotor_StopAll(void);
-BSP_STATUS StepMotor_UpdateState(STEP_MOTOR_CHANNEL channel, uint32_t now_ms);
-BSP_STATUS StepMotor_UpdateAllState(uint32_t now_ms);
-float      StepMotor_GetSpeed(STEP_MOTOR_CHANNEL channel);
-float      StepMotor_GetEstimatedPosition(STEP_MOTOR_CHANNEL channel);
-void       StepMotor_ResetEstimatedPosition(STEP_MOTOR_CHANNEL channel);
-BSP_STATUS StepMotor_SetPositionLimit(const STEP_MOTOR_POSITION_LIMIT *limit);
-STEP_MOTOR_POSITION_LIMIT StepMotor_GetPositionLimit(void);
+/* 生命周期 */
+BSP_STATUS StepMotor_Init(void);       /* 上电即失能，编码器清零 = 坐标系原点 */
+void       StepMotor_Tick(uint32_t now_ms);   /* 唯一周期入口，10ms */
+
+/* 运动指令 —— 唯一入口，一律过限幅 */
+BSP_STATUS StepMotor_MoveToCount(int32_t target_counts);
+BSP_STATUS StepMotor_Stop(void);                               /* 就地停住 */
+BSP_STATUS StepMotor_SetSpeedLimit(float max_speed_deg_per_s); /* 上限，不是指令 */
+
+/* 状态查询 */
+int32_t  StepMotor_GetEncoderCount(void);
+int32_t  StepMotor_GetTargetCount(void);
+int32_t  StepMotor_GetPositionErrorCount(void);   /* 丢步的直接指标 */
+bool     StepMotor_IsAtTarget(void);
+float    StepMotor_CountsToDeg(int32_t counts);
+uint32_t StepMotor_SpeedToStepFreq(float speed_deg_per_s);
+
+/* 使能 */
+BSP_STATUS StepMotor_SetEnabled(bool enable);
+bool       StepMotor_IsEnabled(void);
+
+/* 异常可见性 */
+STEP_MOTOR_GUARD_STATE StepMotor_GetGuardState(void);
+void                   StepMotor_AbortStartup(void);
+
+/* 诊断 */
+float    StepMotor_GetSpeed(void);            /* 伺服实际下发速度，只读 */
+uint32_t StepMotor_GetStepFrequencyHz(void);
 ```
 
-通道枚举当前只有 `STEP_MOTOR_CHANNEL_BEAM`，保留枚举形式便于后续扩展。
+### 刻意不提供的能力
+
+| 缺失的接口 | 理由 |
+|---|---|
+| 任何速度式指令 | 速度指令绕得过位置限幅，位置指令绕不过 |
+| `ResetEncoder` / `SetEncoderCount` | 清零/平移坐标系会让限位边界失去意义。零点只在 `Init` 建立一次 |
+| 限位的运行期开关 | 限位由 `ENC_LIMIT_ENABLED` 宏一次性决定，全程有效。要越过软限位量行程就 `SetEnabled(false)` 手推 |
+| `ClearGuardFault` | `GUARD_FAULT` 意味着极性反了/编码器断线/机械卡死，重新上电才是正确处置 |
+| `ServoTick` / `UpdateEncoder` 单独暴露 | 都由 `Tick()` 统一驱动，顺序不能由调用方决定 |
+| `IsStartupDone` | 上层靠 `MoveToCount()` 返回 `BSP_STATUS_BUSY` 得知抬升未结束 |
 
 ## 使用约束
 
-- `StepMotor_SetSpeed()` 内部会先推进一次位置积分，控制拍内直接调用即可。
-- **`StepMotor_RunFor()` 是阻塞接口**（内部 `BSP_DelayMs`），只能用于自检/标定，
-  不可在控制拍内调用。
-- 位置为**速度积分的开环估计**，丢步不会被察觉；限位只能防止指令超程，
-  不能替代物理限位开关。
-- 位置限位默认值仅为兜底，须按实际连杆减速比与摆杆行程标定后用
-  `StepMotor_SetPositionLimit()` 覆盖。
-
-## 移植来源
-
-移植自 `NUEDC_2026/2026H` 的双轴（YAW/PITCH）云台驱动，算法逻辑未改。适配点：
-
-- 裁剪为单通道（本工程只有摆杆一路步进电机）
-- 原 PITCH 专用的限位逻辑改为通用位置限位：
-  `StepMotor_SetPitchLimit` → `StepMotor_SetPositionLimit`
-- 宏前缀 `STEP_MOTOR_PITCH_*` → `STEP_MOTOR_BEAM_*`
-- 补齐源工程缺失的定时器分频配置（见上文时钟约束）
+- **`StepMotor_Tick()` 必须以 10ms 周期持续调用**（`app_init.c` 已注册进调度器），
+  且与应用状态无关。它一身四职：采样编码器、跑上电抬升、判越界并纠正、驱动位置伺服。
+  **不调它电机根本不会动**——位置指令只登记目标，脉冲由这里的伺服下发。
+- 上电后驱动器**失能**、编码器清零。`MoveToCount()` 会自动通电，无需先手动使能。
+- **失能→使能的瞬间目标会被同步到当前实测位置**，防止断电期间摆杆回落后一通电就被
+  猛拽回旧目标。因此复能之后要动必须重新下位置指令。
+- 上电抬升进行中，外部 `MoveToCount()` 返回 `BSP_STATUS_BUSY` 并被忽略；
+  据此可知抬升未结束，或调 `StepMotor_AbortStartup()` 主动放弃。
+- **限位全程有效，没有运行期开关。** 要越过软限位量机械行程，走
+  `StepMotor_SetEnabled(false)` 手推摆杆——失能后伺服不出力、守护也无从纠正，
+  编码器却照常计数。这比"临时关限位"安全，也不会留下忘了开回来的隐患。
+- 编码器计数的**零点是上电位置**，所有限位常数都相对它。上电时摆杆必须停在同一个
+  可重复的机械参考位（推荐断电自重靠住的那一端），否则限位护错地方。详见标定手册 #11。
+- **丢步看 `GetPositionErrorCount()`**：不丢步时它稳定在跟踪误差附近
+  （约 `速度 ÷ SERVO_KP` 换算的计数），丢步时电机没走到、编码器落后，它会超出该值
+  且不收敛。原先的开环 `est` / `slip` 已删除——闭环下 `err` 是更直接的同一件事。
+- 软限位防的是控制器和操作者的失误，**不能替代物理限位开关**。

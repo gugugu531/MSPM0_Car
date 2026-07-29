@@ -230,32 +230,33 @@ static void ChkTb_Exit(void){
  * docs/step-motor-calibration.md 里的一到两项，并把该填回 step_motor.h 的那个数
  * 直接算好显示出来，免得在现场心算。
  *
- *  1/5 RUN    持续正/反转，ENTER 暂停（保留 est/cnt，可再按 UP/DOWN 接着累积）。
- *             看 est 与 qei 是否同向、slip(=est-qei) 是否发散。
+ *  1/5 RUN    持续正/反转（目标设到远处，被限位夹在边界上），ENTER 暂停。
+ *             看 cnt 的增减方向、err 是否收敛、g 行的守护状态。
  *             → DIR 极性 STEP_MOTOR_BEAM_POSITIVE_DIR_HIGH（按 UP 看摆杆倒向）
- *             → 编码器方向 STEP_MOTOR_ENCODER_INVERT（est 与 cnt 是否同号）
- *  2/5 TURN   开环精确走 N 整圈后自动停。走完看轴上标记实际转过几圈：
+ *             → 编码器方向 STEP_MOTOR_ENCODER_INVERT（按 UP 时 cnt 应增大）
+ *  2/5 TURN   走 N 整圈后自动停。走完看轴上标记实际转过几圈：
  *             → 细分数 STEP_MOTOR_MICROSTEP = 当前值 / 实际圈数
- *             c/N 一栏同时给出编码器每转计数的交叉验证值。
+ *             ⚠ 装机后行程通常不足一圈，目标会被限位夹住（l4 显示 CLAMPED），
+ *               这项标定得先拆下摆杆，或临时把 ENC_LIMIT_ENABLED 设 0 重编译。
  *  3/5 HAND   进入即断电，轴可手转；手转 N 圈后 cpr 栏就是实测每转计数。
  *             → STEP_MOTOR_ENCODER_COUNTS_PER_REV
- *             进本模式轴应能拧动、回其它模式应拧不动，据此定
+ *             进本模式轴应能拧动、回 RUN/TURN 应拧不动，据此定
  *             → STEP_MOTOR_BEAM_ENABLE_HIGH
- *  4/5 SWEEP  转速逐档上扫并记录 |slip| 峰值。峰值开始持续增大即已丢步，退一档：
+ *  4/5 SWEEP  在软限位内**往复**跑，转速逐档上扫并记录 |err| 峰值。
+ *             不丢步时 err 稳定在跟踪误差附近，峰值明显跳高即已丢步，退一档：
  *             → STEP_MOTOR_MAX_STEP_FREQ_HZ 取 f 栏的值
  *             ⚠ 必须装上摆杆带真实负载测，空载能跑的频率挂上摆杆通常要打对折。
- *  5/5 SPAN   按住 UP/DOWN 点动到机械参考位，ENTER 交替打 A/B 点，d 栏给出两点
- *             间的电机轴角。配合量角器读到的摆杆实际角度 θ：
- *             减速比 k = d / θ；软限位 = (θ_max - 5) × k
+ *  5/5 SPAN   进入即断电，**用手**把摆杆推到两端机械极限，ENTER 交替打 A/B 点。
+ *             A/B 显示原始计数，直接抄进
+ *             → STEP_MOTOR_ENC_HARD_MIN/MAX_COUNTS
+ *             d 栏给出两点间的电机轴角，配合量角器读到的摆杆角 θ 得减速比 k = d/θ。
  *
  * 标定有依赖顺序：MICROSTEP 错了 SWEEP 全错，COUNTS_PER_REV 错了 SPAN 全错。
  * 按 TURN → HAND → RUN → SWEEP → SPAN 的次序做，理由见标定手册。
  *
- * est 与编码器计数只在退出整页时清零（另有 TURN/HAND/SWEEP 起测时按各自需要清）。
- * 页内暂停一律保留读数——停下来正是为了读它。
- *
- * ⚠ 摆杆已装机时注意行程——当前软限位放在 ±100000° 等效于不限位，RUN/TURN/SWEEP
- *   都不会自动避让机械死点。随时按 ENTER 或 BACK 停止。
+ * ⚠ 本页**不清零编码器**：零点是上电参考位，限位那组边界全都相对它，清零一次限位
+ *   就护在错的地方了。需要"从零起测"的模式改为记基准值显示差值（rel 行）。
+ *   限位因此全程有效——要越过软限位量机械行程，用 HAND/SPAN 的失能手推。
  */
 
 /* SWEEP 的转速档，单位 deg/s。从远低于额定处起步，逐档确认再往上。 */
@@ -264,12 +265,17 @@ static const float sm_sweep_speed[] = {
 };
 #define SM_SWEEP_STEP_COUNT ((uint8_t)(sizeof(sm_sweep_speed) / sizeof(sm_sweep_speed[0])))
 
-/* RUN 模式转速：够慢，肉眼能跟上轴上的标记。 */
+/*
+ * 驱动只接受位置指令，本页的"持续转"因此改成"把目标设到很远处"——
+ * 伺服会一路跑到那里，途中就是匀速（速度上限饱和），效果与旧的速度式一致，
+ * 区别只是这条路径同样受位置限幅约束，测标定参数时不可能把摆杆开出行程。
+ */
+#define SM_FAR_COUNTS 1000000
+
+/* RUN 模式转速上限：够慢，肉眼能跟上轴上的标记。 */
 #define SM_RUN_SPEED_DEG_S 30.0f
-/* TURN 模式转速：慢一些，减小加减速带来的丢步，让圈数判读干净。 */
+/* TURN 模式转速上限：慢一些，减小加减速带来的丢步，让圈数判读干净。 */
 #define SM_TURN_SPEED_DEG_S 45.0f
-/* SPAN 模式点动转速：慢，便于对准机械参考位。 */
-#define SM_JOG_SPEED_DEG_S 20.0f
 
 #define SM_TURN_MAX 10U
 #define SM_HAND_MAX 20U
@@ -297,38 +303,44 @@ static bool     sm_running;
 static uint8_t  sm_turn_target;      /* TURN：目标圈数。 */
 static uint8_t  sm_hand_turns;       /* HAND：操作者已手转的圈数。 */
 static uint8_t  sm_sweep_idx;        /* SWEEP：当前转速档索引。 */
-static float    sm_slip_peak;        /* SWEEP：本档内 |est-qei| 的峰值。 */
+static int32_t  sm_err_peak;         /* SWEEP：本档内 |err| 的峰值。 */
 static int32_t  sm_span_a;           /* SPAN：A 点编码器计数。 */
 static int32_t  sm_span_b;           /* SPAN：B 点编码器计数。 */
 static bool     sm_span_next_is_b;   /* SPAN：下次打点记 B 而非 A。 */
 static bool     sm_span_has_a;
 static bool     sm_span_has_b;
 
-static float SmAbs(float v){
-    return (v < 0.0f) ? -v : v;
+/*
+ * 各模式的计数基准。
+ *
+ * 本页**不清零编码器**——编码器零点是上电参考位，限位那组边界全都相对它，
+ * 清零一次限位就护在错的地方了。需要"从零起测"的模式改为记下进入时的计数，
+ * 显示差值，坐标系和限位保护因此全程不受影响。
+ */
+static int32_t  sm_cnt_base;
+
+/* SWEEP 往复：当前是否朝正方向。 */
+static bool     sm_sweep_forward;
+
+/* 相对本模式基准的计数。 */
+static int32_t SmRelCount(void){
+    return StepMotor_GetEncoderCount() - sm_cnt_base;
 }
 
-/* 编码器计数换算成角度用的比例；COUNTS_PER_REV 未标定时这个刻度本身就是错的。 */
-static float SmCountsToDeg(int32_t counts){
-    if (STEP_MOTOR_ENCODER_COUNTS_PER_REV <= 0.0f){
-        return 0.0f;
-    }
-    return ((float)counts * 360.0f) / STEP_MOTOR_ENCODER_COUNTS_PER_REV;
+static void SmSetBase(void){
+    sm_cnt_base = StepMotor_GetEncoderCount();
 }
 
-/* 开环角与实测角之差。持续发散即丢步，这是所有模式共用的健康指标。 */
-static float SmSlip(void){
-    return StepMotor_GetEstimatedPosition(STEP_MOTOR_CHANNEL_BEAM) -
-           StepMotor_GetMeasuredPosition();
-}
-
-/* 由转速换算步进频率，与驱动内部同式；SWEEP 直接把这个数报给操作者抄回头文件。 */
-static uint32_t SmSpeedToFreq(float speed_deg_s){
-    if (STEP_MOTOR_STEP_ANGLE_DEG <= 0.0f){
-        return 0U;
-    }
-    return (uint32_t)((SmAbs(speed_deg_s) / STEP_MOTOR_STEP_ANGLE_DEG) *
-                      STEP_MOTOR_MICROSTEP);
+/*
+ * 位置误差的绝对值，单位：编码器计数。
+ *
+ * 闭环下这就是丢步的直接指标：不丢步时它稳定在跟踪误差附近（约 speed/SERVO_KP
+ * 换算的计数），丢步时电机没走到、编码器落后，它会超出该值且不收敛。
+ * 换算与显示都用驱动的接口，不再自己复制一份公式。
+ */
+static int32_t SmAbsErr(void){
+    int32_t e = StepMotor_GetPositionErrorCount();
+    return (e < 0) ? -e : e;
 }
 
 /* "前缀 + 定点数" 一行，省去每处重复的 PutStr/AppFmt 两步。 */
@@ -352,30 +364,41 @@ static void SmLineS(char *buf, const char *text){
  * [SM] 遥测。字段含义：
  *   m    当前标定模式序号
  *   t    ms 时间戳
- *   cmd  指令速度 deg/s
+ *   cnt  编码器累计计数（限位坐标系下的绝对位置）
+ *   tgt  目标计数
+ *   err  位置误差 = tgt - cnt，**丢步的直接指标**
+ *   deg  cnt 换算的电机轴角
+ *   cmd  伺服本拍下发的速度 deg/s（只读，不是指令）
  *   f    驱动实际应用的步进频率 Hz（0=未出脉冲，落进死区或已停）
- *   load 定时器装载值，实际脉冲频率 = STEP_MOTOR_STEP_TIMER_CLK_HZ/(load+1)
- *   est  开环积分角 deg
- *   qei  编码器实测角 deg
- *   cnt  编码器累计计数
- *   raw  QEI 硬件 16 位原始计数
  *   en   驱动器使能
- *   dir  QEI 硬件方向标志
+ *   g    守护状态（见 STEP_MOTOR_GUARD_STATE）
  */
 static void ChkStepMotor_Telemetry(uint32_t now){
     DebugUart_Printf(
-        "[SM] m=%u t=%lu cmd=%.2f f=%lu load=%lu est=%.3f qei=%.3f cnt=%ld raw=%u en=%u dir=%u\r\n",
+        "[SM] m=%u t=%lu cnt=%ld tgt=%ld err=%ld deg=%.2f cmd=%.2f f=%lu en=%u g=%u\r\n",
         (unsigned)sm_mode,
         (unsigned long)now,
-        (double)StepMotor_GetSpeed(STEP_MOTOR_CHANNEL_BEAM),
-        (unsigned long)StepMotor_GetStepFrequencyHz(STEP_MOTOR_CHANNEL_BEAM),
-        (unsigned long)StepMotor_GetTimerLoad(STEP_MOTOR_CHANNEL_BEAM),
-        (double)StepMotor_GetEstimatedPosition(STEP_MOTOR_CHANNEL_BEAM),
-        (double)StepMotor_GetMeasuredPosition(),
         (long)StepMotor_GetEncoderCount(),
-        (unsigned)StepMotor_GetEncoderRaw(),
-        (unsigned)(StepMotor_IsEnabled(STEP_MOTOR_CHANNEL_BEAM) ? 1U : 0U),
-        (unsigned)(StepMotor_IsEncoderCountingUp() ? 1U : 0U));
+        (long)StepMotor_GetTargetCount(),
+        (long)StepMotor_GetPositionErrorCount(),
+        (double)StepMotor_CountsToDeg(StepMotor_GetEncoderCount()),
+        (double)StepMotor_GetSpeed(),
+        (unsigned long)StepMotor_GetStepFrequencyHz(),
+        (unsigned)(StepMotor_IsEnabled() ? 1U : 0U),
+        (unsigned)StepMotor_GetGuardState());
+}
+
+/* 守护状态的短名，够窄能塞进 OLED 一行。 */
+static const char *SmGuardText(void){
+    switch (StepMotor_GetGuardState()){
+    case STEP_MOTOR_GUARD_OK:          return "g ok";
+    case STEP_MOTOR_GUARD_STALLED:     return "g OUT drv off";
+    case STEP_MOTOR_GUARD_RECOVER_NEG: return "g RECOVER -";
+    case STEP_MOTOR_GUARD_RECOVER_POS: return "g RECOVER +";
+    case STEP_MOTOR_GUARD_FAULT:       return "g FAULT!";
+    case STEP_MOTOR_GUARD_DISABLED:
+    default:                           return "g off";
+    }
 }
 
 static void ChkStepMotor_Render(const char *action){
@@ -387,90 +410,122 @@ static void ChkStepMotor_Render(const char *action){
     int32_t cnt = StepMotor_GetEncoderCount();
 
     switch (sm_mode){
-    case SM_MODE_TURN:
+    case SM_MODE_TURN: {
+        int32_t rel = SmRelCount();
         SmLineI(l1, "N ", (int32_t)sm_turn_target);
-        SmLineF(l2, "est ", StepMotor_GetEstimatedPosition(STEP_MOTOR_CHANNEL_BEAM), 0U);
-        SmLineI(l3, "cnt ", cnt);
+        SmLineI(l2, "rel ", rel);
         /* 每转计数的交叉验证值：MICROSTEP 已经对了，这个数就该等于 CPR。 */
-        SmLineI(l4, "c/N ", (sm_turn_target > 0U) ? (cnt / (int32_t)sm_turn_target) : 0);
+        SmLineI(l3, "c/N ", (sm_turn_target > 0U) ? (rel / (int32_t)sm_turn_target) : 0);
+        /* 目标被限幅过就说明行程不够，走不满 N 圈——不提示的话会误判成丢步。 */
+        SmLineS(l4, (StepMotor_GetTargetCount() !=
+                     sm_cnt_base + (int32_t)((float)sm_turn_target *
+                                             STEP_MOTOR_ENCODER_COUNTS_PER_REV))
+                        ? "CLAMPED by limit" : "target ok");
         hint = "UP/DN N  ENT go";
         break;
+    }
 
-    case SM_MODE_HAND:
-        SmLineS(l1, StepMotor_IsEnabled(STEP_MOTOR_CHANNEL_BEAM)
+    case SM_MODE_HAND: {
+        int32_t rel = SmRelCount();
+        SmLineS(l1, StepMotor_IsEnabled()
                         ? "!! still ON !!" : "drv OFF turnable");
-        SmLineI(l2, "cnt ", cnt);
+        SmLineI(l2, "rel ", rel);
         SmLineI(l3, "turns ", (int32_t)sm_hand_turns);
         /* 这一行就是 STEP_MOTOR_ENCODER_COUNTS_PER_REV 的实测值。 */
         SmLineI(l4, "cpr ", (sm_hand_turns > 0U)
-                                ? ((cnt < 0 ? -cnt : cnt) / (int32_t)sm_hand_turns) : 0);
+                                ? ((rel < 0 ? -rel : rel) / (int32_t)sm_hand_turns) : 0);
         hint = "UP/DN turns ENT 0";
         break;
+    }
 
     case SM_MODE_SWEEP:
         SmLineF(l1, "spd ", sm_sweep_speed[sm_sweep_idx], 0U);
-        SmLineI(l2, "f ", (int32_t)SmSpeedToFreq(sm_sweep_speed[sm_sweep_idx]));
-        SmLineF(l3, "slip ", SmSlip(), 1U);
+        /* 用驱动的换算，不自己复制公式——这个 f 就是要抄回 MAX_STEP_FREQ_HZ 的数。 */
+        SmLineI(l2, "f ", (int32_t)StepMotor_SpeedToStepFreq(sm_sweep_speed[sm_sweep_idx]));
+        SmLineI(l3, "err ", SmAbsErr());
         /* 峰值比瞬时值可靠：丢步是累积的，人眼盯瞬时数容易漏掉。 */
-        SmLineF(l4, "peak ", sm_slip_peak, 1U);
+        SmLineI(l4, "peak ", sm_err_peak);
         hint = "UP/DN spd ENT run";
         break;
 
     case SM_MODE_SPAN:
-        if (sm_span_has_a){ SmLineF(l1, "A ", SmCountsToDeg(sm_span_a), 1U); }
+        /*
+         * A/B 显示**原始计数**而非角度：这两个数要直接抄进 step_motor.h 的
+         * STEP_MOTOR_ENC_HARD_MIN/MAX_COUNTS，中间做一道角度换算只会引入
+         * ENCODER_COUNTS_PER_REV 的刻度误差。角度留给 d 行——减速比 k（#9）要的是它。
+         */
+        if (sm_span_has_a){ SmLineI(l1, "A ", sm_span_a); }
         else              { SmLineS(l1, "A --"); }
-        if (sm_span_has_b){ SmLineF(l2, "B ", SmCountsToDeg(sm_span_b), 1U); }
+        if (sm_span_has_b){ SmLineI(l2, "B ", sm_span_b); }
         else              { SmLineS(l2, "B --"); }
         if (sm_span_has_a && sm_span_has_b){
-            SmLineF(l3, "d ", SmCountsToDeg(sm_span_b - sm_span_a), 1U);
+            SmLineF(l3, "d ", StepMotor_CountsToDeg(sm_span_b - sm_span_a), 1U);
         } else {
             SmLineS(l3, "d --");
         }
-        SmLineF(l4, "qei ", StepMotor_GetMeasuredPosition(), 1U);
-        hint = "hold UP/DN  ENT mark";
+        /* 实时计数：打点前就知道会记下什么数，也便于盯着接近极限的过程。 */
+        SmLineI(l4, "cnt ", cnt);
+        hint = "PUSH by hand  ENT mark";
         break;
 
     case SM_MODE_RUN:
     default:
-        SmLineF(l1, "est ", StepMotor_GetEstimatedPosition(STEP_MOTOR_CHANNEL_BEAM), 1U);
-        SmLineF(l2, "qei ", StepMotor_GetMeasuredPosition(), 1U);
-        /* est 与 qei 同号且 slip 不发散，才说明方向与刻度都对。 */
-        SmLineF(l3, "slip ", SmSlip(), 1U);
-        SmLineI(l4, "cnt ", cnt);
-        hint = "UP/DN run ENT pause";
+        SmLineI(l1, "cnt ", cnt);
+        SmLineF(l2, "deg ", StepMotor_CountsToDeg(cnt), 1U);
+        /* 按 UP 时 cnt 应增大；err 不收敛即丢步。方向与刻度都靠这两行判。 */
+        SmLineI(l3, "err ", StepMotor_GetPositionErrorCount());
+        /* 守护状态：摆杆被自动纠正时，这是屏上唯一能看见的线索。 */
+        SmLineS(l4, SmGuardText());
+        hint = (STEP_MOTOR_ENC_LIMIT_ENABLED != 0U) ? "UP/DN run  lim on"
+                                                    : "UP/DN run  lim OFF";
         break;
     }
 
     Ui_RenderLines(sm_mode_tag[sm_mode], action, l1, l2, l3, l4, hint);
 }
 
-/* 切模式先停机；HAND 需要断电才能手转轴，离开时必须还回保持力矩。 */
+/*
+ * 切模式先停机。
+ *
+ * HAND 与 SPAN 要**失能驱动器**：这两个模式靠手推摆杆取数，而限位是全程有效的，
+ * 电机开不出软限位；失能之后伺服不出力、守护也无从纠正，编码器却照常计数——
+ * 这正是量机械行程该用的办法。其余模式恢复通电。
+ */
 static void ChkStepMotor_SetMode(SM_MODE mode){
-    (void)StepMotor_Stop(STEP_MOTOR_CHANNEL_BEAM);
+    (void)StepMotor_Stop();
     sm_running = false;
 
     sm_mode = mode;
-    (void)StepMotor_SetEnabled(STEP_MOTOR_CHANNEL_BEAM, mode != SM_MODE_HAND);
+    bool hand_driven = (mode == SM_MODE_HAND) || (mode == SM_MODE_SPAN);
+    (void)StepMotor_SetEnabled(!hand_driven);
 
-    if (mode == SM_MODE_HAND || mode == SM_MODE_TURN){
-        StepMotor_ResetEncoder();
-        StepMotor_ResetEstimatedPosition(STEP_MOTOR_CHANNEL_BEAM);
-        /* 编码器零点变了，SPAN 之前打的点就不再可比，一并作废免得读到错的 d。 */
-        sm_span_has_a     = false;
-        sm_span_has_b     = false;
-        sm_span_next_is_b = false;
+    /* 从零起测的模式改记基准值，不清零编码器——清零会让限位边界失去意义。 */
+    if (mode == SM_MODE_HAND || mode == SM_MODE_TURN || mode == SM_MODE_SWEEP){
+        SmSetBase();
     }
     if (mode == SM_MODE_SWEEP){
-        sm_slip_peak = 0.0f;
+        sm_err_peak = 0;
+        sm_sweep_forward = true;
     }
 }
 
 static void ChkStepMotor_Enter(void){
-    (void)StepMotor_Init();
+    /*
+     * 不调 StepMotor_Init()：外设已在 App_Init 里初始化过，而 Init 会把编码器零点
+     * 复位——零点正是限位赖以判定的东西，进个自检页就抹掉说不过去。
+     *
+     * 限位全程有效，本页不碰它。要越过软限位量机械行程，用 HAND / SPAN 的
+     * 失能手推，而不是临时关限位——后者会留下忘了开回来的隐患。
+     */
+    /* 上电抬升可能还没跑完，本页要自己下位置指令，先把它放弃掉，免得两边抢。 */
+    StepMotor_AbortStartup();
+
+    sm_cnt_base       = StepMotor_GetEncoderCount();
+    sm_sweep_forward  = true;
     sm_turn_target    = 1U;
     sm_hand_turns     = 1U;
     sm_sweep_idx      = 0U;
-    sm_slip_peak      = 0.0f;
+    sm_err_peak       = 0;
     sm_span_a         = 0;
     sm_span_b         = 0;
     sm_span_has_a     = false;
@@ -506,13 +561,23 @@ static const char *ChkStepMotor_HandleKeys(KEY_EVENT ev_up,
         }
         if (ev_en == KEY_EVENT_SHORT_PRESS){
             if (sm_running){
-                (void)StepMotor_Stop(STEP_MOTOR_CHANNEL_BEAM);
+                (void)StepMotor_Stop();
                 sm_running = false;
                 return "ABORT";
             }
-            StepMotor_ResetEncoder();
-            StepMotor_ResetEstimatedPosition(STEP_MOTOR_CHANNEL_BEAM);
-            (void)StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_BEAM, SM_TURN_SPEED_DEG_S);
+            SmSetBase();
+            /*
+             * 走满 N 圈 = 目标设成 N 圈对应的计数，到位自停。
+             *
+             * ⚠ 目标同样过限幅：摆杆装机后行程通常远小于一圈，这个目标会被夹到
+             *   软限位上，走不满 N 圈——TURN 量的是"轴实际转了几圈"，装机后本就
+             *   做不了。真要重标细分数得先拆下摆杆，或把 ENC_LIMIT_ENABLED 设 0
+             *   重编译。页面 lim 行会显示目标是否被夹过。
+             */
+            (void)StepMotor_SetSpeedLimit(SM_TURN_SPEED_DEG_S);
+            (void)StepMotor_MoveToCount(
+                sm_cnt_base +
+                (int32_t)((float)sm_turn_target * STEP_MOTOR_ENCODER_COUNTS_PER_REV));
             sm_running = true;
             return "GO";
         }
@@ -529,8 +594,8 @@ static const char *ChkStepMotor_HandleKeys(KEY_EVENT ev_up,
             return "turns-";
         }
         if (ev_en == KEY_EVENT_SHORT_PRESS){
-            StepMotor_ResetEncoder();
-            StepMotor_ResetEstimatedPosition(STEP_MOTOR_CHANNEL_BEAM);
+            /* "清零"只是重设基准值，不动编码器本身——限位的坐标系必须保住。 */
+            SmSetBase();
             sm_hand_turns = 1U;
             return "zero";
         }
@@ -539,38 +604,40 @@ static const char *ChkStepMotor_HandleKeys(KEY_EVENT ev_up,
     case SM_MODE_SWEEP:
         if (ev_up == KEY_EVENT_SHORT_PRESS && sm_sweep_idx + 1U < SM_SWEEP_STEP_COUNT){
             sm_sweep_idx++;
-            sm_slip_peak = 0.0f;
-            if (sm_running){
-                (void)StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_BEAM, sm_sweep_speed[sm_sweep_idx]);
-            }
+            sm_err_peak = 0;
+            /* 扫描的是**速度上限**：目标始终在远处，伺服一路饱和在上限上跑。 */
+            (void)StepMotor_SetSpeedLimit(sm_sweep_speed[sm_sweep_idx]);
             return "spd+";
         }
         if (ev_dn == KEY_EVENT_SHORT_PRESS && sm_sweep_idx > 0U){
             sm_sweep_idx--;
-            sm_slip_peak = 0.0f;
-            if (sm_running){
-                (void)StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_BEAM, sm_sweep_speed[sm_sweep_idx]);
-            }
+            sm_err_peak = 0;
+            (void)StepMotor_SetSpeedLimit(sm_sweep_speed[sm_sweep_idx]);
             return "spd-";
         }
         if (ev_en == KEY_EVENT_SHORT_PRESS){
             if (sm_running){
-                (void)StepMotor_Stop(STEP_MOTOR_CHANNEL_BEAM);
+                (void)StepMotor_Stop();
                 sm_running = false;
                 return "STOP";
             }
             /* 每档从零起测，否则上一档的丢步会记进本档峰值。 */
-            StepMotor_ResetEncoder();
-            StepMotor_ResetEstimatedPosition(STEP_MOTOR_CHANNEL_BEAM);
-            sm_slip_peak = 0.0f;
-            (void)StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_BEAM, sm_sweep_speed[sm_sweep_idx]);
+            SmSetBase();
+            sm_err_peak = 0;
+            sm_sweep_forward = true;
+            (void)StepMotor_SetSpeedLimit(sm_sweep_speed[sm_sweep_idx]);
+            (void)StepMotor_MoveToCount(SM_FAR_COUNTS);   /* 夹到软限位上界 */
             sm_running = true;
             return "RUN";
         }
         break;
 
     case SM_MODE_SPAN:
-        /* UP/DOWN 在本模式是"按住点动"，由 Tick 直接读电平，这里不消费其短按。 */
+        /*
+         * 本模式驱动器是失能的：**用手**把摆杆推到机械极限再打点。
+         * 限位全程有效，电机开不出软限位，量不到真实极限；失能后编码器照常计数，
+         * 手推反而是唯一量得准的办法。UP/DOWN 在这里没有作用。
+         */
         if (ev_en == KEY_EVENT_SHORT_PRESS){
             int32_t cnt = StepMotor_GetEncoderCount();
             bool marked_b = sm_span_next_is_b;
@@ -589,12 +656,15 @@ static const char *ChkStepMotor_HandleKeys(KEY_EVENT ev_up,
     case SM_MODE_RUN:
     default:
         if (ev_up == KEY_EVENT_SHORT_PRESS){
-            (void)StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_BEAM, SM_RUN_SPEED_DEG_S);
+            /* "持续正转" = 目标设到远处；限位启用时会被夹到边界，正是期望行为。 */
+            (void)StepMotor_SetSpeedLimit(SM_RUN_SPEED_DEG_S);
+            (void)StepMotor_MoveToCount(SM_FAR_COUNTS);
             sm_running = true;
             return "RUN FWD";
         }
         if (ev_dn == KEY_EVENT_SHORT_PRESS){
-            (void)StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_BEAM, -SM_RUN_SPEED_DEG_S);
+            (void)StepMotor_SetSpeedLimit(SM_RUN_SPEED_DEG_S);
+            (void)StepMotor_MoveToCount(-SM_FAR_COUNTS);
             sm_running = true;
             return "RUN REV";
         }
@@ -604,7 +674,7 @@ static const char *ChkStepMotor_HandleKeys(KEY_EVENT ev_up,
              * est 与 cnt，当场清零等于把要看的数据抹掉；再按 UP/DOWN 可接着累积。
              * 清零挪到退出整页时做。
              */
-            (void)StepMotor_Stop(STEP_MOTOR_CHANNEL_BEAM);
+            (void)StepMotor_Stop();
             sm_running = false;
             return "PAUSE";
         }
@@ -617,8 +687,7 @@ static APP_TASK_STATUS ChkStepMotor_Tick(float dt){
     (void)dt;
     uint32_t now = BSP_Time_GetMs();
 
-    /* 持续推进开环积分并采样 QEI（后者必须高频调用以免 16 位计数环绕丢圈）。 */
-    (void)StepMotor_UpdateState(STEP_MOTOR_CHANNEL_BEAM, now);
+    /* 编码器采样与开环积分都在 StepMotor_GuardTick()（调度器 10ms）里做，这里不重复。 */
 
     /* 三个键每拍都取，避免切模式后残留事件在新模式里意外触发。 */
     KEY_EVENT ev_up = Key_GetEvent(KEY_ID_UP);
@@ -635,32 +704,35 @@ static APP_TASK_STATUS ChkStepMotor_Tick(float dt){
         action = ChkStepMotor_HandleKeys(ev_up, ev_dn, ev_en);
     }
 
-    /* SPAN 点动：按住走、松开停。读稳定电平，与上面的事件消费互不干扰。 */
-    if (sm_mode == SM_MODE_SPAN){
-        float jog = 0.0f;
-        if (Key_IsPressed(KEY_ID_UP))        { jog =  SM_JOG_SPEED_DEG_S; }
-        else if (Key_IsPressed(KEY_ID_DOWN)) { jog = -SM_JOG_SPEED_DEG_S; }
-        if (jog != StepMotor_GetSpeed(STEP_MOTOR_CHANNEL_BEAM)){
-            (void)StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_BEAM, jog);
-            sm_running = (jog != 0.0f);
-        }
-    }
-
-    /* TURN：开环走满 N 圈自动停，让"实际转了几圈"成为可判读的量。 */
+    /* TURN：走到目标自动停。目标在 GO 时就设死了，这里只负责判到位并报 DONE。 */
     if ((sm_mode == SM_MODE_TURN) && sm_running){
-        float target = 360.0f * (float)sm_turn_target;
-        if (SmAbs(StepMotor_GetEstimatedPosition(STEP_MOTOR_CHANNEL_BEAM)) >= target){
-            (void)StepMotor_Stop(STEP_MOTOR_CHANNEL_BEAM);
+        if (StepMotor_IsAtTarget()){
             sm_running = false;
             action = "DONE";
         }
     }
 
-    /* SWEEP：跟踪本档 |slip| 峰值，丢步是累积的，盯瞬时值容易漏。 */
     if ((sm_mode == SM_MODE_SWEEP) && sm_running){
-        float slip = SmAbs(SmSlip());
-        if (slip > sm_slip_peak){
-            sm_slip_peak = slip;
+        /*
+         * SWEEP 往复：到一端就翻头。
+         *
+         * 摆杆装机后行程只有几百个计数，朝一个方向跑不到一秒就抵住软限位停了，
+         * 根本攒不出可判读的数据。往复既能持续运动，也更接近摆杆的真实工况
+         * （来回摆，起停频繁，正是最容易丢步的地方）。
+         */
+        if (StepMotor_IsAtTarget()){
+            sm_sweep_forward = !sm_sweep_forward;
+            (void)StepMotor_MoveToCount(sm_sweep_forward ? SM_FAR_COUNTS : -SM_FAR_COUNTS);
+        }
+
+        /*
+         * 跟踪本档 |err| 峰值。不丢步时 err 稳定在跟踪误差附近
+         * （约 speed/SERVO_KP 换算的计数）；丢步时电机没走到、编码器落后，
+         * err 会明显超出该值。盯瞬时值容易在两次刷屏之间漏掉，故记峰值。
+         */
+        int32_t err = SmAbsErr();
+        if (err > sm_err_peak){
+            sm_err_peak = err;
         }
     }
 
@@ -687,20 +759,17 @@ static APP_TASK_STATUS ChkStepMotor_Tick(float dt){
 }
 
 static void ChkStepMotor_Exit(void){
-    /* 只停脉冲并恢复使能——摆杆需要保持力矩，退出菜单不应让它落下去。 */
-    (void)StepMotor_StopAll();
-    (void)StepMotor_SetEnabled(STEP_MOTOR_CHANNEL_BEAM, true);
+    /* 与上电策略一致：停脉冲后失能，摆杆的保持力矩由后续任务显式申请。 */
+    (void)StepMotor_Stop();
+    (void)StepMotor_SetEnabled(false);
 
     /*
-     * 位置与计数在这里统一清零，页内的暂停不清——这样一次进出就是一段干净的量程，
-     * 下次进来不带上次的累计值。
-     *
-     * ⚠ 软限位标定完(见 docs/step-motor-calibration.md #10)之后要重新考虑这里:
-     *   限位是对开环 est 判的,退出时清零等于让驱动忘记摆杆的真实所在,
-     *   限位就失去意义,届时应改为只清编码器、或退出前先回机械零位。
+     * 编码器计数与限位全程没被动过——本页从头到尾只记基准值、不清零，
+     * 所以退出时无需恢复任何东西，保护一直都在。
      */
-    StepMotor_ResetEncoder();
-    StepMotor_ResetEstimatedPosition(STEP_MOTOR_CHANNEL_BEAM);
+    DebugUart_Printf("[SM] --- exit, cnt=%ld limit kept ---\r\n",
+                     (long)StepMotor_GetEncoderCount());
+
     sm_running = false;
 }
 
@@ -752,7 +821,12 @@ static APP_TASK_STATUS ChkEnc_Tick(float dt){
 /* ============================ 速度闭环 ============================ */
 
 #define SPD_STEP 0.05f   /* 每次按键调整的目标速度步进, m/s */
-#define SPD_MAX  3.0f   /* 目标速度上下限, m/s */
+/*
+ * 目标速度上下限, m/s。实测(2026-07-29 抬轮空载)满占空比对应约 1.21 m/s, 目标超过
+ * 1.45 m/s 即持续输出饱和; 旧值 3.0 是可达上限的 2.5 倍, 按几下就把速度环推进深度饱和。
+ * 取 1.0 留出余量。
+ */
+#define SPD_MAX  1.0f
 
 static float spd_target;
 static uint32_t spd_last_ui;
@@ -784,17 +858,22 @@ static APP_TASK_STATUS ChkSpeedPid_Tick(float dt){
     /*
      * 遥测: 每控制拍(20ms/50Hz)输出一行, 供上位机
      * tools/visualizers/speed_pid_viz.py 绘图整定。
-     * 字段: t 设备 ms; tl/tr 目标轮速; l/r 实测轮速(m/s); dl/dr 应用占空比(%,为上一拍值)。
+     * 字段: t 设备 ms; tl/tr 目标轮速; l/r 实测轮速(m/s); dl/dr 应用占空比(%,为上一拍值);
+     *       il/ir 速度环积分累加值(诊断积分饱和/退绕, 输出中的积分项为 KI*本值)。
+     * t 取自本拍 on_tick 入口, 相邻行的 t 差即实际控制周期, 可据此查调度抖动。
      * 非阻塞(环形缓冲+TX 中断), 对控制环零阻塞。
      */
     CHASSIS_DUTY duty = Chassis_GetDuty();
-    DebugUart_Printf("[SPD] t=%lu tl=%.3f tr=%.3f l=%.3f r=%.3f dl=%.1f dr=%.1f\r\n",
+    DebugUart_Printf("[SPD] t=%lu tl=%.3f tr=%.3f l=%.3f r=%.3f dl=%.1f dr=%.1f"
+                     " il=%.3f ir=%.3f\r\n",
         (unsigned long)now,
         (double)Chassis_GetWheelSpeedTarget(HALL_ENCODER_LEFT),
         (double)Chassis_GetWheelSpeedTarget(HALL_ENCODER_RIGHT),
         (double)HallEncoder_GetSpeed(HALL_ENCODER_LEFT),
         (double)HallEncoder_GetSpeed(HALL_ENCODER_RIGHT),
-        (double)duty.left_percent, (double)duty.right_percent);
+        (double)duty.left_percent, (double)duty.right_percent,
+        (double)Chassis_GetWheelSpeedIntegral(HALL_ENCODER_LEFT),
+        (double)Chassis_GetWheelSpeedIntegral(HALL_ENCODER_RIGHT));
 
     if ((now - spd_last_ui) < CHK_UI_PERIOD_MS){
         return APP_TASK_RUNNING;
@@ -850,11 +929,12 @@ static APP_TASK_STATUS ChkDutySweep_Tick(float dt){
     (void)Chassis_SetDuty(dsw_duty, dsw_duty);   /* 开环固定占空比。 */
 
     /*
-     * 遥测: 复用 [SPD] 行格式(tl/tr=0 无目标, l/r=实测轮速, dl/dr=应用占空比),
-     * 直接用 tools/visualizers/speed_pid_viz.py 看"占空比阶梯 vs 实测速度",
-     * 定位死区与噪声拐点。
+     * 遥测: 复用 [SPD] 行格式(tl/tr=0 无目标, l/r=实测轮速, dl/dr=应用占空比,
+     * il/ir=0 开环不跑速度环), 直接用 tools/visualizers/speed_pid_viz.py 看
+     * "占空比阶梯 vs 实测速度", 定位死区与噪声拐点。
      */
-    DebugUart_Printf("[SPD] t=%lu tl=0.000 tr=0.000 l=%.3f r=%.3f dl=%.1f dr=%.1f\r\n",
+    DebugUart_Printf("[SPD] t=%lu tl=0.000 tr=0.000 l=%.3f r=%.3f dl=%.1f dr=%.1f"
+                     " il=0.000 ir=0.000\r\n",
         (unsigned long)now,
         (double)HallEncoder_GetSpeed(HALL_ENCODER_LEFT),
         (double)HallEncoder_GetSpeed(HALL_ENCODER_RIGHT),

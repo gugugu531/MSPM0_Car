@@ -12,6 +12,17 @@
 > **注意**: 外部工具路径（Keil、SysConfig）需向用户确认实际安装位置；SDK 使用仓库内
 > submodule，不应恢复成本机绝对路径。
 
+> **摆杆步进**: 驱动是**位置式单通道**的（16 个接口，无通道参数）——
+> `StepMotor_MoveToCount()` 是唯一的运动入口，没有速度接口（速度指令绕得过位置限幅，
+> 位置指令绕不过），转速由 `StepMotor_SetSpeedLimit()` 约束。上电即失能并把编码器清零
+> （当前位置 = 坐标系原点），延时后自动抬升到 `STARTUP_LIFT_TARGET_COUNTS` 并保持。
+> 行程边界写死在 `step_motor.h` 宏里，**限位全程有效、无运行期开关**——要越过软限位量
+> 机械行程就失能手推（`Device Check -> Step Motor` 的 `HAND`/`SPAN` 模式）。
+> `StepMotor_Tick()` 由调度器每 10ms 跑位置伺服 + 抬升状态机 + 越界纠正，
+> **不调它电机不会动**。详见
+> [`docs/step-motor-calibration.md`](docs/step-motor-calibration.md) #11 与
+> [`docs/interfaces/bsp_step_motor.md`](docs/interfaces/bsp_step_motor.md)。
+
 ## 硬件外设映射
 
 | 子系统 | 器件 | 接口 | 驱动 |
@@ -19,7 +30,7 @@
 | 底盘轮 | 直流电机 ×2 + 霍尔编码器 | PWM/GPIO | `bsp/motor` (TB6612) |
 | 姿态 | JY61P (WIT 协议) | I2C0（与 Yahboom 循线共总线） | `bsp/imu` (wit_sdk, 中断驱动) |
 | 循迹 | Yahboom 8 路循线 | I2C0（地址 `0x12`，与 JY61P 共总线） | `bsp/yahboom_track` |
-| 摆杆执行器 | 步进电机 | STEP PA29(TIMG6) / DIR PB14 / EN PB11 | `bsp/step_motor` |
+| 摆杆执行器 | 步进电机 + QEI | STEP PA29(TIMG6) / DIR PB14 / EN PB11 / QEI TIMG8 | `bsp/step_motor` |
 | 显示/输入 | OLED / 按键 | I2C1/GPIO | `bsp/oled`, `bsp/key` |
 | 调试遥测 | Debug_Ex | UART1 115200（PA8 TX / PA9 RX） | `bsp/debug_uart` |
 
