@@ -13,6 +13,7 @@
 #include "chassis.h"
 #include "ganv_gray.h"
 #include "hall_encoder.h"
+#include "step_motor.h"
 #include "wit_sdk.h"
 #include "kinematics/kinematics.h"
 
@@ -223,6 +224,156 @@ static void ChkTb_Exit(void){
     (void)Chassis_Brake();
 }
 
+/* ======================= 摆杆步进电机 + QEI（主动） ======================= */
+/*
+ * 持续旋转模式。驱动器上电即使能并**保持通电**，电机始终有保持力矩。
+ *   UP        持续正转
+ *   DOWN      持续反转
+ *   ENTER 短按 停止脉冲 + 清零计数（仍通电，停在原地）
+ *   ENTER 长按 切换驱动器使能——断电后轴可用手转动，用于标定编码器每转计数
+ *   BACK      退出（Exit 只停脉冲，不断电）
+ *
+ * 用持续旋转而非短脉冲，是为了让「电机到底转不转」一眼可辨：转起来后轴上的标记
+ * 会明显转动，编码器 cnt 也会单调累积；若只是原地振动，cnt 仍会在零附近来回。
+ *
+ * ⚠ 持续旋转不会自动停止，摆杆已装机时注意行程——当前软限位已放到 ±100000°
+ *   等效于不限位。随时按 ENTER 或 BACK 停止。
+ *
+ * 标定用法：长按 ENTER 断电 → 短按 ENTER 清零 → 手动精确转一整圈 → 读 cnt 变化量，
+ * 即 STEP_MOTOR_ENCODER_COUNTS_PER_REV 的真实值。
+ */
+#define SM_RUN_SPEED_DEG_S 30.0f
+
+/* 遥测周期：20ms 以便看清起停瞬态与编码器跟随情况。 */
+#define SM_TELEMETRY_PERIOD_MS 20U
+
+static uint32_t sm_last_ui;
+static uint32_t sm_last_telemetry;
+static bool     sm_running;
+
+/*
+ * [SM] 遥测。字段含义：
+ *   t    ms 时间戳
+ *   cmd  指令速度 deg/s
+ *   f    驱动实际应用的步进频率 Hz（0=未出脉冲，落进死区或已停）
+ *   load 定时器装载值，实际脉冲频率 = 1000000/(load+1)
+ *   est  开环积分角 deg
+ *   qei  编码器实测角 deg
+ *   cnt  编码器累计计数
+ *   raw  QEI 硬件 16 位原始计数
+ *   en   驱动器使能
+ *   dir  QEI 硬件方向标志
+ */
+static void ChkStepMotor_Telemetry(uint32_t now){
+    DebugUart_Printf(
+        "[SM] t=%lu cmd=%.2f f=%lu load=%lu est=%.3f qei=%.3f cnt=%ld raw=%u en=%u dir=%u\r\n",
+        (unsigned long)now,
+        (double)StepMotor_GetSpeed(STEP_MOTOR_CHANNEL_BEAM),
+        (unsigned long)StepMotor_GetStepFrequencyHz(STEP_MOTOR_CHANNEL_BEAM),
+        (unsigned long)StepMotor_GetTimerLoad(STEP_MOTOR_CHANNEL_BEAM),
+        (double)StepMotor_GetEstimatedPosition(STEP_MOTOR_CHANNEL_BEAM),
+        (double)StepMotor_GetMeasuredPosition(),
+        (long)StepMotor_GetEncoderCount(),
+        (unsigned)StepMotor_GetEncoderRaw(),
+        (unsigned)(StepMotor_IsEnabled(STEP_MOTOR_CHANNEL_BEAM) ? 1U : 0U),
+        (unsigned)(StepMotor_IsEncoderCountingUp() ? 1U : 0U));
+}
+
+static void ChkStepMotor_Render(const char *action){
+    char est[20];
+    char meas[20];
+    char raw[20];
+    uint8_t n;
+
+    n = PutStr(est, "est ");
+    AppFmt_Fixed(&est[n], StepMotor_GetEstimatedPosition(STEP_MOTOR_CHANNEL_BEAM), 1U);
+    n = PutStr(meas, "qei ");
+    AppFmt_Fixed(&meas[n], StepMotor_GetMeasuredPosition(), 1U);
+    n = PutStr(raw, "cnt ");
+    AppFmt_I32(&raw[n], StepMotor_GetEncoderCount());
+
+    Ui_RenderLines("Chk StepMotor", action, est, meas, raw,
+                   StepMotor_IsEnabled(STEP_MOTOR_CHANNEL_BEAM) ? "drv ON" : "drv OFF (turnable)",
+                   "UP/DN run EN stop/hold");
+}
+
+static void ChkStepMotor_Enter(void){
+    (void)StepMotor_Init();
+    sm_running = false;
+    sm_last_ui = 0U;
+    sm_last_telemetry = 0U;
+    DebugUart_Printf("[SM] --- enter, clk=%lu min_f=%u max_f=%u ustep=%d ---\r\n",
+                     (unsigned long)STEP_MOTOR_STEP_TIMER_CLK_HZ,
+                     (unsigned)STEP_MOTOR_MIN_STEP_FREQ_HZ,
+                     (unsigned)STEP_MOTOR_MAX_STEP_FREQ_HZ,
+                     (int)STEP_MOTOR_MICROSTEP);
+    ChkStepMotor_Render("idle");
+}
+
+static APP_TASK_STATUS ChkStepMotor_Tick(float dt){
+    (void)dt;
+    uint32_t now = BSP_Time_GetMs();
+
+    /* 持续推进开环积分并采样 QEI（后者必须高频调用以免 16 位计数环绕丢圈）。 */
+    (void)StepMotor_UpdateState(STEP_MOTOR_CHANNEL_BEAM, now);
+
+    const char *action = NULL;
+
+    if (Key_GetEvent(KEY_ID_UP) == KEY_EVENT_SHORT_PRESS){
+        (void)StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_BEAM, SM_RUN_SPEED_DEG_S);
+        sm_running = true;
+        action = "RUN FWD";
+    } else if (Key_GetEvent(KEY_ID_DOWN) == KEY_EVENT_SHORT_PRESS){
+        (void)StepMotor_SetSpeed(STEP_MOTOR_CHANNEL_BEAM, -SM_RUN_SPEED_DEG_S);
+        sm_running = true;
+        action = "RUN REV";
+    } else {
+        KEY_EVENT ev = Key_GetEvent(KEY_ID_ENTER);
+        if (ev == KEY_EVENT_SHORT_PRESS){
+            /* 停脉冲但保持通电，摆杆靠保持力矩停在原地。 */
+            (void)StepMotor_Stop(STEP_MOTOR_CHANNEL_BEAM);
+            StepMotor_ResetEncoder();
+            StepMotor_ResetEstimatedPosition(STEP_MOTOR_CHANNEL_BEAM);
+            sm_running = false;
+            action = "STOP + zero";
+        } else if (ev == KEY_EVENT_LONG_PRESS){
+            /* 长按切换使能：断电后电机轴可手动转动，用于标定编码器每转计数。 */
+            (void)StepMotor_Stop(STEP_MOTOR_CHANNEL_BEAM);
+            sm_running = false;
+            bool on = !StepMotor_IsEnabled(STEP_MOTOR_CHANNEL_BEAM);
+            (void)StepMotor_SetEnabled(STEP_MOTOR_CHANNEL_BEAM, on);
+            action = on ? "DRV ON" : "DRV OFF (turnable)";
+        }
+    }
+
+    if (action != NULL){
+        DebugUart_Printf("[SM] --- %s ---\r\n", action);
+        ChkStepMotor_Render(action);
+        sm_last_ui = now;
+    }
+
+    /* 停止时也节流刷新，便于手动转轴标定时观察计数。 */
+    if ((now - sm_last_ui) >= CHK_UI_PERIOD_MS){
+        sm_last_ui = now;
+        ChkStepMotor_Render(sm_running ? "running" : "idle");
+    }
+
+    /* 运动期间高频输出遥测；停止时低频输出，便于手动转轴时观察编码器。 */
+    uint32_t telemetry_period = sm_running ? SM_TELEMETRY_PERIOD_MS : CHK_UI_PERIOD_MS;
+    if ((now - sm_last_telemetry) >= telemetry_period){
+        sm_last_telemetry = now;
+        ChkStepMotor_Telemetry(now);
+    }
+
+    return APP_TASK_RUNNING;
+}
+
+static void ChkStepMotor_Exit(void){
+    /* 只停脉冲，保持使能——摆杆需要保持力矩，退出菜单不应让它落下去。 */
+    (void)StepMotor_StopAll();
+    sm_running = false;
+}
+
 /* ============================ 编码器 ============================ */
 
 static uint32_t enc_last_ui;
@@ -411,6 +562,9 @@ const APP_TASK_DESC APP_CHK_GRAY_I2C = {
 };
 const APP_TASK_DESC APP_CHK_TB6612 = {
     "TB6612", ChkTb_Enter, ChkTb_Tick, ChkTb_Exit
+};
+const APP_TASK_DESC APP_CHK_STEP_MOTOR = {
+    "Step Motor", ChkStepMotor_Enter, ChkStepMotor_Tick, ChkStepMotor_Exit
 };
 const APP_TASK_DESC APP_CHK_ENCODER = {
     "Encoder", ChkEnc_Enter, ChkEnc_Tick, NULL
