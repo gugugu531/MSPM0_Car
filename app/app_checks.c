@@ -10,17 +10,11 @@
 #include "bsp_time.h"
 #include "bsp_common.h"
 #include "debug_uart.h"
-#include "bsp/cy_z/cy_z.h"
 #include "chassis.h"
-#include "grayscale_sensor.h"
 #include "ganv_gray.h"
-#include "yahboom_track.h"
 #include "hall_encoder.h"
 #include "wit_sdk.h"
-#include "mpu6050.h"
-#include "straight_drive.h"
 #include "kinematics/kinematics.h"
-#include "yaw_estimator.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -28,7 +22,6 @@
 
 /* 自检刷屏节流周期。 */
 #define CHK_UI_PERIOD_MS 200U
-#define CY_Z_MAX_AGE_MS  200U
 
 /* 把字符串拷入 buf，返回长度（不终止），便于随后接 AppFmt_* 拼数字。 */
 static uint8_t PutStr(char *buf, const char *s){
@@ -38,117 +31,6 @@ static uint8_t PutStr(char *buf, const char *s){
         i++;
     }
     return i;
-}
-
-/* ======================== 创源 CY-Z 串口陀螺仪 ======================== */
-
-static uint32_t cyz_last_ui;
-static uint8_t cyz_command_sequence;
-
-static void ChkGyroCyZ_Enter(void){
-    CyZ_Init();
-    cyz_last_ui = 0U;
-    cyz_command_sequence = 0U;
-}
-
-static APP_TASK_STATUS ChkGyroCyZ_Tick(float dt){
-    (void)dt;
-    CyZ_Poll();
-
-    if (Key_GetEvent(KEY_ID_UP) == KEY_EVENT_SHORT_PRESS){
-        CyZ_SendZeroAngle(cyz_command_sequence++);
-    } else if (Key_GetEvent(KEY_ID_DOWN) == KEY_EVENT_SHORT_PRESS){
-        CyZ_SendRecalibrateBias(cyz_command_sequence++);
-    } else if (Key_GetEvent(KEY_ID_ENTER) == KEY_EVENT_SHORT_PRESS){
-        CyZ_RequestTelemetry(cyz_command_sequence++);
-    }
-
-    uint32_t now = BSP_Time_GetMs();
-    if ((now - cyz_last_ui) < CHK_UI_PERIOD_MS){
-        return APP_TASK_RUNNING;
-    }
-    cyz_last_ui = now;
-
-    CY_Z_SAMPLE sample;
-    CY_Z_ACK ack;
-    CY_Z_DIAG diag;
-    char l1[20];
-    char l2[20];
-    char l3[20];
-    char l4[20];
-    char l5[20];
-    uint8_t n;
-
-    CyZ_GetDiag(&diag);
-    if (CyZ_GetSnapshot(&sample) && CyZ_IsFresh(CY_Z_MAX_AGE_MS)){
-        n = PutStr(l1, "angle "); AppFmt_Fixed(&l1[n], sample.angle_deg, 2U);
-        n = PutStr(l2, "gyro "); AppFmt_Fixed(&l2[n], sample.gyro_deg_s, 2U);
-        n = PutStr(l3, "seq "); AppFmt_I32(&l3[n], (int32_t)sample.sequence);
-    } else{
-        n = PutStr(l1, "WAIT UART PB13"); l1[n] = '\0';
-        n = PutStr(l2, "115200 8N1"); l2[n] = '\0';
-        n = PutStr(l3, "TX->PB13 GND"); l3[n] = '\0';
-    }
-
-    n = PutStr(l4, "rx "); AppFmt_I32(&l4[n], (int32_t)diag.rx_bytes);
-    while (l4[n] != '\0'){ n++; }
-    n += PutStr(&l4[n], " ok "); AppFmt_I32(&l4[n], (int32_t)diag.valid_frames);
-
-    if (CyZ_GetAck(&ack)){
-        n = PutStr(l5, "ack "); AppFmt_I32(&l5[n], (int32_t)ack.command);
-        while (l5[n] != '\0'){ n++; }
-        n += PutStr(&l5[n], "/"); AppFmt_I32(&l5[n], (int32_t)ack.result);
-    } else{
-        n = PutStr(l5, "crc "); AppFmt_I32(&l5[n], (int32_t)diag.crc_errors);
-        while (l5[n] != '\0'){ n++; }
-        n += PutStr(&l5[n], " drop ");
-        AppFmt_I32(&l5[n], (int32_t)diag.discarded_bytes);
-    }
-
-    Ui_RenderLines("Chk Gyro CY-Z", l1, l2, l3, l4, l5,
-                   "UP0 DNcal ENreq");
-    return APP_TASK_RUNNING;
-}
-
-static void ChkGyroCyZ_Exit(void){
-    CyZ_Deinit();
-}
-
-/* ============================ 灰度 ============================ */
-
-static uint32_t gs_last_ui;
-
-static void ChkGrayscale_Enter(void){
-    gs_last_ui = 0U;
-}
-
-static APP_TASK_STATUS ChkGrayscale_Tick(float dt){
-    (void)dt;
-    uint32_t now = BSP_Time_GetMs();
-    if ((now - gs_last_ui) < CHK_UI_PERIOD_MS){
-        return APP_TASK_RUNNING;
-    }
-    gs_last_ui = now;
-
-    uint8_t mask = GrayscaleSensor_ReadMask();
-    char bits[GRAYSCALE_SENSOR_CHANNEL_COUNT + 1U];
-    uint8_t one_count = 0U;
-    for (uint8_t i = 0U; i < GRAYSCALE_SENSOR_CHANNEL_COUNT; i++){
-        bool on = ((mask & (uint8_t)(1U << i)) != 0U);
-        bits[i] = on ? '1' : '0';
-        if (on){
-            one_count++;
-        }
-    }
-    bits[GRAYSCALE_SENSOR_CHANNEL_COUNT] = '\0';
-
-    char l2[16];
-    uint8_t n = PutStr(l2, "ones ");
-    AppFmt_I32(&l2[n], (int32_t)one_count);
-
-    Ui_RenderLines("Chk Grayscale", bits, l2, "BACK: exit",
-                   NULL, NULL, NULL);
-    return APP_TASK_RUNNING;
 }
 
 /* ============================ 灰度 I2C（感为，I2C0） ============================ */
@@ -231,106 +113,6 @@ static void ChkGrayI2c_Exit(void){
     JY61P_I2C_SetSuspended(false);   /* 归还 I2C0 给 JY61P */
 }
 
-/* ============================ Yahboom 循线 I2C（I2C0） ============================ */
-/* 与 JY61P/MPU6050/感为灰度共 I2C0：进入时挂起 JY61P、退出时恢复。 */
-
-static uint32_t yb_last_ui;
-static uint32_t yb_ok_cnt;
-static uint32_t yb_err_cnt;
-static uint8_t yb_raw;
-static uint8_t yb_mask;
-
-static char HexDigit(uint8_t value){
-    value &= 0x0FU;
-    return (value < 10U) ? (char)('0' + value) : (char)('A' + value - 10U);
-}
-
-static void ChkYahboomI2c_Enter(void){
-    JY61P_I2C_SetSuspended(true);    /* 让出 I2C0 */
-    (void)YahboomTrack_Init();       /* 探测 0x12，同时清零驱动诊断 */
-    yb_last_ui = 0U;
-    yb_ok_cnt  = 0U;
-    yb_err_cnt = 0U;
-    yb_raw     = 0xFFU;
-    yb_mask    = 0U;
-}
-
-static APP_TASK_STATUS ChkYahboomI2c_Tick(float dt){
-    (void)dt;
-    uint32_t now = BSP_Time_GetMs();
-    if ((now - yb_last_ui) < CHK_UI_PERIOD_MS){
-        return APP_TASK_RUNNING;
-    }
-    yb_last_ui = now;
-
-    uint8_t raw = 0xFFU;
-    BSP_STATUS st = YahboomTrack_ReadRaw(&raw);
-    if (st == BSP_STATUS_OK){
-        yb_raw = raw;
-        yb_mask = 0U;
-        for (uint8_t i = 0U; i < YAHBOOM_TRACK_CHANNEL_COUNT; i++){
-            if ((raw & (uint8_t)(1U << (7U - i))) == 0U){
-                yb_mask |= (uint8_t)(1U << i);   /* bit0=X1，1=黑线 */
-            }
-        }
-        yb_ok_cnt++;
-    } else{
-        yb_err_cnt++;
-    }
-
-    char bits[YAHBOOM_TRACK_CHANNEL_COUNT + 1U];
-    uint8_t active = 0U;
-    for (uint8_t i = 0U; i < YAHBOOM_TRACK_CHANNEL_COUNT; i++){
-        bool detected = ((yb_mask & (uint8_t)(1U << i)) != 0U);
-        bits[i] = detected ? '1' : '0';
-        if (detected){ active++; }
-    }
-    bits[YAHBOOM_TRACK_CHANNEL_COUNT] = '\0';
-
-    char l3[20];
-    char l4[20];
-    char l5[20];
-    uint8_t n;
-
-    if (st == BSP_STATUS_OK){
-        n = PutStr(l3, "raw 0x");
-        l3[n++] = HexDigit((uint8_t)(yb_raw >> 4));
-        l3[n++] = HexDigit(yb_raw);
-        n += PutStr(&l3[n], " act ");
-        AppFmt_I32(&l3[n], (int32_t)active);
-    } else{
-        n = PutStr(l3, "READ FAIL");
-        l3[n] = '\0';
-    }
-
-    n = PutStr(l4, "ok ");
-    AppFmt_I32(&l4[n], (int32_t)yb_ok_cnt);
-    while (l4[n] != '\0'){ n++; }
-    n += PutStr(&l4[n], " er ");
-    AppFmt_I32(&l4[n], (int32_t)yb_err_cnt);
-
-    uint32_t read_fail = 0U;
-    uint32_t write_fail = 0U;
-    int32_t last_status = 0;
-    YahboomTrack_GetDiag(&read_fail, &write_fail, &last_status);
-    n = PutStr(l5, "R");
-    AppFmt_I32(&l5[n], (int32_t)read_fail);
-    while (l5[n] != '\0'){ n++; }
-    n += PutStr(&l5[n], " W");
-    AppFmt_I32(&l5[n], (int32_t)write_fail);
-    while (l5[n] != '\0'){ n++; }
-    n += PutStr(&l5[n], " s");
-    AppFmt_I32(&l5[n], last_status);
-
-    Ui_RenderLines("Chk Yahboom I2C", bits, "X1->X8 1=BLACK", l3, l4, l5,
-                   "BACK: exit");
-    return APP_TASK_RUNNING;
-}
-
-static void ChkYahboomI2c_Exit(void){
-    JY61P_I2C_SetSuspended(false);   /* 归还 I2C0 给 JY61P */
-}
-
 /* ============================ 陀螺仪 JY61P ============================ */
 
 static uint32_t gj_last_ui;
@@ -371,187 +153,6 @@ static APP_TASK_STATUS ChkGyroJy_Tick(float dt){
 
     Ui_RenderLines("Chk Gyro JY61P", l1, l2, l3, "BACK: exit", NULL, NULL);
     return APP_TASK_RUNNING;
-}
-
-/* ======================== 航向 A/B 对比（无电机） ======================== */
-
-#define YAW_AB_IMU_MAX_AGE_MS 60U
-
-static uint32_t yab_last_ui_ms;
-static uint32_t yab_last_sample_ms;
-static uint32_t yab_last_sample_count;
-static float yab_fused_deg;
-static float yab_gyro_z_deg_s;
-static bool yab_valid;
-static YAW_ESTIMATOR yab_estimator;
-
-static void ChkYawAb_Enter(void){
-    /* 本任务不调用任何 Chassis/Motor 接口，只观察共享 I2C0 上的 JY61P。 */
-    JY61P_I2C_SetSuspended(false);
-    JY61P_I2C_Init();
-    yab_last_ui_ms = 0U;
-    yab_last_sample_ms = 0U;
-    yab_last_sample_count = 0U;
-    YawEstimator_Reset(&yab_estimator);
-    yab_fused_deg = 0.0f;
-    yab_gyro_z_deg_s = 0.0f;
-    yab_valid = false;
-}
-
-static APP_TASK_STATUS ChkYawAb_Tick(float dt){
-    (void)dt;
-    JY61P_I2C_Poll();
-
-    uint32_t now_ms = BSP_Time_GetMs();
-    JY61P_I2C_SAMPLE sample;
-
-    if (JY61P_I2C_GetSnapshot(&sample) &&
-        (sample.sample_count != yab_last_sample_count)){
-        yab_last_sample_count = sample.sample_count;
-
-        if (JY61P_I2C_IsDataFresh(YAW_AB_IMU_MAX_AGE_MS)){
-            float fused_deg = Kinematics_NormalizeAngleDeg(
-                STRAIGHT_DRIVE_HEADING_YAW_SIGN *
-                sample.data.attitude_deg.yaw);
-            float gyro_z_deg_s =
-                STRAIGHT_DRIVE_RATE_GYRO_SIGN * sample.data.gyro_deg_s.z;
-
-            if (!yab_valid){
-                /* A0 = B0：首次完整样本只负责建立公共角度原点。 */
-                YawEstimator_Start(&yab_estimator, fused_deg,
-                                   gyro_z_deg_s);
-                yab_valid = true;
-            } else{
-                float sample_dt_s =
-                    (float)(sample.timestamp_ms - yab_last_sample_ms) * 0.001f;
-                YawEstimator_Integrate(&yab_estimator, gyro_z_deg_s,
-                                       sample_dt_s);
-            }
-
-            yab_last_sample_ms = sample.timestamp_ms;
-            yab_fused_deg = fused_deg;
-            yab_gyro_z_deg_s = gyro_z_deg_s;
-
-            float delta_ba_deg = YawEstimator_GetFusionOffset(
-                &yab_estimator, yab_fused_deg);
-            DebugUart_Printf(
-                "[YAB] t=%lu n=%lu a=%.3f b=%.3f ba=%.3f gz=%.3f\r\n",
-                (unsigned long)now_ms,
-                (unsigned long)sample.sample_count,
-                (double)YawEstimator_GetIntegrated(&yab_estimator),
-                (double)yab_fused_deg,
-                (double)delta_ba_deg,
-                (double)yab_gyro_z_deg_s);
-        } else{
-            /* 样本链中断后无法补积分；下一帧重新令 A0=B0。 */
-            yab_valid = false;
-        }
-    } else if (!JY61P_I2C_IsDataFresh(YAW_AB_IMU_MAX_AGE_MS)){
-        yab_valid = false;
-    }
-
-    if ((now_ms - yab_last_ui_ms) < CHK_UI_PERIOD_MS){
-        return APP_TASK_RUNNING;
-    }
-    yab_last_ui_ms = now_ms;
-
-    if (!yab_valid){
-        Ui_RenderLines("Yaw A/B No Motor", "IMU waiting", "motor untouched",
-                       "BACK: exit", NULL, NULL, NULL);
-        return APP_TASK_RUNNING;
-    }
-
-    char l1[20];
-    char l2[20];
-    char l3[20];
-    char l4[20];
-    char l5[20];
-    uint8_t n;
-
-    n = PutStr(l1, "Int ");
-    AppFmt_Fixed(&l1[n], YawEstimator_GetIntegrated(&yab_estimator), 2U);
-    n = PutStr(l2, "Fus "); AppFmt_Fixed(&l2[n], yab_fused_deg, 2U);
-    n = PutStr(l3, "Diff ");
-    AppFmt_Fixed(&l3[n], YawEstimator_GetFusionOffset(
-        &yab_estimator, yab_fused_deg), 2U);
-    n = PutStr(l4, "gz "); AppFmt_Fixed(&l4[n], yab_gyro_z_deg_s, 2U);
-    n = PutStr(l5, "sample ");
-    AppFmt_I32(&l5[n], (int32_t)yab_last_sample_count);
-
-    Ui_RenderLines("Yaw A/B No Motor", l1, l2, l3, l4, l5, "BACK: exit");
-    return APP_TASK_RUNNING;
-}
-
-/* ============================ 陀螺仪 MPU6050 ============================ */
-/* 基础模式物理量检查；与 JY61P 共 I2C0，进入时挂起、退出时恢复。 */
-
-static uint32_t gm_last_ui;
-static uint8_t gm_page;
-static BSP_STATUS gm_init_status;
-
-static void ChkGyroMpu_Enter(void){
-    JY61P_I2C_SetSuspended(true);    /* 让出 I2C0 */
-    gm_init_status = MPU6050_Init();
-    gm_last_ui = 0U;
-    gm_page = 0U;
-}
-
-static APP_TASK_STATUS ChkGyroMpu_Tick(float dt){
-    (void)dt;
-    uint32_t now = BSP_Time_GetMs();
-
-    if ((Key_GetEvent(KEY_ID_UP) == KEY_EVENT_SHORT_PRESS) ||
-        (Key_GetEvent(KEY_ID_DOWN) == KEY_EVENT_SHORT_PRESS)){
-        gm_page ^= 1U;
-        gm_last_ui = 0U;
-    }
-
-    if ((now - gm_last_ui) < CHK_UI_PERIOD_MS){
-        return APP_TASK_RUNNING;
-    }
-    gm_last_ui = now;
-
-    char l1[20];
-    char l2[20];
-    char l3[20];
-    char l4[20];
-    char l5[20];
-    char l6[20];
-    uint8_t n;
-
-    bool connected = (gm_init_status == BSP_STATUS_OK) &&
-                     MPU6050_TestConnection();
-    MPU6050_MEASUREMENT m;
-    if (!connected || (MPU6050_GetMeasurement(&m) != BSP_STATUS_OK)){
-        n = PutStr(l1, connected ? "read FAIL" : "conn FAIL");
-        l1[n] = '\0';
-        Ui_RenderLines("Chk MPU6050", l1, "check wiring/bus", "BACK: exit",
-                       NULL, NULL, NULL);
-        return APP_TASK_RUNNING;
-    }
-
-    if (gm_page == 0U){
-        (void)PutStr(l1, "unit m/s2"); l1[10] = '\0';
-        n = PutStr(l2, "Ax "); AppFmt_Fixed(&l2[n], m.accel_x_mps2, 2U);
-        n = PutStr(l3, "Ay "); AppFmt_Fixed(&l3[n], m.accel_y_mps2, 2U);
-        n = PutStr(l4, "Az "); AppFmt_Fixed(&l4[n], m.accel_z_mps2, 2U);
-        n = PutStr(l5, "|a| "); AppFmt_Fixed(&l5[n], m.accel_magnitude_mps2, 2U);
-        n = PutStr(l6, "Temp C "); AppFmt_Fixed(&l6[n], m.temperature_c, 1U);
-        Ui_RenderLines("MPU Acc 1/2", l1, l2, l3, l4, l5, l6);
-    } else{
-        (void)PutStr(l1, "unit deg/s"); l1[10] = '\0';
-        n = PutStr(l2, "Gx "); AppFmt_Fixed(&l2[n], m.gyro_x_deg_s, 1U);
-        n = PutStr(l3, "Gy "); AppFmt_Fixed(&l3[n], m.gyro_y_deg_s, 1U);
-        n = PutStr(l4, "Gz "); AppFmt_Fixed(&l4[n], m.gyro_z_deg_s, 1U);
-        n = PutStr(l5, "Pitch "); AppFmt_Fixed(&l5[n], m.pitch_deg, 1U);
-        n = PutStr(l6, "Roll "); AppFmt_Fixed(&l6[n], m.roll_deg, 1U);
-        Ui_RenderLines("MPU Gyro 2/2", l1, l2, l3, l4, l5, l6);
-    }
-    return APP_TASK_RUNNING;
-}
-
-static void ChkGyroMpu_Exit(void){
-    JY61P_I2C_SetSuspended(false);   /* 归还 I2C0 给 JY61P */
 }
 
 /* ============================ TB6612（主动） ============================ */
@@ -805,23 +406,8 @@ static APP_TASK_STATUS ChkDutySweep_Tick(float dt){
 const APP_TASK_DESC APP_CHK_GYRO_JY61P = {
     "Gyro JY61P", ChkGyroJy_Enter, ChkGyroJy_Tick, NULL
 };
-const APP_TASK_DESC APP_CHK_YAW_AB = {
-    "Yaw A/B", ChkYawAb_Enter, ChkYawAb_Tick, NULL
-};
-const APP_TASK_DESC APP_CHK_GYRO_MPU6050 = {
-    "Gyro MPU6050", ChkGyroMpu_Enter, ChkGyroMpu_Tick, ChkGyroMpu_Exit
-};
-const APP_TASK_DESC APP_CHK_GYRO_CY_Z = {
-    "Gyro CY-Z", ChkGyroCyZ_Enter, ChkGyroCyZ_Tick, ChkGyroCyZ_Exit
-};
-const APP_TASK_DESC APP_CHK_GRAYSCALE = {
-    "Grayscale", ChkGrayscale_Enter, ChkGrayscale_Tick, NULL
-};
 const APP_TASK_DESC APP_CHK_GRAY_I2C = {
     "Gray I2C", ChkGrayI2c_Enter, ChkGrayI2c_Tick, ChkGrayI2c_Exit
-};
-const APP_TASK_DESC APP_CHK_YAHBOOM_I2C = {
-    "Yahboom I2C", ChkYahboomI2c_Enter, ChkYahboomI2c_Tick, ChkYahboomI2c_Exit
 };
 const APP_TASK_DESC APP_CHK_TB6612 = {
     "TB6612", ChkTb_Enter, ChkTb_Tick, ChkTb_Exit

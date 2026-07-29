@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\core\yaw_estimator;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\line_guided_drive;..\..\middleware\straight_drive;..\..\middleware\turn_drive;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\bluetooth;..\..\bsp\debug_uart;..\..\bsp\cy_z;..\..\bsp\grayscale_sensor;..\..\bsp\ganv_gray;..\..\bsp\yahboom_track;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\bsp\mpu6050;..\..\board\sys_config;..\..\third_party\mspm0-sdk\source;..\..\third_party\mspm0-sdk\source\third_party\CMSIS\Core\Include</IncludePath>
+              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\debug_uart;..\..\bsp\ganv_gray;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\board\sys_config;..\..\third_party\mspm0-sdk\source;..\..\third_party\mspm0-sdk\source\third_party\CMSIS\Core\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -416,21 +416,6 @@
               <FilePath>..\..\app\app_line_task.c</FilePath>
             </File>
             <File>
-              <FileName>app_straight_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\app\app_straight_task.c</FilePath>
-            </File>
-            <File>
-              <FileName>app_turn_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\app\app_turn_task.c</FilePath>
-            </File>
-            <File>
-              <FileName>app_bt_task.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\app\app_bt_task.c</FilePath>
-            </File>
-            <File>
               <FileName>app_menu.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\app\app_menu.c</FilePath>
@@ -475,11 +460,6 @@
               <FileType>1</FileType>
               <FilePath>..\..\core\filter\filter.c</FilePath>
             </File>
-            <File>
-              <FileName>yaw_estimator.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\core\yaw_estimator\yaw_estimator.c</FilePath>
-            </File>
           </Files>
         </Group>
         <Group>
@@ -499,26 +479,6 @@
               <FileName>line_follow.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\middleware\line_follow\line_follow.c</FilePath>
-            </File>
-            <File>
-              <FileName>line_guided_drive.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\middleware\line_guided_drive\line_guided_drive.c</FilePath>
-            </File>
-            <File>
-              <FileName>vision_line_drive.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\middleware\vision_line_drive\vision_line_drive.c</FilePath>
-            </File>
-            <File>
-              <FileName>straight_drive.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\middleware\straight_drive\straight_drive.c</FilePath>
-            </File>
-            <File>
-              <FileName>turn_drive.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\middleware\turn_drive\turn_drive.c</FilePath>
             </File>
             <File>
               <FileName>ui.c</FileName>
@@ -551,34 +511,14 @@
           <GroupName>BSP</GroupName>
           <Files>
             <File>
-              <FileName>bluetooth.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\bluetooth\bluetooth.c</FilePath>
-            </File>
-            <File>
               <FileName>debug_uart.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\debug_uart\debug_uart.c</FilePath>
             </File>
             <File>
-              <FileName>cy_z.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\cy_z\cy_z.c</FilePath>
-            </File>
-            <File>
-              <FileName>grayscale_sensor.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\grayscale_sensor\grayscale_sensor.c</FilePath>
-            </File>
-            <File>
               <FileName>ganv_gray.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\ganv_gray\ganv_gray.c</FilePath>
-            </File>
-            <File>
-              <FileName>yahboom_track.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\yahboom_track\yahboom_track.c</FilePath>
             </File>
             <File>
               <FileName>wit_sdk.c</FileName>
@@ -609,21 +549,6 @@
               <FileName>bsp_time.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\time\bsp_time.c</FilePath>
-            </File>
-            <File>
-              <FileName>mpu6050.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\mpu6050\mpu6050.c</FilePath>
-            </File>
-            <File>
-              <FileName>mpu6050_dmp_fw.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\mpu6050\mpu6050_dmp_fw.c</FilePath>
-            </File>
-            <File>
-              <FileName>mpu6050_test.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\bsp\mpu6050\mpu6050_test.c</FilePath>
             </File>
           </Files>
         </Group>

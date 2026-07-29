@@ -13,14 +13,9 @@
 - `app_mode.h`：状态机 `APP_MODE`（INIT/MENU/RUN/FAULT）与 `App_Mode_Init/Get`、`App_ControlTick/UiTick`。
 - `app_task.h`：任务生命周期契约——`APP_TASK_STATUS` 与 `APP_TASK_DESC`（`on_enter/on_tick/on_exit`），不含具体任务。
 - `app_menu.h`：菜单树类型 `MENU_NODE`/`MENU_ITEM` 与 `Menu_Tick` 导航；`app_menu_def.c` 定义菜单树实例 `APP_ROOT_MENU`。
-- `app_checks.h`：外设自检任务描述符 `APP_CHK_*`（JY61P / Yaw A/B / MPU6050 / CY-Z / Grayscale / Gray I2C / Yahboom I2C / TB6612 / Encoder / Speed PID / Duty Sweep）。
-- `app_line_task.h`：Yahboom 循迹、组合循迹转向和 K230 视觉循迹共四个任务，以及共享 I2C0
-  分时调度（挂根菜单）。
-- `app_straight_task.h`：九种直行测试任务、3 m 自动停车与遥测配置，详见
-  `docs/interfaces/app_straight_task.md`。
-- `app_turn_task.h`：两种前进左转任务（直行 2 m、左转 90°、再直行 1 m），具体控制见
-  `docs/interfaces/middleware_turn_drive.md`。
-- `app_bt_task.h`：蓝牙串口收发测试任务 `APP_CHK_BLUETOOTH`（挂 Device Check）。
+- `app_checks.h`：外设自检任务描述符 `APP_CHK_*`（JY61P / Gray I2C / TB6612 / Encoder /
+  Speed PID / Duty Sweep）。
+- `app_line_task.h`：感为灰度循迹任务，以及与 JY61P 共享 I2C0 的分时调度（挂根菜单）。
 
 ## core
 
@@ -28,22 +23,12 @@
 - `filter/filter.h`：一阶低通(EMA)与中心死区等通用信号调理算法，详细说明见 `docs/interfaces/core_filter.md`。
 - `common/core_types.h`：core 层基础二维点类型，详细说明见 `docs/interfaces/core_common.md`。
 - `kinematics/kinematics.h`：限幅、角度归一化、差速混控与两轮差速运动学模型（正/逆运动学、转弯半径、位姿积分），详细说明见 `docs/interfaces/core_kinematics.md`。
-- `yaw_estimator/yaw_estimator.h`：纯角速度积分航向 A 与融合角偏移 `B-A`，详细说明见
-  `docs/interfaces/core_yaw_estimator.md`。
 
 ## middleware
 
 - `chassis.h`：底盘组合服务（开环占空比 + 每轮速度闭环 PID），详细说明见 `docs/interfaces/middleware_chassis.md`。
 - `line_follow.h`：标准化八路黑线观测、巡线偏差计算、PID/陀螺修正和底盘输出，详细说明见
   `docs/interfaces/middleware_line_follow.md`。
-- `line_guided_drive.h`：80% 直接起步的外侧灰度 PID 与中间通道航向保持，详细说明见
-  `docs/interfaces/middleware_line_guided_drive.md`。
-- `vision_line_drive.h`：K230 红线帧解析、角速度起步和位置/方向连续融合循迹，详细说明见
-  `docs/interfaces/middleware_vision_line_drive.md`。
-- `straight_drive.h`：九种直行模式的指令、PID、启动阶段切换、姿态反馈和底盘输出，详细说明见
-  `docs/interfaces/middleware_straight_drive.md`。
-- `turn_drive.h`：80%/满速前进左转实验的阶段、航向估计和底盘输出，详细说明见
-  `docs/interfaces/middleware_turn_drive.md`。
 - `ui.h`：轻量 OLED UI 渲染层，详细说明见 `docs/interfaces/middleware_ui.md`。
 - `system_fault.h`：系统故障处理服务，详细说明见 `docs/interfaces/middleware_system_fault.md`。
 
@@ -54,17 +39,10 @@
 - `key.h`：按键读取、消抖和事件生成，详细说明见 `docs/interfaces/bsp_key.md`。
 - `oled.h`：SSD1306 OLED 帧缓冲显示接口（I2C1），详细说明见 `docs/interfaces/bsp_oled.md`。
 - `wit_sdk.h`：JY61P（WIT 协议）I2C0 中断驱动、数据解析和结构体读取接口，详细说明见 `docs/interfaces/bsp_wit_sdk.md`。
-- `mpu6050.h`：MPU6050 基础六轴/温度/静态倾角与 DMP 姿态驱动（I2C0，共享总线），详细说明见
-  `docs/interfaces/bsp_mpu6050.md`。
-- `cy_z.h`：创源 CY-Z 串口角度/角速度解析、诊断与控制命令，详见
-  `docs/interfaces/bsp_cy_z.md`。
 - `tb6612fng.h`：TB6612FNG 双路直流电机驱动芯片接口，详细说明见 `docs/interfaces/bsp_tb6612fng.md`。
 - `hall_encoder.h`：左右双轮霍尔编码器计数、速度和距离估计接口（按 `HALL_ENCODER_ID` 选轮），详细说明见 `docs/interfaces/bsp_hall_encoder.md`。
-- `grayscale_sensor.h`：8 路光敏灰度传感器数字量接口（GPIO），详细说明见 `docs/interfaces/bsp_grayscale_sensor.md`。
 - `ganv_gray.h`：感为 8 路灰度传感器 I2C 驱动（I2C0，默认地址 `0x4F`），详细说明见 `docs/interfaces/bsp_ganv_gray.md`。
-- `yahboom_track.h`：Yahboom 8 路循线模块 I2C 驱动（I2C0，地址 `0x12`），详细说明见 `docs/interfaces/bsp_yahboom_track.md`。
-- `debug_uart.h`：调试串口（Debug_Ex/UART1，115200）非阻塞收发——TX 遥测环形缓冲与 RX K230 视觉字节流。
-- `bluetooth.h`：蓝牙串口（BlueTooth/UART0，9600 8N1）收发——RX 中断 + 环形缓冲，发送直接写 TX FIFO。
+- `debug_uart.h`：调试串口（Debug_Ex/UART1，115200）非阻塞收发——TX 遥测环形缓冲与 RX 视觉板字节流。
 
 ### 三种灰度接口的位序与极性
 

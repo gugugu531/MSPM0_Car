@@ -19,7 +19,7 @@
 #include <stdbool.h>
 
 /* I2C 外设实例(I2C0,与 MPU6050/JY61P 共用)与自旋超时。 */
-#define GANV_GRAY_I2C_INST     MPU6050_JY61P_Tracking_INST
+#define GANV_GRAY_I2C_INST     Gray_JY61P_I2C_INST
 #define GANV_GRAY_I2C_TIMEOUT  100000U
 /* 上电同步:每次 ping 间隔 1ms,最多重试 100 次(约 100ms)后判超时。 */
 #define GANV_GRAY_PING_RETRY   100U

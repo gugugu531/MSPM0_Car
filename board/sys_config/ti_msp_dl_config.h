@@ -126,53 +126,21 @@ extern "C" {
 #define GPIO_OLED_IOMUX_SCL                                      (IOMUX_PINCM22)
 #define GPIO_OLED_IOMUX_SCL_FUNC                       IOMUX_PINCM22_PF_I2C1_SCL
 
-/* Defines for MPU6050_JY61P_Tracking */
-#define MPU6050_JY61P_Tracking_INST                                         I2C0
-#define MPU6050_JY61P_Tracking_INST_IRQHandler                         I2C0_IRQHandler
-#define MPU6050_JY61P_Tracking_INST_INT_IRQN                           I2C0_INT_IRQn
-#define MPU6050_JY61P_Tracking_BUS_SPEED_HZ                                  400000
-#define GPIO_MPU6050_JY61P_Tracking_SDA_PORT                                   GPIOA
-#define GPIO_MPU6050_JY61P_Tracking_SDA_PIN                           DL_GPIO_PIN_0
-#define GPIO_MPU6050_JY61P_Tracking_IOMUX_SDA                          (IOMUX_PINCM1)
-#define GPIO_MPU6050_JY61P_Tracking_IOMUX_SDA_FUNC                IOMUX_PINCM1_PF_I2C0_SDA
-#define GPIO_MPU6050_JY61P_Tracking_SCL_PORT                                   GPIOA
-#define GPIO_MPU6050_JY61P_Tracking_SCL_PIN                           DL_GPIO_PIN_1
-#define GPIO_MPU6050_JY61P_Tracking_IOMUX_SCL                          (IOMUX_PINCM2)
-#define GPIO_MPU6050_JY61P_Tracking_IOMUX_SCL_FUNC                IOMUX_PINCM2_PF_I2C0_SCL
+/* Defines for Gray_JY61P_I2C */
+#define Gray_JY61P_I2C_INST                                                 I2C0
+#define Gray_JY61P_I2C_INST_IRQHandler                           I2C0_IRQHandler
+#define Gray_JY61P_I2C_INST_INT_IRQN                               I2C0_INT_IRQn
+#define Gray_JY61P_I2C_BUS_SPEED_HZ                                       400000
+#define GPIO_Gray_JY61P_I2C_SDA_PORT                                       GPIOA
+#define GPIO_Gray_JY61P_I2C_SDA_PIN                                DL_GPIO_PIN_0
+#define GPIO_Gray_JY61P_I2C_IOMUX_SDA                             (IOMUX_PINCM1)
+#define GPIO_Gray_JY61P_I2C_IOMUX_SDA_FUNC                IOMUX_PINCM1_PF_I2C0_SDA
+#define GPIO_Gray_JY61P_I2C_SCL_PORT                                       GPIOA
+#define GPIO_Gray_JY61P_I2C_SCL_PIN                                DL_GPIO_PIN_1
+#define GPIO_Gray_JY61P_I2C_IOMUX_SCL                             (IOMUX_PINCM2)
+#define GPIO_Gray_JY61P_I2C_IOMUX_SCL_FUNC                IOMUX_PINCM2_PF_I2C0_SCL
 
 
-/* Defines for BlueTooth */
-#define BlueTooth_INST                                                     UART0
-#define BlueTooth_INST_FREQUENCY                                        32000000
-#define BlueTooth_INST_IRQHandler                               UART0_IRQHandler
-#define BlueTooth_INST_INT_IRQN                                   UART0_INT_IRQn
-#define GPIO_BlueTooth_RX_PORT                                             GPIOB
-#define GPIO_BlueTooth_TX_PORT                                             GPIOB
-#define GPIO_BlueTooth_RX_PIN                                      DL_GPIO_PIN_1
-#define GPIO_BlueTooth_TX_PIN                                      DL_GPIO_PIN_0
-#define GPIO_BlueTooth_IOMUX_RX                                  (IOMUX_PINCM13)
-#define GPIO_BlueTooth_IOMUX_TX                                  (IOMUX_PINCM12)
-#define GPIO_BlueTooth_IOMUX_RX_FUNC                   IOMUX_PINCM13_PF_UART0_RX
-#define GPIO_BlueTooth_IOMUX_TX_FUNC                   IOMUX_PINCM12_PF_UART0_TX
-#define BlueTooth_BAUD_RATE                                               (9600)
-#define BlueTooth_IBRD_32_MHZ_9600_BAUD                                    (208)
-#define BlueTooth_FBRD_32_MHZ_9600_BAUD                                     (21)
-/* Defines for CY_Z */
-#define CY_Z_INST                                                          UART3
-#define CY_Z_INST_FREQUENCY                                             32000000
-#define CY_Z_INST_IRQHandler                                    UART3_IRQHandler
-#define CY_Z_INST_INT_IRQN                                        UART3_INT_IRQn
-#define GPIO_CY_Z_RX_PORT                                                  GPIOB
-#define GPIO_CY_Z_TX_PORT                                                  GPIOB
-#define GPIO_CY_Z_RX_PIN                                          DL_GPIO_PIN_13
-#define GPIO_CY_Z_TX_PIN                                           DL_GPIO_PIN_2
-#define GPIO_CY_Z_IOMUX_RX                                       (IOMUX_PINCM30)
-#define GPIO_CY_Z_IOMUX_TX                                       (IOMUX_PINCM15)
-#define GPIO_CY_Z_IOMUX_RX_FUNC                        IOMUX_PINCM30_PF_UART3_RX
-#define GPIO_CY_Z_IOMUX_TX_FUNC                        IOMUX_PINCM15_PF_UART3_TX
-#define CY_Z_BAUD_RATE                                                  (115200)
-#define CY_Z_IBRD_32_MHZ_115200_BAUD                                        (17)
-#define CY_Z_FBRD_32_MHZ_115200_BAUD                                        (23)
 /* Defines for Debug_Ex */
 #define Debug_Ex_INST                                                      UART1
 #define Debug_Ex_INST_FREQUENCY                                         32000000
@@ -200,12 +168,6 @@ extern "C" {
 /* Defines for PIN: GPIOB.5 with pinCMx 18 on package pin 53 */
 #define Buzzer_PIN_PIN                                           (DL_GPIO_PIN_5)
 #define Buzzer_PIN_IOMUX                                         (IOMUX_PINCM18)
-/* Port definition for Pin Group GPIO_GRP_0 */
-#define GPIO_GRP_0_PORT                                                  (GPIOA)
-
-/* Defines for PIN_0: GPIOA.17 with pinCMx 39 on package pin 10 */
-#define GPIO_GRP_0_PIN_0_PIN                                    (DL_GPIO_PIN_17)
-#define GPIO_GRP_0_PIN_0_IOMUX                                   (IOMUX_PINCM39)
 /* Defines for AIN1: GPIOA.16 with pinCMx 38 on package pin 9 */
 #define Motor_IO_AIN1_PORT                                               (GPIOA)
 #define Motor_IO_AIN1_PIN                                       (DL_GPIO_PIN_16)
@@ -259,59 +221,12 @@ extern "C" {
 #define Key_PIN_4_PORT                                                   (GPIOB)
 #define Key_PIN_4_PIN                                           (DL_GPIO_PIN_25)
 #define Key_PIN_4_IOMUX                                          (IOMUX_PINCM56)
-/* Defines for Tracking_1: GPIOB.6 with pinCMx 23 on package pin 58 */
-#define Tracking_Tracking_1_PORT                                         (GPIOB)
-#define Tracking_Tracking_1_PIN                                  (DL_GPIO_PIN_6)
-#define Tracking_Tracking_1_IOMUX                                (IOMUX_PINCM23)
-/* Defines for Tracking_2: GPIOB.7 with pinCMx 24 on package pin 59 */
-#define Tracking_Tracking_2_PORT                                         (GPIOB)
-#define Tracking_Tracking_2_PIN                                  (DL_GPIO_PIN_7)
-#define Tracking_Tracking_2_IOMUX                                (IOMUX_PINCM24)
-/* Defines for Tracking_3: GPIOB.8 with pinCMx 25 on package pin 60 */
-#define Tracking_Tracking_3_PORT                                         (GPIOB)
-#define Tracking_Tracking_3_PIN                                  (DL_GPIO_PIN_8)
-#define Tracking_Tracking_3_IOMUX                                (IOMUX_PINCM25)
-/* Defines for Tracking_4: GPIOB.9 with pinCMx 26 on package pin 61 */
-#define Tracking_Tracking_4_PORT                                         (GPIOB)
-#define Tracking_Tracking_4_PIN                                  (DL_GPIO_PIN_9)
-#define Tracking_Tracking_4_IOMUX                                (IOMUX_PINCM26)
-/* Defines for Tracking_5: GPIOA.12 with pinCMx 34 on package pin 5 */
-#define Tracking_Tracking_5_PORT                                         (GPIOA)
-#define Tracking_Tracking_5_PIN                                 (DL_GPIO_PIN_12)
-#define Tracking_Tracking_5_IOMUX                                (IOMUX_PINCM34)
-/* Defines for Tracking_6: GPIOB.26 with pinCMx 57 on package pin 28 */
-#define Tracking_Tracking_6_PORT                                         (GPIOB)
-#define Tracking_Tracking_6_PIN                                 (DL_GPIO_PIN_26)
-#define Tracking_Tracking_6_IOMUX                                (IOMUX_PINCM57)
-/* Defines for Tracking_7: GPIOB.23 with pinCMx 51 on package pin 22 */
-#define Tracking_Tracking_7_PORT                                         (GPIOB)
-#define Tracking_Tracking_7_PIN                                 (DL_GPIO_PIN_23)
-#define Tracking_Tracking_7_IOMUX                                (IOMUX_PINCM51)
-/* Defines for Tracking_8: GPIOA.13 with pinCMx 35 on package pin 6 */
-#define Tracking_Tracking_8_PORT                                         (GPIOA)
-#define Tracking_Tracking_8_PIN                                 (DL_GPIO_PIN_13)
-#define Tracking_Tracking_8_IOMUX                                (IOMUX_PINCM35)
-/* Port definition for Pin Group SR04 */
-#define SR04_PORT                                                        (GPIOA)
+/* Port definition for Pin Group LED */
+#define LED_PORT                                                         (GPIOA)
 
-/* Defines for Trig: GPIOA.27 with pinCMx 60 on package pin 31 */
-#define SR04_Trig_PIN                                           (DL_GPIO_PIN_27)
-#define SR04_Trig_IOMUX                                          (IOMUX_PINCM60)
-/* Defines for Echo: GPIOA.26 with pinCMx 59 on package pin 30 */
-#define SR04_Echo_PIN                                           (DL_GPIO_PIN_26)
-#define SR04_Echo_IOMUX                                          (IOMUX_PINCM59)
 /* Defines for G: GPIOA.23 with pinCMx 53 on package pin 24 */
-#define LED_G_PORT                                                       (GPIOA)
 #define LED_G_PIN                                               (DL_GPIO_PIN_23)
 #define LED_G_IOMUX                                              (IOMUX_PINCM53)
-/* Defines for Y: GPIOB.27 with pinCMx 58 on package pin 29 */
-#define LED_Y_PORT                                                       (GPIOB)
-#define LED_Y_PIN                                               (DL_GPIO_PIN_27)
-#define LED_Y_IOMUX                                              (IOMUX_PINCM58)
-/* Defines for R: GPIOB.16 with pinCMx 33 on package pin 4 */
-#define LED_R_PORT                                                       (GPIOB)
-#define LED_R_PIN                                               (DL_GPIO_PIN_16)
-#define LED_R_IOMUX                                              (IOMUX_PINCM33)
 
 
 
@@ -326,9 +241,7 @@ void SYSCFG_DL_Motor_Left_init(void);
 void SYSCFG_DL_Motor_Right_init(void);
 void SYSCFG_DL_TIMER_0_init(void);
 void SYSCFG_DL_OLED_init(void);
-void SYSCFG_DL_MPU6050_JY61P_Tracking_init(void);
-void SYSCFG_DL_BlueTooth_init(void);
-void SYSCFG_DL_CY_Z_init(void);
+void SYSCFG_DL_Gray_JY61P_I2C_init(void);
 void SYSCFG_DL_Debug_Ex_init(void);
 
 void SYSCFG_DL_SYSTICK_init(void);

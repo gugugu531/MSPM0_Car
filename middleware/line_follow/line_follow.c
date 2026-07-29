@@ -6,7 +6,6 @@
 
 #include "chassis.h"
 #include "filter/filter.h"
-#include "grayscale_sensor.h"
 #include "kinematics/kinematics.h"
 #include "wit_sdk.h"
 
@@ -80,37 +79,6 @@ void LineFollow_Reset(void){
     line_follow_output.left_duty = 0.0f;
     line_follow_output.right_duty = 0.0f;
     line_follow_output.line_lost = true;
-}
-
-BSP_STATUS LineFollow_Update(float dt_s){
-    LineFollow_EnsureInitialized();
-
-    LINE_FOLLOW_INPUT input;
-    GrayscaleSensor_Read(input.level);
-
-    /* 只消费 JY61P 已发布的缓存；I2C 状态机由当前 app 任务负责周期 Poll。 */
-    float omega_deg_s = 0.0f;
-    if (line_follow_config.gyro_stab_enabled){
-        JY61P_I2C_SAMPLE sample;
-        if (JY61P_I2C_GetSnapshot(&sample)){
-            omega_deg_s = line_follow_config.gyro_z_sign *
-                          sample.data.gyro_deg_s.z;
-        }
-    }
-
-    BSP_STATUS status = LineFollow_Compute(&input, dt_s, omega_deg_s,
-                                           &line_follow_output);
-    if (status != BSP_STATUS_OK){
-        return status;
-    }
-
-    if (line_follow_output.line_lost){
-        /* 丢线恢复策略属于 app；本层不搜索、不刹车，只报告未就绪。 */
-        return BSP_STATUS_NOT_READY;
-    }
-
-    return Chassis_SetDuty(line_follow_output.left_duty,
-                           line_follow_output.right_duty);
 }
 
 BSP_STATUS LineFollow_UpdateDetectedMask(uint8_t detected_mask, float dt_s){

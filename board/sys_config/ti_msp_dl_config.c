@@ -42,7 +42,6 @@
 
 DL_TimerA_backupConfig gMotor_LeftBackup;
 DL_TimerA_backupConfig gTIMER_0Backup;
-DL_UART_Main_backupConfig gCY_ZBackup;
 
 /*
  *  ======== SYSCFG_DL_init ========
@@ -58,15 +57,13 @@ SYSCONFIG_WEAK void SYSCFG_DL_init(void)
     SYSCFG_DL_Motor_Right_init();
     SYSCFG_DL_TIMER_0_init();
     SYSCFG_DL_OLED_init();
-    SYSCFG_DL_MPU6050_JY61P_Tracking_init();
-    SYSCFG_DL_BlueTooth_init();
-    SYSCFG_DL_CY_Z_init();
+    SYSCFG_DL_Gray_JY61P_I2C_init();
     SYSCFG_DL_Debug_Ex_init();
     SYSCFG_DL_SYSTICK_init();
     /* Ensure backup structures have no valid state */
 	gMotor_LeftBackup.backupRdy 	= false;
 	gTIMER_0Backup.backupRdy 	= false;
-	gCY_ZBackup.backupRdy 	= false;
+
 
 }
 /*
@@ -79,7 +76,6 @@ SYSCONFIG_WEAK bool SYSCFG_DL_saveConfiguration(void)
 
 	retStatus &= DL_TimerA_saveConfiguration(Motor_Left_INST, &gMotor_LeftBackup);
 	retStatus &= DL_TimerA_saveConfiguration(TIMER_0_INST, &gTIMER_0Backup);
-	retStatus &= DL_UART_Main_saveConfiguration(CY_Z_INST, &gCY_ZBackup);
 
     return retStatus;
 }
@@ -91,7 +87,6 @@ SYSCONFIG_WEAK bool SYSCFG_DL_restoreConfiguration(void)
 
 	retStatus &= DL_TimerA_restoreConfiguration(Motor_Left_INST, &gMotor_LeftBackup, false);
 	retStatus &= DL_TimerA_restoreConfiguration(TIMER_0_INST, &gTIMER_0Backup, false);
-	retStatus &= DL_UART_Main_restoreConfiguration(CY_Z_INST, &gCY_ZBackup);
 
     return retStatus;
 }
@@ -104,9 +99,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_TimerG_reset(Motor_Right_INST);
     DL_TimerA_reset(TIMER_0_INST);
     DL_I2C_reset(OLED_INST);
-    DL_I2C_reset(MPU6050_JY61P_Tracking_INST);
-    DL_UART_Main_reset(BlueTooth_INST);
-    DL_UART_Main_reset(CY_Z_INST);
+    DL_I2C_reset(Gray_JY61P_I2C_INST);
     DL_UART_Main_reset(Debug_Ex_INST);
 
 
@@ -116,9 +109,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_TimerG_enablePower(Motor_Right_INST);
     DL_TimerA_enablePower(TIMER_0_INST);
     DL_I2C_enablePower(OLED_INST);
-    DL_I2C_enablePower(MPU6050_JY61P_Tracking_INST);
-    DL_UART_Main_enablePower(BlueTooth_INST);
-    DL_UART_Main_enablePower(CY_Z_INST);
+    DL_I2C_enablePower(Gray_JY61P_I2C_INST);
     DL_UART_Main_enablePower(Debug_Ex_INST);
 
     delay_cycles(POWER_STARTUP_DELAY);
@@ -142,39 +133,23 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
         DL_GPIO_WAKEUP_DISABLE);
     DL_GPIO_enableHiZ(GPIO_OLED_IOMUX_SDA);
     DL_GPIO_enableHiZ(GPIO_OLED_IOMUX_SCL);
-    DL_GPIO_initPeripheralInputFunctionFeatures(GPIO_MPU6050_JY61P_Tracking_IOMUX_SDA,
-        GPIO_MPU6050_JY61P_Tracking_IOMUX_SDA_FUNC, DL_GPIO_INVERSION_DISABLE,
+    DL_GPIO_initPeripheralInputFunctionFeatures(GPIO_Gray_JY61P_I2C_IOMUX_SDA,
+        GPIO_Gray_JY61P_I2C_IOMUX_SDA_FUNC, DL_GPIO_INVERSION_DISABLE,
         DL_GPIO_RESISTOR_NONE, DL_GPIO_HYSTERESIS_DISABLE,
         DL_GPIO_WAKEUP_DISABLE);
-    DL_GPIO_initPeripheralInputFunctionFeatures(GPIO_MPU6050_JY61P_Tracking_IOMUX_SCL,
-        GPIO_MPU6050_JY61P_Tracking_IOMUX_SCL_FUNC, DL_GPIO_INVERSION_DISABLE,
+    DL_GPIO_initPeripheralInputFunctionFeatures(GPIO_Gray_JY61P_I2C_IOMUX_SCL,
+        GPIO_Gray_JY61P_I2C_IOMUX_SCL_FUNC, DL_GPIO_INVERSION_DISABLE,
         DL_GPIO_RESISTOR_NONE, DL_GPIO_HYSTERESIS_DISABLE,
         DL_GPIO_WAKEUP_DISABLE);
-    DL_GPIO_enableHiZ(GPIO_MPU6050_JY61P_Tracking_IOMUX_SDA);
-    DL_GPIO_enableHiZ(GPIO_MPU6050_JY61P_Tracking_IOMUX_SCL);
+    DL_GPIO_enableHiZ(GPIO_Gray_JY61P_I2C_IOMUX_SDA);
+    DL_GPIO_enableHiZ(GPIO_Gray_JY61P_I2C_IOMUX_SCL);
 
-    DL_GPIO_initPeripheralOutputFunction(
-        GPIO_BlueTooth_IOMUX_TX, GPIO_BlueTooth_IOMUX_TX_FUNC);
-    
-	DL_GPIO_initPeripheralInputFunctionFeatures(
-		 GPIO_BlueTooth_IOMUX_RX, GPIO_BlueTooth_IOMUX_RX_FUNC,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_UP,
-		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
-    DL_GPIO_initPeripheralOutputFunction(
-        GPIO_CY_Z_IOMUX_TX, GPIO_CY_Z_IOMUX_TX_FUNC);
-    
-	DL_GPIO_initPeripheralInputFunctionFeatures(
-		 GPIO_CY_Z_IOMUX_RX, GPIO_CY_Z_IOMUX_RX_FUNC,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_UP,
-		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
     DL_GPIO_initPeripheralOutputFunction(
         GPIO_Debug_Ex_IOMUX_TX, GPIO_Debug_Ex_IOMUX_TX_FUNC);
     DL_GPIO_initPeripheralInputFunction(
         GPIO_Debug_Ex_IOMUX_RX, GPIO_Debug_Ex_IOMUX_RX_FUNC);
 
     DL_GPIO_initDigitalOutput(Buzzer_PIN_IOMUX);
-
-    DL_GPIO_initDigitalOutput(GPIO_GRP_0_PIN_0_IOMUX);
 
     DL_GPIO_initDigitalOutputFeatures(Motor_IO_AIN1_IOMUX,
 		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
@@ -224,57 +199,11 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
 		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_UP,
 		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
 
-    DL_GPIO_initDigitalInputFeatures(Tracking_Tracking_1_IOMUX,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
-		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
-
-    DL_GPIO_initDigitalInputFeatures(Tracking_Tracking_2_IOMUX,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
-		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
-
-    DL_GPIO_initDigitalInputFeatures(Tracking_Tracking_3_IOMUX,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
-		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
-
-    DL_GPIO_initDigitalInputFeatures(Tracking_Tracking_4_IOMUX,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
-		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
-
-    DL_GPIO_initDigitalInputFeatures(Tracking_Tracking_5_IOMUX,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
-		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
-
-    DL_GPIO_initDigitalInputFeatures(Tracking_Tracking_6_IOMUX,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
-		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
-
-    DL_GPIO_initDigitalInputFeatures(Tracking_Tracking_7_IOMUX,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
-		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
-
-    DL_GPIO_initDigitalInputFeatures(Tracking_Tracking_8_IOMUX,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_PULL_DOWN,
-		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
-
-    DL_GPIO_initDigitalOutput(SR04_Trig_IOMUX);
-
-    DL_GPIO_initDigitalInputFeatures(SR04_Echo_IOMUX,
-		 DL_GPIO_INVERSION_DISABLE, DL_GPIO_RESISTOR_NONE,
-		 DL_GPIO_HYSTERESIS_DISABLE, DL_GPIO_WAKEUP_DISABLE);
-
     DL_GPIO_initDigitalOutput(LED_G_IOMUX);
 
-    DL_GPIO_initDigitalOutput(LED_Y_IOMUX);
-
-    DL_GPIO_initDigitalOutput(LED_R_IOMUX);
-
     DL_GPIO_clearPins(GPIOA, Motor_IO_AIN1_PIN |
-		SR04_Trig_PIN |
 		LED_G_PIN);
-    DL_GPIO_setPins(GPIOA, GPIO_GRP_0_PIN_0_PIN);
-    DL_GPIO_enableOutput(GPIOA, GPIO_GRP_0_PIN_0_PIN |
-		Motor_IO_AIN1_PIN |
-		SR04_Trig_PIN |
+    DL_GPIO_enableOutput(GPIOA, Motor_IO_AIN1_PIN |
 		LED_G_PIN);
     DL_GPIO_setUpperPinsPolarity(GPIOA, DL_GPIO_PIN_28_EDGE_RISE |
 		DL_GPIO_PIN_22_EDGE_RISE);
@@ -287,15 +216,11 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
     DL_GPIO_clearPins(GPIOB, Buzzer_PIN_PIN |
 		Motor_IO_AIN2_PIN |
 		Motor_IO_BIN1_PIN |
-		Motor_IO_BIN2_PIN |
-		LED_Y_PIN |
-		LED_R_PIN);
+		Motor_IO_BIN2_PIN);
     DL_GPIO_enableOutput(GPIOB, Buzzer_PIN_PIN |
 		Motor_IO_AIN2_PIN |
 		Motor_IO_BIN1_PIN |
-		Motor_IO_BIN2_PIN |
-		LED_Y_PIN |
-		LED_R_PIN);
+		Motor_IO_BIN2_PIN);
 
 }
 
@@ -475,29 +400,29 @@ SYSCONFIG_WEAK void SYSCFG_DL_OLED_init(void) {
 
 
 }
-static const DL_I2C_ClockConfig gMPU6050_JY61P_TrackingClockConfig = {
+static const DL_I2C_ClockConfig gGray_JY61P_I2CClockConfig = {
     .clockSel = DL_I2C_CLOCK_BUSCLK,
     .divideRatio = DL_I2C_CLOCK_DIVIDE_1,
 };
 
-SYSCONFIG_WEAK void SYSCFG_DL_MPU6050_JY61P_Tracking_init(void) {
+SYSCONFIG_WEAK void SYSCFG_DL_Gray_JY61P_I2C_init(void) {
 
-    DL_I2C_setClockConfig(MPU6050_JY61P_Tracking_INST,
-        (DL_I2C_ClockConfig *) &gMPU6050_JY61P_TrackingClockConfig);
-    DL_I2C_setAnalogGlitchFilterPulseWidth(MPU6050_JY61P_Tracking_INST,
+    DL_I2C_setClockConfig(Gray_JY61P_I2C_INST,
+        (DL_I2C_ClockConfig *) &gGray_JY61P_I2CClockConfig);
+    DL_I2C_setAnalogGlitchFilterPulseWidth(Gray_JY61P_I2C_INST,
         DL_I2C_ANALOG_GLITCH_FILTER_WIDTH_50NS);
-    DL_I2C_enableAnalogGlitchFilter(MPU6050_JY61P_Tracking_INST);
+    DL_I2C_enableAnalogGlitchFilter(Gray_JY61P_I2C_INST);
 
     /* Configure Controller Mode */
-    DL_I2C_resetControllerTransfer(MPU6050_JY61P_Tracking_INST);
+    DL_I2C_resetControllerTransfer(Gray_JY61P_I2C_INST);
     /* Set frequency to 400000 Hz*/
-    DL_I2C_setTimerPeriod(MPU6050_JY61P_Tracking_INST, 7);
-    DL_I2C_setControllerTXFIFOThreshold(MPU6050_JY61P_Tracking_INST, DL_I2C_TX_FIFO_LEVEL_EMPTY);
-    DL_I2C_setControllerRXFIFOThreshold(MPU6050_JY61P_Tracking_INST, DL_I2C_RX_FIFO_LEVEL_BYTES_1);
-    DL_I2C_enableControllerClockStretching(MPU6050_JY61P_Tracking_INST);
+    DL_I2C_setTimerPeriod(Gray_JY61P_I2C_INST, 7);
+    DL_I2C_setControllerTXFIFOThreshold(Gray_JY61P_I2C_INST, DL_I2C_TX_FIFO_LEVEL_EMPTY);
+    DL_I2C_setControllerRXFIFOThreshold(Gray_JY61P_I2C_INST, DL_I2C_RX_FIFO_LEVEL_BYTES_1);
+    DL_I2C_enableControllerClockStretching(Gray_JY61P_I2C_INST);
 
     /* Configure Interrupts */
-    DL_I2C_enableInterrupt(MPU6050_JY61P_Tracking_INST,
+    DL_I2C_enableInterrupt(Gray_JY61P_I2C_INST,
                            DL_I2C_INTERRUPT_CONTROLLER_ARBITRATION_LOST |
                            DL_I2C_INTERRUPT_CONTROLLER_NACK |
                            DL_I2C_INTERRUPT_CONTROLLER_RXFIFO_TRIGGER |
@@ -506,73 +431,11 @@ SYSCONFIG_WEAK void SYSCFG_DL_MPU6050_JY61P_Tracking_init(void) {
 
 
     /* Enable module */
-    DL_I2C_enableController(MPU6050_JY61P_Tracking_INST);
+    DL_I2C_enableController(Gray_JY61P_I2C_INST);
 
 
 }
 
-static const DL_UART_Main_ClockConfig gBlueToothClockConfig = {
-    .clockSel    = DL_UART_MAIN_CLOCK_BUSCLK,
-    .divideRatio = DL_UART_MAIN_CLOCK_DIVIDE_RATIO_1
-};
-
-static const DL_UART_Main_Config gBlueToothConfig = {
-    .mode        = DL_UART_MAIN_MODE_NORMAL,
-    .direction   = DL_UART_MAIN_DIRECTION_TX_RX,
-    .flowControl = DL_UART_MAIN_FLOW_CONTROL_NONE,
-    .parity      = DL_UART_MAIN_PARITY_NONE,
-    .wordLength  = DL_UART_MAIN_WORD_LENGTH_8_BITS,
-    .stopBits    = DL_UART_MAIN_STOP_BITS_ONE
-};
-
-SYSCONFIG_WEAK void SYSCFG_DL_BlueTooth_init(void)
-{
-    DL_UART_Main_setClockConfig(BlueTooth_INST, (DL_UART_Main_ClockConfig *) &gBlueToothClockConfig);
-
-    DL_UART_Main_init(BlueTooth_INST, (DL_UART_Main_Config *) &gBlueToothConfig);
-    /*
-     * Configure baud rate by setting oversampling and baud rate divisors.
-     *  Target baud rate: 9600
-     *  Actual baud rate: 9600.24
-     */
-    DL_UART_Main_setOversampling(BlueTooth_INST, DL_UART_OVERSAMPLING_RATE_16X);
-    DL_UART_Main_setBaudRateDivisor(BlueTooth_INST, BlueTooth_IBRD_32_MHZ_9600_BAUD, BlueTooth_FBRD_32_MHZ_9600_BAUD);
-
-
-
-    DL_UART_Main_enable(BlueTooth_INST);
-}
-static const DL_UART_Main_ClockConfig gCY_ZClockConfig = {
-    .clockSel    = DL_UART_MAIN_CLOCK_BUSCLK,
-    .divideRatio = DL_UART_MAIN_CLOCK_DIVIDE_RATIO_1
-};
-
-static const DL_UART_Main_Config gCY_ZConfig = {
-    .mode        = DL_UART_MAIN_MODE_NORMAL,
-    .direction   = DL_UART_MAIN_DIRECTION_TX_RX,
-    .flowControl = DL_UART_MAIN_FLOW_CONTROL_NONE,
-    .parity      = DL_UART_MAIN_PARITY_NONE,
-    .wordLength  = DL_UART_MAIN_WORD_LENGTH_8_BITS,
-    .stopBits    = DL_UART_MAIN_STOP_BITS_ONE
-};
-
-SYSCONFIG_WEAK void SYSCFG_DL_CY_Z_init(void)
-{
-    DL_UART_Main_setClockConfig(CY_Z_INST, (DL_UART_Main_ClockConfig *) &gCY_ZClockConfig);
-
-    DL_UART_Main_init(CY_Z_INST, (DL_UART_Main_Config *) &gCY_ZConfig);
-    /*
-     * Configure baud rate by setting oversampling and baud rate divisors.
-     *  Target baud rate: 115200
-     *  Actual baud rate: 115211.52
-     */
-    DL_UART_Main_setOversampling(CY_Z_INST, DL_UART_OVERSAMPLING_RATE_16X);
-    DL_UART_Main_setBaudRateDivisor(CY_Z_INST, CY_Z_IBRD_32_MHZ_115200_BAUD, CY_Z_FBRD_32_MHZ_115200_BAUD);
-
-
-
-    DL_UART_Main_enable(CY_Z_INST);
-}
 static const DL_UART_Main_ClockConfig gDebug_ExClockConfig = {
     .clockSel    = DL_UART_MAIN_CLOCK_BUSCLK,
     .divideRatio = DL_UART_MAIN_CLOCK_DIVIDE_RATIO_1

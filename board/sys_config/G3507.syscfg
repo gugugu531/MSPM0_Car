@@ -12,11 +12,8 @@
 const GPIO    = scripting.addModule("/ti/driverlib/GPIO", {}, false);
 const GPIO1   = GPIO.addInstance();
 const GPIO2   = GPIO.addInstance();
-const GPIO3   = GPIO.addInstance();
-const GPIO4   = GPIO.addInstance();
 const GPIO5   = GPIO.addInstance();
 const GPIO6   = GPIO.addInstance();
-const GPIO7   = GPIO.addInstance();
 const I2C     = scripting.addModule("/ti/driverlib/I2C", {}, false);
 const I2C1    = I2C.addInstance();
 const I2C2    = I2C.addInstance();
@@ -28,8 +25,6 @@ const SYSTICK = scripting.addModule("/ti/driverlib/SYSTICK");
 const TIMER   = scripting.addModule("/ti/driverlib/TIMER", {}, false);
 const TIMER1  = TIMER.addInstance();
 const UART    = scripting.addModule("/ti/driverlib/UART", {}, false);
-const UART1   = UART.addInstance();
-const UART2   = UART.addInstance();
 const UART3   = UART.addInstance();
 
 /**
@@ -91,66 +86,14 @@ GPIO2.associatedPins[3].direction        = "INPUT";
 GPIO2.associatedPins[3].internalResistor = "PULL_UP";
 GPIO2.associatedPins[3].pin.$assign      = "PB25";
 
-GPIO3.$name                              = "Tracking";
-GPIO3.associatedPins.create(8);
-GPIO3.associatedPins[0].$name            = "Tracking_1";
-GPIO3.associatedPins[0].direction        = "INPUT";
-GPIO3.associatedPins[0].internalResistor = "PULL_DOWN";
-GPIO3.associatedPins[0].pin.$assign      = "PB6";
-GPIO3.associatedPins[1].$name            = "Tracking_2";
-GPIO3.associatedPins[1].internalResistor = "PULL_DOWN";
-GPIO3.associatedPins[1].direction        = "INPUT";
-GPIO3.associatedPins[1].pin.$assign      = "PB7";
-GPIO3.associatedPins[2].$name            = "Tracking_3";
-GPIO3.associatedPins[2].internalResistor = "PULL_DOWN";
-GPIO3.associatedPins[2].direction        = "INPUT";
-GPIO3.associatedPins[2].pin.$assign      = "PB8";
-GPIO3.associatedPins[3].$name            = "Tracking_4";
-GPIO3.associatedPins[3].internalResistor = "PULL_DOWN";
-GPIO3.associatedPins[3].direction        = "INPUT";
-GPIO3.associatedPins[3].pin.$assign      = "PB9";
-GPIO3.associatedPins[4].$name            = "Tracking_5";
-GPIO3.associatedPins[4].internalResistor = "PULL_DOWN";
-GPIO3.associatedPins[4].direction        = "INPUT";
-GPIO3.associatedPins[4].pin.$assign      = "PA12";
-GPIO3.associatedPins[5].$name            = "Tracking_6";
-GPIO3.associatedPins[5].internalResistor = "PULL_DOWN";
-GPIO3.associatedPins[5].direction        = "INPUT";
-GPIO3.associatedPins[5].pin.$assign      = "PB26";
-GPIO3.associatedPins[6].$name            = "Tracking_7";
-GPIO3.associatedPins[6].direction        = "INPUT";
-GPIO3.associatedPins[6].internalResistor = "PULL_DOWN";
-GPIO3.associatedPins[6].pin.$assign      = "PB23";
-GPIO3.associatedPins[7].$name            = "Tracking_8";
-GPIO3.associatedPins[7].internalResistor = "PULL_DOWN";
-GPIO3.associatedPins[7].direction        = "INPUT";
-GPIO3.associatedPins[7].pin.$assign      = "PA13";
-
-GPIO4.$name                         = "SR04";
-GPIO4.associatedPins.create(2);
-GPIO4.associatedPins[0].$name       = "Trig";
-GPIO4.associatedPins[0].pin.$assign = "PA27";
-GPIO4.associatedPins[1].$name       = "Echo";
-GPIO4.associatedPins[1].direction   = "INPUT";
-GPIO4.associatedPins[1].pin.$assign = "PA26";
-
 GPIO5.$name                         = "LED";
-GPIO5.associatedPins.create(3);
+GPIO5.associatedPins.create(1);
 GPIO5.associatedPins[0].$name       = "G";
 GPIO5.associatedPins[0].pin.$assign = "PA23";
-GPIO5.associatedPins[1].$name       = "Y";
-GPIO5.associatedPins[1].pin.$assign = "PB27";
-GPIO5.associatedPins[2].$name       = "R";
-GPIO5.associatedPins[2].pin.$assign = "PB16";
 
 GPIO6.$name                         = "Buzzer";
 GPIO6.associatedPins[0].$name       = "PIN";
 GPIO6.associatedPins[0].pin.$assign = "PB5";
-
-GPIO7.$name                          = "GPIO_GRP_0";
-GPIO7.associatedPins[0].$name        = "PIN_0";
-GPIO7.associatedPins[0].initialValue = "SET";
-GPIO7.associatedPins[0].pin.$assign  = "PA17";
 
 I2C1.$name                             = "OLED";
 I2C1.basicEnableController             = true;
@@ -166,7 +109,7 @@ I2C1.sclPinConfig.onlyInternalResistor = scripting.forceWrite(false);
 I2C1.sclPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
 I2C1.sclPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric2";
 
-I2C2.$name                             = "MPU6050_JY61P_Tracking";
+I2C2.$name                             = "Gray_JY61P_I2C";
 I2C2.basicEnableController             = true;
 I2C2.basicControllerStandardBusSpeed   = "Fast";
 I2C2.intController                     = ["ARBITRATION_LOST","NACK","RXFIFO_TRIGGER","RX_DONE","TX_DONE"];
@@ -228,39 +171,6 @@ TIMER1.timerStartTimer    = true;
 TIMER1.interruptPriority  = "3";
 TIMER1.timerPeriod        = "20ms";
 TIMER1.peripheral.$assign = "TIMA1";
-
-UART1.$name                            = "BlueTooth";
-UART1.peripheral.$assign               = "UART0";
-UART1.peripheral.rxPin.$assign         = "PB1";
-UART1.peripheral.txPin.$assign         = "PB0";
-UART1.txPinConfig.direction            = scripting.forceWrite("OUTPUT");
-UART1.txPinConfig.hideOutputInversion  = scripting.forceWrite(false);
-UART1.txPinConfig.onlyInternalResistor = scripting.forceWrite(false);
-UART1.txPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
-UART1.txPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric12";
-UART1.rxPinConfig.hideOutputInversion  = scripting.forceWrite(false);
-UART1.rxPinConfig.onlyInternalResistor = scripting.forceWrite(false);
-UART1.rxPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
-UART1.rxPinConfig.enableConfig         = true;
-UART1.rxPinConfig.internalResistor     = "PULL_UP";
-UART1.rxPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric13";
-
-UART2.$name                            = "CY_Z";
-UART2.targetBaudRate                   = 115200;
-UART2.peripheral.$assign               = "UART3";
-UART2.peripheral.rxPin.$assign         = "PB13";
-UART2.peripheral.txPin.$assign         = "PB2";
-UART2.txPinConfig.direction            = scripting.forceWrite("OUTPUT");
-UART2.txPinConfig.hideOutputInversion  = scripting.forceWrite(false);
-UART2.txPinConfig.onlyInternalResistor = scripting.forceWrite(false);
-UART2.txPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
-UART2.txPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric14";
-UART2.rxPinConfig.hideOutputInversion  = scripting.forceWrite(false);
-UART2.rxPinConfig.onlyInternalResistor = scripting.forceWrite(false);
-UART2.rxPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
-UART2.rxPinConfig.enableConfig         = true;
-UART2.rxPinConfig.internalResistor     = "PULL_UP";
-UART2.rxPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric15";
 
 UART3.$name                            = "Debug_Ex";
 UART3.targetBaudRate                   = 115200;

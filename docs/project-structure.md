@@ -39,13 +39,7 @@
 - `app_task.h`：任务生命周期契约（`APP_TASK_STATUS` + `APP_TASK_DESC` 三钩子），不含具体任务。
 - `app_menu.c/.h` 与 `app_menu_def.c`：菜单树（`MENU_NODE`/`MENU_ITEM`）导航与菜单树实例定义。
 - `app_checks.c/.h`：外设自检任务描述符，挂在 Device Check 子菜单。
-- `app_line_task.c/.h`：Yahboom 循迹、组合循迹转向和 K230 视觉循迹任务，负责与 JY61P 的
-  I2C0 分时调度，挂在根菜单。
-- `app_straight_task.c/.h`：直行测试的任务生命周期、按键、OLED 与遥测适配，挂在
-  `Straight Test` 子菜单；具体控制由 `middleware/straight_drive` 承担。
-- `app_turn_task.c/.h`：两种前进左转实验的生命周期、OLED 与遥测适配，挂在 `Turn Test`
-  子菜单；具体控制由 `middleware/turn_drive` 承担。
-- `app_bt_task.c/.h`：蓝牙串口收发测试任务，挂在 Device Check 子菜单。
+- `app_line_task.c/.h`：感为灰度循迹任务，负责与 JY61P 的 I2C0 分时调度，挂在根菜单。
 - `app_fmt.c/.h`：定点数字格式化（不引浮点 printf），供自检显示。
 
 > 外设自检集中在 `app_checks`；功能性任务各占一个 `app_*_task.c/.h`，避免自检文件无限膨胀。

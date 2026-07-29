@@ -18,15 +18,10 @@
 |--------|------|------|------|
 | 主控 | MSPM0G3507 (LQFP-64) | — | — |
 | 底盘轮 | 直流电机 ×2 (TB6612FNG) + 霍尔编码器 | PWM / GPIO | `bsp/motor` |
-| 姿态 | JY61P 六轴 (WIT 协议) | I2C0 | `bsp/imu` (wit_sdk) |
-| 姿态 | MPU6050（基础六轴 + DMP） | I2C0（共享总线） | `bsp/mpu6050` |
-| 姿态 | 创源 CY-Z 串口陀螺仪 | UART3 115200（PB2 TX / PB13 RX） | `bsp/cy_z` |
-| 循迹 | 8 路灰度传感器 | GPIO | `bsp/grayscale_sensor` |
-| 循迹 | 感为 8 路灰度传感器 | I2C0（与两种 IMU 共总线） | `bsp/ganv_gray` |
-| 循迹 | Yahboom 8 路循线模块 | I2C0（地址 `0x12`，与两种 IMU/感为共总线） | `bsp/yahboom_track` |
-| 视觉循迹 | K230（只识别红线） | UART1 115200 RX（板端当前未启用） | `k230/vision_red_line_follow.py` + `middleware/vision_line_drive` |
+| 姿态 | JY61P 六轴 (WIT 协议) | I2C0（与感为灰度共总线） | `bsp/imu` (wit_sdk) |
+| 循迹 | 感为 8 路灰度传感器 | I2C0（地址 `0x4F`，与 JY61P 共总线） | `bsp/ganv_gray` |
 | 人机 | OLED + 独立按键 | I2C1 / GPIO | `bsp/oled`, `bsp/key` |
-| 通信 | 蓝牙 / 调试遥测 | UART0 9600 / UART1 115200 | `bsp/bluetooth`, `bsp/debug_uart` |
+| 调试遥测 | Debug_Ex | UART1 115200（PA8 TX / PA9 RX） | `bsp/debug_uart` |
 
 ## 分层架构
 
@@ -225,15 +220,11 @@ python tools/checks/check_docs.py
 - 构建与 SysConfig：[`docs/build-guide.md`](docs/build-guide.md)
 - 目录职责：[`docs/project-structure.md`](docs/project-structure.md)
 - 模块接口：[`docs/interfaces/`](docs/interfaces/)
-  - GPIO 灰度：[`bsp_grayscale_sensor.md`](docs/interfaces/bsp_grayscale_sensor.md)
   - 感为 I2C 灰度：[`bsp_ganv_gray.md`](docs/interfaces/bsp_ganv_gray.md)
-  - Yahboom I2C 循线：[`bsp_yahboom_track.md`](docs/interfaces/bsp_yahboom_track.md)
-  - MPU6050：[`bsp_mpu6050.md`](docs/interfaces/bsp_mpu6050.md)
-  - CY-Z 串口陀螺仪：[`bsp_cy_z.md`](docs/interfaces/bsp_cy_z.md)
+  - JY61P：[`bsp_wit_sdk.md`](docs/interfaces/bsp_wit_sdk.md)
 - 当前待办和上板风险：[`docs/todo.md`](docs/todo.md)
 - K230 v1.8 固件更新、VS Code CanMV 扩展和 MCP/Preview 连接流程：
   [`docs/k230-development.md`](docs/k230-development.md)
 - K230 Wi-Fi 程序上传、远程执行、调试输出与恢复流程：
   [`docs/k230-remote-development.md`](docs/k230-remote-development.md)
 - 电脑端工具、K230 探针、J-Link 脚本和遥测可视化索引：[`tools/README.md`](tools/README.md)
-- K230 红线识别、阈值/安装标定、串口协议与控制：[`docs/vision-red-line-follow.md`](docs/vision-red-line-follow.md)

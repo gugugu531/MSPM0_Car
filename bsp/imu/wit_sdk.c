@@ -663,8 +663,8 @@ int32_t WitGetData(WIT_IMU_DATA *out)
 
 #include "bsp_time.h"
 
-#define JY61P_I2C_INST          MPU6050_JY61P_Tracking_INST
-#define JY61P_I2C_IRQN          MPU6050_JY61P_Tracking_INST_INT_IRQN
+#define JY61P_I2C_INST          Gray_JY61P_I2C_INST
+#define JY61P_I2C_IRQN          Gray_JY61P_I2C_INST_INT_IRQN
 /* 单次读寄存器字节数 (angle/gyro 各 6 字节) */
 #define JY61P_I2C_READ_LEN      6U
 /* 事务看门狗超时(ms): 中断状态机卡住超过此值则复位, 防止 IMU 数据永久冻结。

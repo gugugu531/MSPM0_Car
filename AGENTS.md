@@ -17,14 +17,10 @@
 | 子系统 | 器件 | 接口 | 驱动 |
 |--------|------|------|------|
 | 底盘轮 | 直流电机 ×2 + 霍尔编码器 | PWM/GPIO | `bsp/motor` (TB6612) |
-| 姿态 | JY61P (WIT 协议) | I2C0 | `bsp/imu` (wit_sdk, 中断驱动) |
-| 姿态 | MPU6050（基础六轴 + DMP） | I2C0（共享总线） | `bsp/mpu6050` |
-| 循迹 | 8 路灰度 | GPIO | `bsp/grayscale_sensor` |
-| 循迹 | 感为 8 路灰度 | I2C0（与两种 IMU 共总线） | `bsp/ganv_gray` |
-| 循迹 | Yahboom 8 路循线模块 | I2C0（地址 `0x12`，与两种 IMU/感为共总线） | `bsp/yahboom_track` |
+| 姿态 | JY61P (WIT 协议) | I2C0（与感为灰度共总线） | `bsp/imu` (wit_sdk, 中断驱动) |
+| 循迹 | 感为 8 路灰度 | I2C0（地址 `0x4F`，与 JY61P 共总线） | `bsp/ganv_gray` |
 | 显示/输入 | OLED / 按键 | I2C1/GPIO | `bsp/oled`, `bsp/key` |
-| 通信 | 蓝牙 / 调试遥测 | UART0/UART1 | `bsp/bluetooth`, `bsp/debug_uart` |
-| 视觉/远程调试 | K230 | UART1 / 2.4 GHz Wi-Fi | `k230/`, `middleware/vision_line_drive` |
+| 调试遥测 | Debug_Ex | UART1 115200（PA8 TX / PA9 RX） | `bsp/debug_uart` |
 
 ## 目录结构
 

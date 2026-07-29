@@ -11,13 +11,8 @@
 extern "C" {
 #endif
 
-/** 循迹测试：使用 Yahboom 8 路模块观测，跑 line_follow 完整闭环。 */
+/** 循迹：使用感为 8 路灰度观测，跑 line_follow 完整闭环。 */
 extern const APP_TASK_DESC APP_LINE_FOLLOW_TEST;
-/** 80% 直接起步：角速度启动后运行 Yahboom 循线外环 + 航向内环。 */
-extern const APP_TASK_DESC APP_LINE_GUIDED_TEST;
-extern const APP_TASK_DESC APP_LINE_LEFT_LINE_TEST;
-/** K230 红线视觉循迹：角速度起步后持续融合位置/方向偏差。 */
-extern const APP_TASK_DESC APP_VISION_LINE_TEST;
 
 #ifdef __cplusplus
 }
