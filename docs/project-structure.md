@@ -11,8 +11,9 @@
 - `board/`：SysConfig、启动和链接资源
 - `project/`：CCS 和 Keil 工程文件
 - `third_party/`：外部依赖 submodule
+- `k230/`：K230 视觉、RTSP 和无线开发代理板端程序
 - `docs/`：工程文档
-- `tools/`：调试和烧录脚本
+- `tools/`：按 checks/jlink/k230/visualizers 分类的开发与调试工具
 
 > 说明：二维云台/瞄准子系统（step_motor / bldc / gimbal / gimbal_tracking / auto_aim /
 > aim_solver / aim_fusion / localization）已整体移除。app 层已重建为菜单驱动的协作式调度
@@ -38,9 +39,12 @@
 - `app_task.h`：任务生命周期契约（`APP_TASK_STATUS` + `APP_TASK_DESC` 三钩子），不含具体任务。
 - `app_menu.c/.h` 与 `app_menu_def.c`：菜单树（`MENU_NODE`/`MENU_ITEM`）导航与菜单树实例定义。
 - `app_checks.c/.h`：外设自检任务描述符，挂在 Device Check 子菜单。
-- `app_line_task.c/.h`：Yahboom 循迹任务及其与 JY61P 的 I2C0 分时调度，挂在根菜单。
+- `app_line_task.c/.h`：Yahboom 循迹、组合循迹转向和 K230 视觉循迹任务，负责与 JY61P 的
+  I2C0 分时调度，挂在根菜单。
 - `app_straight_task.c/.h`：直行测试的任务生命周期、按键、OLED 与遥测适配，挂在
   `Straight Test` 子菜单；具体控制由 `middleware/straight_drive` 承担。
+- `app_turn_task.c/.h`：两种前进左转实验的生命周期、OLED 与遥测适配，挂在 `Turn Test`
+  子菜单；具体控制由 `middleware/turn_drive` 承担。
 - `app_bt_task.c/.h`：蓝牙串口收发测试任务，挂在 Device Check 子菜单。
 - `app_fmt.c/.h`：定点数字格式化（不引浮点 printf），供自检显示。
 
@@ -67,9 +71,10 @@
 
 - `chassis/`：底盘组合服务（开环占空比 + 每轮速度闭环 PID）
 - `line_follow/`：八路黑线观测、巡线偏差计算、PID/陀螺修正和底盘输出
-- `line_guided_drive/`：80% 启动角速度阶段、Yahboom 外环和航向内环状态机
+- `line_guided_drive/`：80% 直接起步、外侧灰度 PID 与中间通道航向保持状态机
 - `vision_line_drive/`：K230 红线协议解析、角速度起步和位置/方向融合循迹
 - `straight_drive/`：九种直行模式的指令、启动阶段切换、姿态反馈、PID 与底盘输出
+- `turn_drive/`：80%/满速两种直行 2 m、左转 90°、再直行 1 m 的状态机
 - `ui/`：轻量 OLED UI 渲染层
 - `fault/`：系统故障处理服务
 
@@ -115,7 +120,7 @@ SysConfig CLI 重新生成。
 - `keil/`：并行保存 MDK 5 uVision `.uvprojx` 与 MDK 6/Keil Studio CMSIS Solution
 
 源码路径重构后必须同步维护三套工程文件；MDK 5/6 可运行
-`python tools/check_keil_project_sync.py` 检查编译输入是否一致。
+`python tools/checks/check_keil_project_sync.py` 检查编译输入是否一致。
 
 ## third_party
 
@@ -124,7 +129,11 @@ SysConfig CLI 重新生成。
 
 ## tools
 
-- `speed_pid_viz.py`：可视化 Device Check 的 `[SPD]` 速度 PID 遥测。
-- `check_keil_project_sync.py`：比较 MDK 5/6 的 C、汇编与库输入列表。
-- `straight_test_viz.py`：可视化 Straight Test 的 `[STR]` 左右轮占空比、速度、
-  距离、融合 yaw、积分 yaw 与 gz，支持原始日志和 CSV 导出。
+- `checks/`：仓库一致性检查；`check_keil_project_sync.py` 比较 MDK 5/6 的 C、汇编与库输入，
+  `check_docs.py` 检查 Markdown 本地链接和已迁移的旧工具路径。
+- `jlink/`：J-Link 烧录、探测、寄存器读取和恢复脚本。
+- `k230/`：K230 raw REPL、Wi-Fi 远程部署、RTSP 查看、CanMV MCP 辅助和数据集工具；
+  `probes/` 保存有界诊断脚本，`runners/` 保存经 raw REPL 启动板端文件的薄包装。
+- `visualizers/`：底盘串口遥测可视化；当前包含 `[SPD]` 速度闭环和 `[STR]` 直行测试工具。
+
+详细入口、依赖和维护边界见 [`../tools/README.md`](../tools/README.md)。

@@ -6,7 +6,8 @@
 - **IDE**: Keil MDK 5 + MDK 6/Keil Studio (ARMCLANG V6.22) / CCS (TICLANG)
 - **SDK**: `third_party/mspm0-sdk` submodule，固定 mspm0_sdk_2_10_00_04
 - **当前状态**: 原 2025E 二维云台/瞄准子系统已移除；`app` 已重建为菜单驱动的裸机协作式
-  调度框架，现有循迹测试、四种直行控制测试和 9 项设备检查。当前重点为底盘闭环整定与上板验证。
+  调度框架，现有四个循迹入口、九种直行实验、两种转向实验和 12 项设备检查。当前重点为
+  底盘闭环整定与上板验证。
 
 > **注意**: 外部工具路径（Keil、SysConfig）需向用户确认实际安装位置；SDK 使用仓库内
 > submodule，不应恢复成本机绝对路径。
@@ -23,6 +24,7 @@
 | 循迹 | Yahboom 8 路循线模块 | I2C0（地址 `0x12`，与两种 IMU/感为共总线） | `bsp/yahboom_track` |
 | 显示/输入 | OLED / 按键 | I2C1/GPIO | `bsp/oled`, `bsp/key` |
 | 通信 | 蓝牙 / 调试遥测 | UART0/UART1 | `bsp/bluetooth`, `bsp/debug_uart` |
+| 视觉/远程调试 | K230 | UART1 / 2.4 GHz Wi-Fi | `k230/`, `middleware/vision_line_drive` |
 
 ## 目录结构
 
@@ -35,10 +37,11 @@ MSPM0_Car/
 │   └── sys_config/       # SysConfig 源文件及生成代码
 ├── core/                 # 纯计算算法 (pid, filter, kinematics, common)
 ├── middleware/           # 中间件 (chassis, line_follow, straight_drive, ui, fault)
+├── k230/                 # K230 视觉、RTSP 与无线开发代理板端程序
 ├── project/{keil,ccs}/     # Keil（MDK 5 + MDK 6/CMSIS Solution）与 CCS 工程
 ├── third_party/mspm0-sdk/ # TI 官方 SDK submodule（2.10.00.04）
 ├── docs/                 # 架构/接口/构建文档
-└── tools/                # 调试/烧录脚本
+└── tools/                # checks/jlink/k230/visualizers 分类开发工具
 ```
 
 ## 分层与依赖边界
@@ -79,12 +82,12 @@ app ─► middleware ─► {core (纯计算), bsp}
 > 运行前 `cd` 到 `project/keil/`，UV4.exe 路径需向用户确认。
 
 MDK 6 使用 `project/keil/NUEDC2025_MSPM0G3507.csolution.yml`，通过 Keil Studio Pack
-或 `cbuild` 构建。新增/删除编译输入后运行 `python tools/check_keil_project_sync.py`。
+或 `cbuild` 构建。新增/删除编译输入后运行 `python tools/checks/check_keil_project_sync.py`。
 
 ### Keil 工程维护
 - `.uvprojx` 是 XML，可手编增删 `<File>` 条目；漏加会在链接阶段报 `L6218E`。
 - 已删文件引用须同步维护 MDK 5、MDK 6 与 CCS 三套工程。
-- MDK 5 与 MDK 6 的源码/库输入必须通过 `tools/check_keil_project_sync.py` 核对一致。
+- MDK 5 与 MDK 6 的源码/库输入必须通过 `tools/checks/check_keil_project_sync.py` 核对一致。
 - CCS projectspec 已改用仓库内 SDK 并修正已知元数据，但重新构建验证前不要宣称 CCS 可用。
 
 ### 提交

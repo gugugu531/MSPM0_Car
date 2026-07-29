@@ -25,9 +25,15 @@ def walk(path, depth=0):
                 text = stream.read()
         except Exception:
             continue
-        if ("Display.ST7701" in text or "Display.bind_layer" in text or
+        if ("Display.ST7701" in text or "Display.LT9611" in text or
+                "Display.bind_layer" in text or
                 "display_mode=\"lcd\"" in text or "display_mode='lcd'" in text):
-            print("EXAMPLE %s" % child)
+            print("EXAMPLE %s lt9611=%d sensor=%d bind=%d" % (
+                child,
+                "Display.LT9611" in text,
+                "Sensor(" in text,
+                "Display.bind_layer" in text,
+            ))
 
 
 walk("/sdcard/examples")

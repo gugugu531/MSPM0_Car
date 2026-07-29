@@ -19,7 +19,7 @@ STREAM_WIDTH = 640
 STREAM_HEIGHT = 360
 STREAM_FPS = 60
 STREAM_BIT_RATE = 1000
-STREAM_GOP = 30
+STREAM_GOP = 10
 SENSOR_WIDTH = 1920
 SENSOR_HEIGHT = 1080
 SENSOR_FPS = 60
@@ -128,13 +128,12 @@ class CameraRtspServer:
                 self.frame_count = frame_count
                 for index in range(stream_data.pack_cnt):
                     self.byte_count += stream_data.data_size[index]
-                    data = bytes(uctypes.bytearray_at(
-                        stream_data.data[index],
-                        stream_data.data_size[index],
-                    ))
-                    self.server.rtspserver_sendvideodata(
+                    # The RTSP extension can consume the VENC physical buffer
+                    # directly. Avoid copying every packet into a Python bytes
+                    # object, which adds CPU time and garbage-collection jitter.
+                    self.server.rtspserver_sendvideodata_byphyaddr(
                         RTSP_SESSION,
-                        data,
+                        stream_data.phy_addr[index],
                         stream_data.data_size[index],
                         1000,
                     )

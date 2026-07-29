@@ -17,7 +17,7 @@
 当前板端和电脑端实现分别为：
 
 - `k230/remote_dev_agent.py`：安装到 `/sdcard/main.py` 的开机代理；
-- `tools/k230_remote.py`：电脑端上传、执行、状态、重启和控制台工具；
+- `tools/k230/k230_remote.py`：电脑端上传、执行、状态、重启和控制台工具；
 - `k230/rtsp_camera_stream.py`：当前部署为 `/sdcard/app.py` 的远程摄像头程序。
 
 已在 CanMV K230 01Studio 1G、CanMV v1.8 上验证：完整复位后自动联网，有限测试程序可经 Wi-Fi 完成
@@ -65,26 +65,26 @@ USB 启动日志或热点客户端列表。
 查询当前应用状态：
 
 ```powershell
-python tools/k230_remote.py --host 10.190.177.220 status
+python tools/k230/k230_remote.py --host 10.190.177.220 status
 ```
 
 持续读取调试输出；连接中断后工具每 2 秒自动重连，并在重新连接时接收板端保留的最近日志：
 
 ```powershell
-python tools/k230_remote.py --host 10.190.177.220 console
+python tools/k230/k230_remote.py --host 10.190.177.220 console
 ```
 
 只上传，不改变当前正在运行的程序：
 
 ```powershell
-python tools/k230_remote.py --host 10.190.177.220 \
+python tools/k230/k230_remote.py --host 10.190.177.220 \
     put local.py /sdcard/app.py
 ```
 
 上传为 `/sdcard/app.py` 并执行完整系统复位：
 
 ```powershell
-python tools/k230_remote.py --host 10.190.177.220 deploy local.py
+python tools/k230/k230_remote.py --host 10.190.177.220 deploy local.py
 ```
 
 `deploy` 是无限循环程序的推荐更新方式。代理先把完整内容写入临时文件，再替换 `app.py`，随后执行
@@ -94,13 +94,13 @@ python tools/k230_remote.py --host 10.190.177.220 deploy local.py
 若当前程序已经结束，可不复位而请求再次执行：
 
 ```powershell
-python tools/k230_remote.py --host 10.190.177.220 run /sdcard/app.py
+python tools/k230/k230_remote.py --host 10.190.177.220 run /sdcard/app.py
 ```
 
 远程系统复位：
 
 ```powershell
-python tools/k230_remote.py --host 10.190.177.220 restart
+python tools/k230/k230_remote.py --host 10.190.177.220 restart
 ```
 
 ## 运行状态与输出语义
@@ -149,25 +149,25 @@ RESTART
 首次安装无线代理仍需 USB raw REPL：
 
 ```powershell
-python tools/k230_tool.py --port COM15 copy \
+python tools/k230/k230_tool.py --port COM15 copy \
     /sdcard/main.py /sdcard/main_before_remote_dev.py
-python tools/k230_tool.py --port COM15 put \
+python tools/k230/k230_tool.py --port COM15 put \
     k230/remote_dev_agent.py /sdcard/main.py
-python tools/k230_tool.py --port COM15 put \
+python tools/k230/k230_tool.py --port COM15 put \
     k230/rtsp_camera_stream.py /sdcard/app.py
-python tools/k230_tool.py --port COM15 hard-reset
+python tools/k230/k230_tool.py --port COM15 hard-reset
 ```
 
 若无线代理无法启动，恢复原开机程序：
 
 ```powershell
-python tools/k230_tool.py --port COM15 copy \
+python tools/k230/k230_tool.py --port COM15 copy \
     /sdcard/main_before_remote_dev.py /sdcard/main.py
-python tools/k230_tool.py --port COM15 hard-reset
+python tools/k230/k230_tool.py --port COM15 hard-reset
 ```
 
 CanMV v1.8 偶尔会在写文件成功后丢失 raw REPL 结束标记。安装过程中若 `put` 超时，应先用
-`tools/probes/k230_status_probe.py` 核对远程文件大小和开头内容，不要立即重复覆盖。
+`tools/k230/probes/k230_status_probe.py` 核对远程文件大小和开头内容，不要立即重复覆盖。
 
 ## 已知限制
 

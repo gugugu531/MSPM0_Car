@@ -125,7 +125,7 @@ EMA 响应，而不是加入阶段切换。
 
 ## K230 测速
 
-`tools/probes/k230_red_line_bench.py` 运行 10 秒有界测试，LCD 保持开启。候选程序应上传到
+`tools/k230/probes/k230_red_line_bench.py` 运行 10 秒有界测试，LCD 保持开启。候选程序应上传到
 `/sdcard/vision_red_line_follow_candidate.py`，不会覆盖 `/sdcard/main.py`。最终帧率必须以 LCD 开启、
 真实地图进入视野时的 `fps` 为准；无轨道空载结果只能用于排查性能上限。
 

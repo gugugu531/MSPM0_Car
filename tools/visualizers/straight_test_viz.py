@@ -13,9 +13,9 @@
 姿态数据不画入曲线，避免把占位零值当成真实姿态。
 
 用法：
-  python tools/straight_test_viz.py --list
-  python tools/straight_test_viz.py --port COM7
-  python tools/straight_test_viz.py --port COM7 --csv straight.csv --log straight_raw.txt
+  python tools/visualizers/straight_test_viz.py --list
+  python tools/visualizers/straight_test_viz.py --port COM7
+  python tools/visualizers/straight_test_viz.py --port COM7 --csv straight.csv --log straight_raw.txt
 
 依赖：
   pip install pyserial matplotlib

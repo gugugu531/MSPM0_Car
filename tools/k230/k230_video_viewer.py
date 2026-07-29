@@ -9,14 +9,6 @@ import statistics
 import time
 from pathlib import Path
 
-# This must be set before importing cv2. Keep RTSP on TCP and minimize buffering.
-os.environ.setdefault(
-    "OPENCV_FFMPEG_CAPTURE_OPTIONS",
-    "rtsp_transport;tcp|fflags;nobuffer|flags;low_delay",
-)
-
-import cv2
-
 
 def rotate_if_needed(frame, disabled: bool):
     if not disabled and frame.shape[0] > frame.shape[1]:
@@ -33,6 +25,18 @@ def percentile(values: list[float], fraction: float) -> float:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("url", help="An rtsp:// or http://.../stream.mjpg URL")
+    parser.add_argument(
+        "--transport",
+        choices=("tcp", "udp"),
+        default="tcp",
+        help="RTSP/RTP transport; try udp for lower latency on a reliable LAN",
+    )
+    parser.add_argument(
+        "--buffer-size",
+        type=int,
+        default=1,
+        help="Requested OpenCV capture queue size (the FFmpeg backend may ignore it)",
+    )
     parser.add_argument("--snapshot", type=Path, help="Save one decoded frame and exit")
     parser.add_argument("--stats-frames", type=int, help="Measure N decoded frames and exit")
     parser.add_argument(
@@ -49,6 +53,15 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    # OpenCV reads these FFmpeg options only when cv2 is imported. UDP avoids
+    # TCP head-of-line blocking, while TCP remains the safer default on a noisy
+    # hotspot. Both modes ask FFmpeg not to build a playback buffer.
+    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+        "rtsp_transport;%s|fflags;nobuffer|flags;low_delay" % args.transport
+    )
+    global cv2
+    import cv2
+
     timeout_ms = max(1, int(args.timeout * 1000))
     capture = cv2.VideoCapture(
         args.url,
@@ -60,6 +73,7 @@ def main() -> int:
             timeout_ms,
         ],
     )
+    capture.set(cv2.CAP_PROP_BUFFERSIZE, max(1, args.buffer_size))
     deadline = time.monotonic() + args.timeout
     frame_times: list[float] = []
     try:

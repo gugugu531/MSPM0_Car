@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 MDK5_DIR = REPO_ROOT / "project" / "keil"
 MDK6_DIR = MDK5_DIR
 MDK5_PROJECT = MDK5_DIR / "NUEDC2025_MSPM0G3507.uvprojx"
