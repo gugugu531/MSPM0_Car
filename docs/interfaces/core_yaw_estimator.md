@@ -23,5 +23,5 @@ float YawEstimator_GetFusionOffset(const YAW_ESTIMATOR *estimator,
 - `GetFusionOffset(B)` 返回 `shortest_angle(B-A)`。
 - 调用者决定何时冻结偏移以及如何构造参考角；core 不知道“启动”“循迹”等阶段。
 
-当前消费者限定为 `middleware/straight_drive`、`middleware/line_guided_drive` 和无电机
-`Yaw A/B` 检查页，避免继续复制 A/B 算法。
+当前消费者限定为 `middleware/straight_drive`、`middleware/turn_drive` 和无电机 `Yaw A/B`
+检查页，避免继续复制 A/B 算法。

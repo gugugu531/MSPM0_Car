@@ -47,7 +47,8 @@ SDK 的命名、串口协议解析、寄存器定义和已有全局变量，同�
   计数反推事务是否成功。
 - `JY61P_I2C_GetSnapshot()`：用序列锁原子复制同一轮 angle + gyro 以及其样本计数和发布时间戳。
 
-当前由 `app/app_line_task.c`、`app/app_straight_task.c` 的九种直行测试、JY61P 自检和
+当前由 `app/app_line_task.c`、`app/app_straight_task.c` 的九种直行测试、
+`app/app_turn_task.c` 的两种转向测试、JY61P 自检和
 Yaw A/B 无电机对比任务在每个 20ms 控制拍调用 `JY61P_I2C_Poll()`；
 SysTick ISR 不轮询 JY61P。
 

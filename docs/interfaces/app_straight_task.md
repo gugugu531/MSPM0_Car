@@ -62,9 +62,9 @@ OLED 显示指令、实际左右占空比与编码器速度；陀螺模式额外
 上位机工具：
 
 ```powershell
-python tools/straight_test_viz.py --list
-python tools/straight_test_viz.py --port COM7
-python tools/straight_test_viz.py --port COM7 --csv straight.csv --log straight_raw.txt
+python tools/visualizers/straight_test_viz.py --list
+python tools/visualizers/straight_test_viz.py --port COM7
+python tools/visualizers/straight_test_viz.py --port COM7 --csv straight.csv --log straight_raw.txt
 ```
 
 依赖为 `pyserial` 和 `matplotlib`。窗口实时显示左右轮占空比、速度、距离及

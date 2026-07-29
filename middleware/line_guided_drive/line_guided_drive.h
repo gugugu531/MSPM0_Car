@@ -63,7 +63,7 @@ typedef struct {
     float right_duty_percent;
 } LINE_GUIDED_OUTPUT;
 
-/** 初始化状态、PID、里程和 A/B 航向估计器。 */
+/** 初始化状态、PID、里程和航向参考。 */
 void LineGuidedDrive_Init(void);
 /**
  * @brief 使用 app 已采集的 Yahboom 黑线掩码，推进状态机并写入底盘。

@@ -700,7 +700,8 @@ static APP_TASK_STATUS ChkSpeedPid_Tick(float dt){
     Chassis_SetSpeed(spd_target);
 
     /*
-     * 遥测: 每控制拍(20ms/50Hz)输出一行, 供上位机 tools/speed_pid_viz.py 绘图整定。
+     * 遥测: 每控制拍(20ms/50Hz)输出一行, 供上位机
+     * tools/visualizers/speed_pid_viz.py 绘图整定。
      * 字段: t 设备 ms; tl/tr 目标轮速; l/r 实测轮速(m/s); dl/dr 应用占空比(%,为上一拍值)。
      * 非阻塞(环形缓冲+TX 中断), 对控制环零阻塞。
      */
@@ -768,7 +769,8 @@ static APP_TASK_STATUS ChkDutySweep_Tick(float dt){
 
     /*
      * 遥测: 复用 [SPD] 行格式(tl/tr=0 无目标, l/r=实测轮速, dl/dr=应用占空比),
-     * 直接用 tools/speed_pid_viz.py 看"占空比阶梯 vs 实测速度", 定位死区与噪声拐点。
+     * 直接用 tools/visualizers/speed_pid_viz.py 看"占空比阶梯 vs 实测速度",
+     * 定位死区与噪声拐点。
      */
     DebugUart_Printf("[SPD] t=%lu tl=0.000 tr=0.000 l=%.3f r=%.3f dl=%.1f dr=%.1f\r\n",
         (unsigned long)now,

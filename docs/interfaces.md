@@ -14,9 +14,12 @@
 - `app_task.h`：任务生命周期契约——`APP_TASK_STATUS` 与 `APP_TASK_DESC`（`on_enter/on_tick/on_exit`），不含具体任务。
 - `app_menu.h`：菜单树类型 `MENU_NODE`/`MENU_ITEM` 与 `Menu_Tick` 导航；`app_menu_def.c` 定义菜单树实例 `APP_ROOT_MENU`。
 - `app_checks.h`：外设自检任务描述符 `APP_CHK_*`（JY61P / Yaw A/B / MPU6050 / CY-Z / Grayscale / Gray I2C / Yahboom I2C / TB6612 / Encoder / Speed PID / Duty Sweep）。
-- `app_line_task.h`：两个 Yahboom 循迹任务及共享 I2C0 分时调度（挂根菜单）。
+- `app_line_task.h`：Yahboom 循迹、组合循迹转向和 K230 视觉循迹共四个任务，以及共享 I2C0
+  分时调度（挂根菜单）。
 - `app_straight_task.h`：九种直行测试任务、3 m 自动停车与遥测配置，详见
   `docs/interfaces/app_straight_task.md`。
+- `app_turn_task.h`：两种前进左转任务（直行 2 m、左转 90°、再直行 1 m），具体控制见
+  `docs/interfaces/middleware_turn_drive.md`。
 - `app_bt_task.h`：蓝牙串口收发测试任务 `APP_CHK_BLUETOOTH`（挂 Device Check）。
 
 ## core
@@ -33,12 +36,14 @@
 - `chassis.h`：底盘组合服务（开环占空比 + 每轮速度闭环 PID），详细说明见 `docs/interfaces/middleware_chassis.md`。
 - `line_follow.h`：标准化八路黑线观测、巡线偏差计算、PID/陀螺修正和底盘输出，详细说明见
   `docs/interfaces/middleware_line_follow.md`。
-- `line_guided_drive.h`：80% 直接起步的启动角速度控制、Yahboom 外环与航向内环，详细说明见
+- `line_guided_drive.h`：80% 直接起步的外侧灰度 PID 与中间通道航向保持，详细说明见
   `docs/interfaces/middleware_line_guided_drive.md`。
 - `vision_line_drive.h`：K230 红线帧解析、角速度起步和位置/方向连续融合循迹，详细说明见
   `docs/interfaces/middleware_vision_line_drive.md`。
 - `straight_drive.h`：九种直行模式的指令、PID、启动阶段切换、姿态反馈和底盘输出，详细说明见
   `docs/interfaces/middleware_straight_drive.md`。
+- `turn_drive.h`：80%/满速前进左转实验的阶段、航向估计和底盘输出，详细说明见
+  `docs/interfaces/middleware_turn_drive.md`。
 - `ui.h`：轻量 OLED UI 渲染层，详细说明见 `docs/interfaces/middleware_ui.md`。
 - `system_fault.h`：系统故障处理服务，详细说明见 `docs/interfaces/middleware_system_fault.md`。
 

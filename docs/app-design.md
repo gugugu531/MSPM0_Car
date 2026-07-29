@@ -44,6 +44,9 @@ Main Menu
 │   ├── 80 Enc->Yaw     (task)   1 s 双轮累计路程差闭环后切换航向闭环
 │   ├── 80 Int->Yaw     (task)   500 ms 固定周期积分航向对照版
 │   └── 100 Int->Yaw    (task)   500 ms 新样本积分 + 融合角修正，速度优先
+├── Turn Test           (submenu)
+│   ├── Fwd2m L90 +1m  (task)   80% 直行 2 m，左转 90°，再直行 1 m
+│   └── Full Fwd2m L90 (task)   100% 直行 2 m，左转 90°，再直行 1 m
 └── Device Check        (submenu)
     ├── Gyro JY61P       (task)   JY61P 陀螺/姿态/温度 + 诊断计数
     ├── Yaw A/B          (task)   无电机对比 gz 积分角 A 与融合角 B
@@ -130,7 +133,7 @@ Main Menu
 9. **UI**：RUN 运行页由任务 `on_tick` 低频自渲染；MENU/FAULT 页归框架。
 
 ### 参考实现
-Device Check 共 11 项（`app_checks.c` 10 项诊断 + `app_bt_task.c` 蓝牙收发），演示了 enter 复位、tick 非阻塞采样、按变化节流刷屏、
+Device Check 共 12 项（`app_checks.c` 11 项诊断 + `app_bt_task.c` 蓝牙收发），演示了 enter 复位、tick 非阻塞采样、按变化节流刷屏、
 仅靠 BACK 短按退出；MPU6050、感为灰度与 Yahboom 检查页还示范了 on_enter/on_exit
 挂起/恢复 JY61P，以分时共用 I2C0。
 

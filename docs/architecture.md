@@ -21,10 +21,11 @@ app ─► middleware ─► bsp
 - `app`：固件入口与应用框架——上电初始化(`app_init`)、时间触发调度器(`app_scheduler`)、
   顶层状态机 INIT/MENU/RUN/FAULT(`app_mode`)、菜单树(`app_menu`)与任务契约(`app_task`)、
   外设自检任务(`app_checks`)与功能任务(`app_line_task` 循迹 /
-  `app_straight_task` 直行测试适配 / `app_bt_task` 蓝牙)。
+  `app_straight_task` 直行测试适配 / `app_turn_task` 转向测试适配 / `app_bt_task` 蓝牙)。
 - `core`：PID、信号调理(filter)、运动学等纯计算能力。
 - `middleware`：组合 core 与 BSP，包括底盘（开环占空比 + 每轮速度闭环）、完整巡线闭环
-  （line_follow）、直行闭环（straight_drive）、UI 和故障处理。
+  （line_follow）、航向辅助循迹（line_guided_drive）、K230 视觉循迹（vision_line_drive）、
+  直行闭环（straight_drive）、转向状态机（turn_drive）、UI 和故障处理。
 - `bsp`：直接面向板级外设的驱动，包括直流电机(TB6612)、双轮霍尔编码器、OLED、按键、
   JY61P IMU、MPU6050、灰度巡线传感器、调试串口与蓝牙串口。
 
