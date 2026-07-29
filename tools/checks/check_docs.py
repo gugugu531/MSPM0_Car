@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -27,6 +29,26 @@ LEGACY_PATHS = (
     "tools/k230_video_viewer.py",
     "tools/probes/",
 )
+
+
+@lru_cache(maxsize=None)
+def is_gitignored(repository_path: str) -> bool:
+    """Whether a path is deliberately absent because .gitignore excludes it.
+
+    Build outputs such as project/keil/Objects/ are documented on purpose but
+    never exist in a fresh clone. Failing on those trains readers to ignore this
+    check, which defeats it -- so treat "missing but gitignored" as expected.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", "check-ignore", "-q", "--", repository_path],
+            cwd=ROOT,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return False          # 没有 git 就退回严格模式，宁可误报也不漏报
+    return completed.returncode == 0
 
 
 def markdown_files() -> list[Path]:
@@ -67,8 +89,10 @@ def main() -> int:
                         candidate.with_suffix(".c"),
                         candidate.with_suffix(".h"),
                     )
-                    if not candidate.exists() and not any(
-                        source.exists() for source in module_sources
+                    if (
+                        not candidate.exists()
+                        and not any(source.exists() for source in module_sources)
+                        and not is_gitignored(repository_path)
                     ):
                         failures.append(
                             f"{relative_document}:{line_number}: missing repository path "
