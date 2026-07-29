@@ -33,6 +33,7 @@
 | 摆杆执行器 | 步进电机 + QEI | STEP PA29(TIMG6) / DIR PB14 / EN PB11 / QEI TIMG8 | `bsp/step_motor` |
 | 显示/输入 | OLED / 按键 | I2C1/GPIO | `bsp/oled`, `bsp/key` |
 | 调试遥测 | Debug_Ex | UART1 115200（PA8 TX / PA9 RX） | `bsp/debug_uart` |
+| 视觉链路 | 树莓派（球位置检测） | Rpi_UART 115200（PB15 TX / PA24 RX） | 驱动待实现 |
 
 ## 目录结构
 

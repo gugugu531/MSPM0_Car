@@ -22,6 +22,7 @@
 | 摆杆执行器 | 步进电机 + 驱动器 | STEP PA29（TIMG6）/ DIR PB14 / EN PB11 | `bsp/step_motor` |
 | 人机 | OLED + 独立按键 | I2C1 / GPIO | `bsp/oled`, `bsp/key` |
 | 调试遥测 | Debug_Ex | UART1 115200（PA8 TX / PA9 RX） | `bsp/debug_uart` |
+| 视觉链路 | 树莓派（球位置检测） | Rpi_UART 115200（PB15 TX / PA24 RX） | 驱动待实现 |
 
 ## 分层架构
 
@@ -104,8 +105,18 @@ $env:AC6_TOOLCHAIN_6_22_0 = "<KEIL>\ARM\ARMCLANG\bin"
 cbuild project/keil/NUEDC2025_MSPM0G3507.csolution.yml --rebuild --toolchain AC6
 ```
 
+> **CMSIS-Toolbox 必须 ≥ 2.12.0**：`csolution.yml` 使用了 `target-set` 节点。命令行构建前请先对
+> `project/keil/vcpkg-configuration.json` 执行 **Activate Environment**，或显式指定 vcpkg 装好的
+> toolbox 路径。**不要**直接使用 MDK 5 自带的 `<KEIL>\ARM\cmsis-toolbox`——它是 2.6.0，会报
+> `csolution.yml:9:7 - error csolution: schema check failed, verify syntax`，该信息不会提示真实
+> 原因是版本过低。
+
 输出位于 `project/keil/out/`。TI 启动文件使用 legacy armasm 语法，当前会出现一条 `A1950W`
 弃用警告，不影响链接产物生成。
+
+MDK 5 与 MDK 6 的优化级别保持一致，均为 **-O0**（`.uvprojx` 的 `<Optim>1</Optim>` 对应
+`csolution.yml` 的 `optimize: none`）。本工程含步进脉冲时序与控制周期预算，两侧优化级别若不一致，
+在一边上板标定过的时序换到另一边不成立，修改时须同步。
 
 ### Keil MDK 5 / uVision
 
@@ -214,6 +225,7 @@ python tools/checks/check_docs.py
 - 模块接口：[`docs/interfaces/`](docs/interfaces/)
   - Yahboom I2C 循线：[`bsp_yahboom_track.md`](docs/interfaces/bsp_yahboom_track.md)
   - JY61P：[`bsp_wit_sdk.md`](docs/interfaces/bsp_wit_sdk.md)
+- H 题控制方案（循迹 + 摆杆滚球的控制律与参数）：[`docs/control-plan.md`](docs/control-plan.md)
 - 摆杆步进电机上板标定流程：[`docs/step-motor-calibration.md`](docs/step-motor-calibration.md)
 - 当前待办和上板风险：[`docs/todo.md`](docs/todo.md)
 - K230 开发与远程部署流程（**2025E 历史资料**，2026H 视觉已改用树莓派）：
