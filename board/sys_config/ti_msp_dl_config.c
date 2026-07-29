@@ -63,6 +63,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_init(void)
     SYSCFG_DL_OLED_init();
     SYSCFG_DL_Gray_JY61P_I2C_init();
     SYSCFG_DL_Debug_Ex_init();
+    SYSCFG_DL_Rpi_UART_init();
     SYSCFG_DL_SYSTICK_init();
     /* Ensure backup structures have no valid state */
 	gMotor_LeftBackup.backupRdy 	= false;
@@ -113,6 +114,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_I2C_reset(OLED_INST);
     DL_I2C_reset(Gray_JY61P_I2C_INST);
     DL_UART_Main_reset(Debug_Ex_INST);
+    DL_UART_Main_reset(Rpi_UART_INST);
 
 
     DL_GPIO_enablePower(GPIOA);
@@ -125,6 +127,7 @@ SYSCONFIG_WEAK void SYSCFG_DL_initPower(void)
     DL_I2C_enablePower(OLED_INST);
     DL_I2C_enablePower(Gray_JY61P_I2C_INST);
     DL_UART_Main_enablePower(Debug_Ex_INST);
+    DL_UART_Main_enablePower(Rpi_UART_INST);
 
     delay_cycles(POWER_STARTUP_DELAY);
 }
@@ -167,6 +170,10 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
         GPIO_Debug_Ex_IOMUX_TX, GPIO_Debug_Ex_IOMUX_TX_FUNC);
     DL_GPIO_initPeripheralInputFunction(
         GPIO_Debug_Ex_IOMUX_RX, GPIO_Debug_Ex_IOMUX_RX_FUNC);
+    DL_GPIO_initPeripheralOutputFunction(
+        GPIO_Rpi_UART_IOMUX_TX, GPIO_Rpi_UART_IOMUX_TX_FUNC);
+    DL_GPIO_initPeripheralInputFunction(
+        GPIO_Rpi_UART_IOMUX_RX, GPIO_Rpi_UART_IOMUX_RX_FUNC);
 
     DL_GPIO_initDigitalOutput(LED_G_IOMUX);
 
@@ -560,6 +567,37 @@ SYSCONFIG_WEAK void SYSCFG_DL_Debug_Ex_init(void)
 
 
     DL_UART_Main_enable(Debug_Ex_INST);
+}
+static const DL_UART_Main_ClockConfig gRpi_UARTClockConfig = {
+    .clockSel    = DL_UART_MAIN_CLOCK_BUSCLK,
+    .divideRatio = DL_UART_MAIN_CLOCK_DIVIDE_RATIO_1
+};
+
+static const DL_UART_Main_Config gRpi_UARTConfig = {
+    .mode        = DL_UART_MAIN_MODE_NORMAL,
+    .direction   = DL_UART_MAIN_DIRECTION_TX_RX,
+    .flowControl = DL_UART_MAIN_FLOW_CONTROL_NONE,
+    .parity      = DL_UART_MAIN_PARITY_NONE,
+    .wordLength  = DL_UART_MAIN_WORD_LENGTH_8_BITS,
+    .stopBits    = DL_UART_MAIN_STOP_BITS_ONE
+};
+
+SYSCONFIG_WEAK void SYSCFG_DL_Rpi_UART_init(void)
+{
+    DL_UART_Main_setClockConfig(Rpi_UART_INST, (DL_UART_Main_ClockConfig *) &gRpi_UARTClockConfig);
+
+    DL_UART_Main_init(Rpi_UART_INST, (DL_UART_Main_Config *) &gRpi_UARTConfig);
+    /*
+     * Configure baud rate by setting oversampling and baud rate divisors.
+     *  Target baud rate: 115200
+     *  Actual baud rate: 115211.52
+     */
+    DL_UART_Main_setOversampling(Rpi_UART_INST, DL_UART_OVERSAMPLING_RATE_16X);
+    DL_UART_Main_setBaudRateDivisor(Rpi_UART_INST, Rpi_UART_IBRD_32_MHZ_115200_BAUD, Rpi_UART_FBRD_32_MHZ_115200_BAUD);
+
+
+
+    DL_UART_Main_enable(Rpi_UART_INST);
 }
 
 SYSCONFIG_WEAK void SYSCFG_DL_SYSTICK_init(void)

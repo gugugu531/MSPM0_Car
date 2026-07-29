@@ -186,6 +186,22 @@ extern "C" {
 #define Debug_Ex_BAUD_RATE                                              (115200)
 #define Debug_Ex_IBRD_32_MHZ_115200_BAUD                                    (17)
 #define Debug_Ex_FBRD_32_MHZ_115200_BAUD                                    (23)
+/* Defines for Rpi_UART */
+#define Rpi_UART_INST                                                      UART2
+#define Rpi_UART_INST_FREQUENCY                                         32000000
+#define Rpi_UART_INST_IRQHandler                                UART2_IRQHandler
+#define Rpi_UART_INST_INT_IRQN                                    UART2_INT_IRQn
+#define GPIO_Rpi_UART_RX_PORT                                              GPIOA
+#define GPIO_Rpi_UART_TX_PORT                                              GPIOB
+#define GPIO_Rpi_UART_RX_PIN                                      DL_GPIO_PIN_24
+#define GPIO_Rpi_UART_TX_PIN                                      DL_GPIO_PIN_15
+#define GPIO_Rpi_UART_IOMUX_RX                                   (IOMUX_PINCM54)
+#define GPIO_Rpi_UART_IOMUX_TX                                   (IOMUX_PINCM32)
+#define GPIO_Rpi_UART_IOMUX_RX_FUNC                    IOMUX_PINCM54_PF_UART2_RX
+#define GPIO_Rpi_UART_IOMUX_TX_FUNC                    IOMUX_PINCM32_PF_UART2_TX
+#define Rpi_UART_BAUD_RATE                                              (115200)
+#define Rpi_UART_IBRD_32_MHZ_115200_BAUD                                    (17)
+#define Rpi_UART_FBRD_32_MHZ_115200_BAUD                                    (23)
 
 
 
@@ -283,6 +299,7 @@ void SYSCFG_DL_TIMER_0_init(void);
 void SYSCFG_DL_OLED_init(void);
 void SYSCFG_DL_Gray_JY61P_I2C_init(void);
 void SYSCFG_DL_Debug_Ex_init(void);
+void SYSCFG_DL_Rpi_UART_init(void);
 
 void SYSCFG_DL_SYSTICK_init(void);
 

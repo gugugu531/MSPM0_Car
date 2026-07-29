@@ -30,6 +30,7 @@ const TIMER   = scripting.addModule("/ti/driverlib/TIMER", {}, false);
 const TIMER1  = TIMER.addInstance();
 const UART    = scripting.addModule("/ti/driverlib/UART", {}, false);
 const UART1   = UART.addInstance();
+const UART2   = UART.addInstance();
 
 /**
  * Write custom configuration values to the imported modules.
@@ -225,6 +226,20 @@ UART1.rxPinConfig.onlyInternalResistor = scripting.forceWrite(false);
 UART1.rxPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
 UART1.rxPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric7";
 
+UART2.$name                            = "Rpi_UART";
+UART2.targetBaudRate                   = 115200;
+UART2.peripheral.rxPin.$assign         = "PA24";
+UART2.peripheral.txPin.$assign         = "PB15";
+UART2.txPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric11";
+UART2.txPinConfig.direction            = scripting.forceWrite("OUTPUT");
+UART2.txPinConfig.hideOutputInversion  = scripting.forceWrite(false);
+UART2.txPinConfig.onlyInternalResistor = scripting.forceWrite(false);
+UART2.txPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
+UART2.rxPinConfig.$name                = "ti_driverlib_gpio_GPIOPinGeneric12";
+UART2.rxPinConfig.hideOutputInversion  = scripting.forceWrite(false);
+UART2.rxPinConfig.onlyInternalResistor = scripting.forceWrite(false);
+UART2.rxPinConfig.passedPeripheralType = scripting.forceWrite("Digital");
+
 /**
  * Pinmux solution for unlocked pins/peripherals. This ensures that minor changes to the automatic solver in a future
  * version of the tool will not impact the pinmux you originally saw.  These lines can be completely deleted in order to
@@ -236,3 +251,4 @@ Board.peripheral.swdioPin.$suggestSolution = "PA19";
 I2C1.peripheral.$suggestSolution           = "I2C1";
 SYSCTL.peripheral.$suggestSolution         = "SYSCTL";
 UART1.peripheral.$suggestSolution          = "UART1";
+UART2.peripheral.$suggestSolution          = "UART2";
