@@ -147,9 +147,10 @@ GPIO6.$name                         = "Buzzer";
 GPIO6.associatedPins[0].$name       = "PIN";
 GPIO6.associatedPins[0].pin.$assign = "PB5";
 
-GPIO7.$name                         = "GPIO_GRP_0";
-GPIO7.associatedPins[0].$name       = "PIN_0";
-GPIO7.associatedPins[0].pin.$assign = "PB3";
+GPIO7.$name                          = "GPIO_GRP_0";
+GPIO7.associatedPins[0].$name        = "PIN_0";
+GPIO7.associatedPins[0].initialValue = "SET";
+GPIO7.associatedPins[0].pin.$assign  = "PA17";
 
 I2C1.$name                             = "OLED";
 I2C1.basicEnableController             = true;

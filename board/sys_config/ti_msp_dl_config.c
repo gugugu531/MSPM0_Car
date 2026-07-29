@@ -271,7 +271,9 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
     DL_GPIO_clearPins(GPIOA, Motor_IO_AIN1_PIN |
 		SR04_Trig_PIN |
 		LED_G_PIN);
-    DL_GPIO_enableOutput(GPIOA, Motor_IO_AIN1_PIN |
+    DL_GPIO_setPins(GPIOA, GPIO_GRP_0_PIN_0_PIN);
+    DL_GPIO_enableOutput(GPIOA, GPIO_GRP_0_PIN_0_PIN |
+		Motor_IO_AIN1_PIN |
 		SR04_Trig_PIN |
 		LED_G_PIN);
     DL_GPIO_setUpperPinsPolarity(GPIOA, DL_GPIO_PIN_28_EDGE_RISE |
@@ -283,14 +285,12 @@ SYSCONFIG_WEAK void SYSCFG_DL_GPIO_init(void)
     DL_GPIO_enableInterrupt(GPIOA, Motor_IO_ENC_R_A_PIN |
 		Motor_IO_ENC_L_A_PIN);
     DL_GPIO_clearPins(GPIOB, Buzzer_PIN_PIN |
-		GPIO_GRP_0_PIN_0_PIN |
 		Motor_IO_AIN2_PIN |
 		Motor_IO_BIN1_PIN |
 		Motor_IO_BIN2_PIN |
 		LED_Y_PIN |
 		LED_R_PIN);
     DL_GPIO_enableOutput(GPIOB, Buzzer_PIN_PIN |
-		GPIO_GRP_0_PIN_0_PIN |
 		Motor_IO_AIN2_PIN |
 		Motor_IO_BIN1_PIN |
 		Motor_IO_BIN2_PIN |

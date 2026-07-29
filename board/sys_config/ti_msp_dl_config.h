@@ -201,11 +201,11 @@ extern "C" {
 #define Buzzer_PIN_PIN                                           (DL_GPIO_PIN_5)
 #define Buzzer_PIN_IOMUX                                         (IOMUX_PINCM18)
 /* Port definition for Pin Group GPIO_GRP_0 */
-#define GPIO_GRP_0_PORT                                                  (GPIOB)
+#define GPIO_GRP_0_PORT                                                  (GPIOA)
 
-/* Defines for PIN_0: GPIOB.3 with pinCMx 16 on package pin 51 */
-#define GPIO_GRP_0_PIN_0_PIN                                     (DL_GPIO_PIN_3)
-#define GPIO_GRP_0_PIN_0_IOMUX                                   (IOMUX_PINCM16)
+/* Defines for PIN_0: GPIOA.17 with pinCMx 39 on package pin 10 */
+#define GPIO_GRP_0_PIN_0_PIN                                    (DL_GPIO_PIN_17)
+#define GPIO_GRP_0_PIN_0_IOMUX                                   (IOMUX_PINCM39)
 /* Defines for AIN1: GPIOA.16 with pinCMx 38 on package pin 9 */
 #define Motor_IO_AIN1_PORT                                               (GPIOA)
 #define Motor_IO_AIN1_PIN                                       (DL_GPIO_PIN_16)
