@@ -42,6 +42,7 @@
 - `tb6612fng.h`：TB6612FNG 双路直流电机驱动芯片接口，详细说明见 `docs/interfaces/bsp_tb6612fng.md`。
 - `hall_encoder.h`：左右双轮霍尔编码器计数、速度和距离估计接口（按 `HALL_ENCODER_ID` 选轮），详细说明见 `docs/interfaces/bsp_hall_encoder.md`。
 - `ganv_gray.h`：感为 8 路灰度传感器 I2C 驱动（I2C0，默认地址 `0x4F`），详细说明见 `docs/interfaces/bsp_ganv_gray.md`。
+- `step_motor.h`：摆杆步进电机开环控制（STEP=PA29/TIMG6，DIR=PB14，EN=PB11），含速度限幅与开环位置限位，详细说明见 `docs/interfaces/bsp_step_motor.md`。
 - `debug_uart.h`：调试串口（Debug_Ex/UART1，115200）非阻塞收发——TX 遥测环形缓冲与 RX 视觉板字节流。
 
 ### 三种灰度接口的位序与极性

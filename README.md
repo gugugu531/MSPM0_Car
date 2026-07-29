@@ -20,6 +20,7 @@
 | 底盘轮 | 直流电机 ×2 (TB6612FNG) + 霍尔编码器 | PWM / GPIO | `bsp/motor` |
 | 姿态 | JY61P 六轴 (WIT 协议) | I2C0（与感为灰度共总线） | `bsp/imu` (wit_sdk) |
 | 循迹 | 感为 8 路灰度传感器 | I2C0（地址 `0x4F`，与 JY61P 共总线） | `bsp/ganv_gray` |
+| 摆杆执行器 | 步进电机 + 驱动器 | STEP PA29（TIMG6）/ DIR PB14 / EN PB11 | `bsp/step_motor` |
 | 人机 | OLED + 独立按键 | I2C1 / GPIO | `bsp/oled`, `bsp/key` |
 | 调试遥测 | Debug_Ex | UART1 115200（PA8 TX / PA9 RX） | `bsp/debug_uart` |
 

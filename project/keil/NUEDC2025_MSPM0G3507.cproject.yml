@@ -22,6 +22,7 @@ project:
         - ../../bsp/key
         - ../../bsp/motor
         - ../../bsp/oled
+        - ../../bsp/step_motor
         - ../../bsp/time
         - ../../board/sys_config
         - ../../third_party/mspm0-sdk/source
@@ -120,4 +121,5 @@ project:
         - file: ../../bsp/motor/hall_encoder.c
         - file: ../../bsp/motor/tb6612fng.c
         - file: ../../bsp/oled/oled.c
+        - file: ../../bsp/step_motor/step_motor.c
         - file: ../../bsp/time/bsp_time.c

@@ -101,6 +101,35 @@ extern "C" {
 #define GPIO_Motor_Right_C0_IOMUX_FUNC               IOMUX_PINCM27_PF_TIMG0_CCP0
 #define GPIO_Motor_Right_C0_IDX                              DL_TIMER_CC_0_INDEX
 
+/* Defines for SMotor */
+#define SMotor_INST                                                        TIMG6
+#define SMotor_INST_IRQHandler                                  TIMG6_IRQHandler
+#define SMotor_INST_INT_IRQN                                    (TIMG6_INT_IRQn)
+#define SMotor_INST_CLK_FREQ                                               62500
+/* GPIO defines for channel 0 */
+#define GPIO_SMotor_C0_PORT                                                GPIOA
+#define GPIO_SMotor_C0_PIN                                        DL_GPIO_PIN_29
+#define GPIO_SMotor_C0_IOMUX                                      (IOMUX_PINCM4)
+#define GPIO_SMotor_C0_IOMUX_FUNC                     IOMUX_PINCM4_PF_TIMG6_CCP0
+#define GPIO_SMotor_C0_IDX                                   DL_TIMER_CC_0_INDEX
+
+
+
+
+/* Defines for SMotor_QEI */
+#define SMotor_QEI_INST                                                    TIMG8
+#define SMotor_QEI_INST_IRQHandler                              TIMG8_IRQHandler
+#define SMotor_QEI_INST_INT_IRQN                                (TIMG8_INT_IRQn)
+/* Pin configuration defines for SMotor_QEI PHA Pin */
+#define GPIO_SMotor_QEI_PHA_PORT                                           GPIOA
+#define GPIO_SMotor_QEI_PHA_PIN                                   DL_GPIO_PIN_26
+#define GPIO_SMotor_QEI_PHA_IOMUX                                (IOMUX_PINCM59)
+#define GPIO_SMotor_QEI_PHA_IOMUX_FUNC               IOMUX_PINCM59_PF_TIMG8_CCP0
+/* Pin configuration defines for SMotor_QEI PHB Pin */
+#define GPIO_SMotor_QEI_PHB_PORT                                           GPIOA
+#define GPIO_SMotor_QEI_PHB_PIN                                   DL_GPIO_PIN_27
+#define GPIO_SMotor_QEI_PHB_IOMUX                                (IOMUX_PINCM60)
+#define GPIO_SMotor_QEI_PHB_IOMUX_FUNC               IOMUX_PINCM60_PF_TIMG8_CCP1
 
 
 /* Defines for TIMER_0 */
@@ -227,6 +256,15 @@ extern "C" {
 /* Defines for G: GPIOA.23 with pinCMx 53 on package pin 24 */
 #define LED_G_PIN                                               (DL_GPIO_PIN_23)
 #define LED_G_IOMUX                                              (IOMUX_PINCM53)
+/* Port definition for Pin Group SMotor_IO */
+#define SMotor_IO_PORT                                                   (GPIOB)
+
+/* Defines for DIR1: GPIOB.14 with pinCMx 31 on package pin 2 */
+#define SMotor_IO_DIR1_PIN                                      (DL_GPIO_PIN_14)
+#define SMotor_IO_DIR1_IOMUX                                     (IOMUX_PINCM31)
+/* Defines for EN1: GPIOB.11 with pinCMx 28 on package pin 63 */
+#define SMotor_IO_EN1_PIN                                       (DL_GPIO_PIN_11)
+#define SMotor_IO_EN1_IOMUX                                      (IOMUX_PINCM28)
 
 
 
@@ -239,6 +277,8 @@ void SYSCFG_DL_GPIO_init(void);
 void SYSCFG_DL_SYSCTL_init(void);
 void SYSCFG_DL_Motor_Left_init(void);
 void SYSCFG_DL_Motor_Right_init(void);
+void SYSCFG_DL_SMotor_init(void);
+void SYSCFG_DL_SMotor_QEI_init(void);
 void SYSCFG_DL_TIMER_0_init(void);
 void SYSCFG_DL_OLED_init(void);
 void SYSCFG_DL_Gray_JY61P_I2C_init(void);

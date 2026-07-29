@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\debug_uart;..\..\bsp\ganv_gray;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\time;..\..\board\sys_config;..\..\third_party\mspm0-sdk\source;..\..\third_party\mspm0-sdk\source\third_party\CMSIS\Core\Include</IncludePath>
+              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\debug_uart;..\..\bsp\ganv_gray;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\step_motor;..\..\bsp\time;..\..\board\sys_config;..\..\third_party\mspm0-sdk\source;..\..\third_party\mspm0-sdk\source\third_party\CMSIS\Core\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -544,6 +544,11 @@
               <FileName>oled.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\bsp\oled\oled.c</FilePath>
+            </File>
+            <File>
+              <FileName>step_motor.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\bsp\step_motor\step_motor.c</FilePath>
             </File>
             <File>
               <FileName>bsp_time.c</FileName>
