@@ -30,36 +30,15 @@ run-to-completion 任务。
 
 ```
 Main Menu
-├── Line Follow         (task)   Yahboom 循线 + 角速度内环, 黑线位图/误差/双轮占空比, 丢线刹停
-├── Line Guided 80      (task)   80% 直接起步，外侧黑线灰度 PID 优先，否则航向保持
-├── Line->Left->Line    (task)   首段丢线后制动 250 ms，再左转至 X4/X5 命中
-├── Vision Red          (task)   K230 红线位置/方向融合；1s 角速度起步后持续视觉循迹
-├── Straight Test       (submenu)
-│   ├── Duty Open       (task)   左右轮同占空比开环
-│   ├── Speed Closed    (task)   左右轮独立速度 PID 直行
-│   ├── Duty+Gyro Rate  (task)   基础占空比 + gz=0 角速度闭环
-│   ├── Duty+Yaw Hold   (task)   基础占空比 + 启动航向锁定
-│   ├── Ramp Yaw Hold   (task)   占空比斜坡，全程启动航向闭环
-│   ├── 80 Rate->Yaw    (task)   1 s 角速度闭环后切换航向闭环
-│   ├── 80 Enc->Yaw     (task)   1 s 双轮累计路程差闭环后切换航向闭环
-│   ├── 80 Int->Yaw     (task)   500 ms 固定周期积分航向对照版
-│   └── 100 Int->Yaw    (task)   500 ms 新样本积分 + 融合角修正，速度优先
-├── Turn Test           (submenu)
-│   ├── Fwd2m L90 +1m  (task)   80% 直行 2 m，左转 90°，再直行 1 m
-│   └── Full Fwd2m L90 (task)   100% 直行 2 m，左转 90°，再直行 1 m
+├── Line Follow         (task)   Yahboom 8 路循线 + 角速度内环, 黑线位图/误差/双轮占空比, 丢线刹停
 └── Device Check        (submenu)
-    ├── Gyro JY61P       (task)   JY61P 陀螺/姿态/温度 + 诊断计数
-    ├── Yaw A/B          (task)   无电机对比 gz 积分角 A 与融合角 B
-    ├── Gyro MPU6050     (task)   物理六轴/温度/静态倾角双页; 进挂起/出恢复 JY61P
-    ├── Gyro CY-Z        (task)   UART3 角度/角速度/CRC/ACK；UP清零、DOWN校准、ENTER请求
-    ├── Grayscale        (task)   数字量 GPIO 版, 8 路 mask 二进制 + 触发数
-    ├── Gray I2C         (task)   感为 I2C 版(0x4F), 8 路数字量 + 在线/固件版本
-    ├── Yahboom I2C      (task)   Yahboom I2C 版(0x12), X1→X8 位图 + 诊断计数
-    ├── TB6612           (task)   短按单次低速脉冲(20%/300ms) + 编码器响应, 抬轮提示
-    ├── Encoder          (task)   双轮 count/speed/dir
-    ├── Speed PID        (task)   双轮速度闭环, 按键给目标 + 目标/实测对比, 整定用, 抬轮提示
-    ├── Duty Sweep       (task)   开环占空比阶梯, 查各占空比下编码器读速(死区/噪声诊断), 抬轮提示
-    └── BlueTooth        (task)   蓝牙串口(UART0,9600)收发测试: 显示收到 ASCII, EN 键发 "hello"
+    ├── Gyro JY61P      (task)   JY61P 陀螺/姿态/温度 + 诊断计数
+    ├── Gray I2C        (task)   Yahboom I2C 版(0x12), 8 路数字量 + 成功/失败与 I2C 诊断计数
+    ├── TB6612          (task)   短按单次低速脉冲(20%/300ms) + 编码器响应, 抬轮提示
+    ├── Step Motor      (task)   摆杆步进短按脉冲(30deg/s, 400ms), 开环估计角与 QEI 实测角对比, EN 键清零
+    ├── Encoder         (task)   双轮 count/speed/dir
+    ├── Speed PID       (task)   双轮速度闭环, 按键给目标 + 目标/实测对比, 整定用, 抬轮提示
+    └── Duty Sweep      (task)   开环占空比阶梯, 查各占空比下编码器读速(死区/噪声诊断), 抬轮提示
 ```
 
 导航按键（仍仅短按）：`UP/DOWN` 移动、`ENTER` 进入子菜单/任务、`BACK` 返回上级。
@@ -133,8 +112,8 @@ Main Menu
 9. **UI**：RUN 运行页由任务 `on_tick` 低频自渲染；MENU/FAULT 页归框架。
 
 ### 参考实现
-Device Check 共 12 项（`app_checks.c` 11 项诊断 + `app_bt_task.c` 蓝牙收发），演示了 enter 复位、tick 非阻塞采样、按变化节流刷屏、
-仅靠 BACK 短按退出；MPU6050、感为灰度与 Yahboom 检查页还示范了 on_enter/on_exit
+Device Check 共 7 项（均在 `app_checks.c`），演示了 enter 复位、tick 非阻塞采样、
+按变化节流刷屏、仅靠 BACK 短按退出；灰度检查页还示范了 on_enter/on_exit
 挂起/恢复 JY61P，以分时共用 I2C0。
 
 ### 公共支持
@@ -142,9 +121,8 @@ Device Check 共 12 项（`app_checks.c` 11 项诊断 + `app_bt_task.c` 蓝牙�
 
 ### 后续扩展点
 - **传感器采样进 ISR**：灰度/编码器等便宜同步量可在 SysTick/专用定时器采进 volatile 快照，
-  IMU 用「定时器 kick + I2C ISR 完成」；控制任务只消费快照（降低控制环输入抖动）。MPU6050
-  DMP 阻塞重，留任务。
-- **命令层**：蓝牙/调试 UART 的 RX/TX 中断 + 环形缓冲 + 命令解析，按需在 app 层新增
+  IMU 用「定时器 kick + I2C ISR 完成」；控制任务只消费快照（降低控制环输入抖动）。
+- **命令层**：调试 UART 的 RX/TX 中断 + 环形缓冲 + 命令解析，按需在 app 层新增
   `UARTx_IRQHandler`。
 - **MPU6050 DMP 姿态**：当前 Device Check 使用基础模式 `MPU6050_GetMeasurement()`，
   UP/DOWN 在加速度/温度页与角速度/静态 pitch/roll 页之间切换。DMP 已有阻塞式 bring-up

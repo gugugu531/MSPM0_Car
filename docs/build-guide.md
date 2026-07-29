@@ -187,28 +187,20 @@ armasm 语法，因此 MDK 6 有一条 `A1950W` 弃用警告；这是兼容性�
 
 编译通过后仍需上板验证（当前 app 框架，详见 `docs/app-design.md`）：
 
-- 上电后 OLED 显示 `Main Menu`，含四个循迹入口、`Straight Test`、`Turn Test` 与
-  `Device Check`；`Straight Test` 下有九种直行测试，所有模式到 3 m 后自动停车
+- 上电后 OLED 显示 `Main Menu`，含 `Line Follow` 与 `Device Check` 两个入口
 - 短按 UP/DOWN 移动选择、ENTER 进入、BACK 返回上级
-- `Device Check` 子菜单内 12 个自检（Gyro JY61P / Yaw A/B / Gyro MPU6050 / Gyro CY-Z /
-  Grayscale / Gray I2C / Yahboom I2C / TB6612 / Encoder / Speed PID / Duty Sweep / BlueTooth）
-  可进入并刷新数据
-- `Yaw A/B` 不驱动电机；转动车体时 A（gz 积分）、B（JY61P 融合）方向应一致，并显示
-  最短角差 `B-A`，UART1 同步输出 `[YAB]` 遥测
-- `Gyro MPU6050` 第 1 页显示三轴加速度、合加速度与温度，第 2 页显示三轴角速度及仅由
-  重力方向估算的 pitch/roll；短按 UP/DOWN 切页。静止平放时合加速度应接近 `9.81 m/s²`，
-  角速度应接近零；进入/退出页面后 JY61P 应分别暂停/恢复更新
+- `Device Check` 子菜单内 7 个自检（Gyro JY61P / Gray I2C / TB6612 / Step Motor /
+  Encoder / Speed PID / Duty Sweep）可进入并刷新数据
 - `Gray I2C` 进入后显示 8 路数字量二进制、`act` 触发数与 `ok/er`、`W/R/s` 诊断计数；
   断开传感器应显示 `READ FAIL` 且 `er` 递增
-- `Yahboom I2C` 显示按 X1→X8 排列且 `1=黑线` 的位图、原始 `0x30` 寄存器值及
-  `ok/er`、`R/W/s` 诊断；断开模块应显示 `READ FAIL`
-- `Line Follow` 与 `Line Guided 80` 均按 X1→X8 显示 `1=黑线`；后者在外侧六路命中时
-  显示 `LINE PID`，只有中间 X4/X5 命中时捕获切换瞬间 yaw 并显示 `YAW HOLD`
 - TB6612 自检短按发单次脉冲、左右轮编码器计数（`encL`/`encR`）随之变化
+- `Step Motor` 须**摆杆脱开或行程内**运行；短按 UP/DOWN 发单次脉冲，`est`(开环积分)
+  与 `qei`(编码器实测) 应同向变化且数值接近，持续偏离即为丢步。ENTER 清零后
+  手动把电机轴精确转一整圈，`cnt` 的变化量即 `STEP_MOTOR_ENCODER_COUNTS_PER_REV`
+  的真实值，据此修正 `bsp/step_motor/step_motor.h`
 - `Encoder` 自检整车前进时两轮 `spd` 应同为正（方向符号见 `bsp/motor/hall_encoder.h`）
 - `Speed PID` / `Duty Sweep` 须**抬起车轮**运行；可配合
   `tools/visualizers/speed_pid_viz.py` 看曲线
-- `BlueTooth` 与手机串口助手（9600 8N1）对连：收到字符滚动显示且回显，ENTER 键发 `hello`
 - `SysTick_Handler` 可按周期扫描按键（菜单响应正常即证明）
 
 ## 本地产物边界

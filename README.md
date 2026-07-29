@@ -221,8 +221,9 @@ python tools/checks/check_docs.py
 - 构建与 SysConfig：[`docs/build-guide.md`](docs/build-guide.md)
 - 目录职责：[`docs/project-structure.md`](docs/project-structure.md)
 - 模块接口：[`docs/interfaces/`](docs/interfaces/)
-  - 感为 I2C 灰度：[`bsp_ganv_gray.md`](docs/interfaces/bsp_ganv_gray.md)
+  - Yahboom I2C 循线：[`bsp_yahboom_track.md`](docs/interfaces/bsp_yahboom_track.md)
   - JY61P：[`bsp_wit_sdk.md`](docs/interfaces/bsp_wit_sdk.md)
+- 摆杆步进电机上板标定流程：[`docs/step-motor-calibration.md`](docs/step-motor-calibration.md)
 - 当前待办和上板风险：[`docs/todo.md`](docs/todo.md)
 - K230 v1.8 固件更新、VS Code CanMV 扩展和 MCP/Preview 连接流程：
   [`docs/k230-development.md`](docs/k230-development.md)
