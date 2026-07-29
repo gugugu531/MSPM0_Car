@@ -134,13 +134,6 @@ typedef enum {
 
 ## 兼容宏
 
-为了降低本轮重写对上层应用的影响，保留单按键便捷宏：
-
-```c
-#define Key_Read()         Key_IsPressed(KEY_ID_1)
-#define Key_short_press()  Key_IsShortPress(KEY_ID_1)
-#define Key_long_press()   Key_IsLongPress(KEY_ID_1)
-#define Key_double_click() Key_IsDoubleClick(KEY_ID_1)
-```
-
-其中 `KEY_ID_1` 兼容映射到 `KEY_ID_ENTER`。后续如果上层流程统一改用语义化 `KEY_ID_*`，可以再考虑移除这些兼容宏。
+早期为降低重写影响保留过 `Key_Read()` / `Key_short_press()` 等单按键便捷宏（`KEY_ID_1`
+映射到 `KEY_ID_ENTER`）。上层已统一改用语义化 `KEY_ID_*`，这批兼容宏**已移除**，
+调用方直接用 `Key_IsPressed(KEY_ID_ENTER)` 一类的完整形式。

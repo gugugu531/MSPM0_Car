@@ -76,21 +76,6 @@ typedef struct {
 
 保存左右轮占空比百分比。正值表示前进方向，负值表示后退方向。实际限幅由 BSP `TB6612FNG_SetDuty()` 完成。
 
-### `CHASSIS_STATUS`
-
-```c
-typedef struct {
-    CHASSIS_DUTY duty;
-    float speed_mps;
-    float distance_m;
-    HALL_ENCODER_DIR encoder_dir;
-    TB6612FNG_OUTPUT left_output;
-    TB6612FNG_OUTPUT right_output;
-} CHASSIS_STATUS;
-```
-
-底盘状态快照。
-
 工程现为**左右双轮**霍尔编码器。`Chassis_GetSpeed()`/`Chassis_GetDistance()` 返回**车体量**（左右轮均值），每轮独立值用 `Chassis_GetWheelSpeed(id)`/`Chassis_GetWheelDistance(id)` 获取。
 
 ## 公开接口
@@ -174,15 +159,6 @@ Chassis_SetDuty(-30.0f, 30.0f);
 
 ## 迁移说明
 
-本轮重写不保留旧 `Motor_*`、`Encoder_*` 和 `UpdateSInedge()` 接口。
-
-后续应将上层调用从：
-
-- `Motor_SystemInit()`
-- `Motor_SetLeft()`
-- `Motor_SetRight()`
-- `Motor_Brake()`
-- `Encoder_GetSpeed()`
-- `UpdateSInedge()`
-
-迁移到 `Chassis_*` 或后续 `line_follow` 模块。
+早期的 `Motor_*`、`Encoder_*` 和 `UpdateSInedge()` 接口在底盘层重写时已废弃，上层调用
+**均已迁移完毕**，现统一走 `Chassis_*`（底盘组合服务）与 `HallEncoder_*`（BSP 层测速）。
+仓库内已无这些旧接口的定义与调用者。

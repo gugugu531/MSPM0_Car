@@ -2,15 +2,14 @@
 
 基于 `TI MSPM0G3507` 的分层车载固件工程。
 
-> **当前状态**：原 2025E 二维云台/瞄准子系统已整体移除；`app` 已重建为菜单驱动的裸机
-> 协作式调度框架。当前可从 OLED 菜单运行 Yahboom 八路循迹测试、80% 航向循迹实验、K230 红线视觉循迹、
-> 九种直行控制/启动实验、两种前进左转实验，
-> 以及 JY61P、Yahboom 8 路循线传感器、TB6612、双轮编码器、
-> 速度 PID、占空比扫描和蓝牙串口等设备检查任务。
+> **当前状态**：面向 2026 电赛 H 题（车载平衡滚球）。原 2025E 二维云台/瞄准子系统，
+> 以及直行测试、转向测试、航向辅助循迹与 K230 视觉循迹等实验任务已按赛题需求整体移除。
+> `app` 为菜单驱动的裸机协作式调度框架，主菜单只有 `Line Follow` 与 `Device Check` 两项。
 >
-> **视觉循迹状态**：K230 红线识别、LCD/Preview 和约 90 FPS 板端运行已验证，但尚未安装到车上进行
-> 整车循迹实测；K230 控制 UART 仍关闭，MSPM0 控制增益均为待整车标定的初始值。
-> 现阶段重点是底盘测速/速度闭环整定与各外设上板验证。
+> **摆杆步进电机**：细分数、编码器每转计数与方向、EN/DIR 极性均已上板标定完成；最大步进
+> 频率、摆杆减速比与软限位待机械装配后测定，流程见
+> [`docs/step-motor-calibration.md`](docs/step-motor-calibration.md)。
+> 底盘速度闭环增益仍为待整车标定的初始值。
 
 ## 硬件构成
 
@@ -34,9 +33,7 @@ app ─► middleware ─► bsp
 
 - `app`：初始化、协作式调度器、状态机、菜单树与具体测试任务。
 - `core`：PID、滤波、运动学与纯角速度积分等纯计算能力。
-- `middleware`：组合 core 与 BSP 的系统能力（`chassis` / `line_follow` /
-  `line_guided_drive` / `vision_line_drive` / `straight_drive` / `turn_drive` /
-  `ui` / `fault`）。
+- `middleware`：组合 core 与 BSP 的系统能力（`chassis` / `line_follow` / `ui` / `fault`）。
 - `bsp`：直接面向板级外设的驱动（见上表 + `time` / `common`）。
 - `board`：SysConfig 源文件与生成代码、启动/链接资源。
 - `third_party/mspm0-sdk`：TI 官方 MSPM0 SDK 2.10.00.04 submodule，供各工程使用相对路径。
@@ -139,12 +136,11 @@ Pop-Location
 - MDK 5：在 uVision 中执行 Download，或使用工程已配置的下载按钮。
 - MDK 6：在 CMSIS 视图中选择正确调试适配器后执行 Load/Run。
 
-首次上板请先架空驱动轮并准备随时断电。`Straight Test` 的具体任务在进入后会立即运行：
+首次上板请先架空驱动轮并准备随时断电：
 
-- 常规占空比模式默认以 `80%` 启动；`Speed Closed` 默认目标为 `1.06 m/s`。
-- `100 Int->Yaw` 会立即以 `100%` 输出，前 500 ms 使用纯角速度积分航向，随后切换到
-  经启动误差修正的 JY61P 航向闭环。所有直行模式达到 3 m 后自动停车并返回菜单。
-- `Speed PID`、`Duty Sweep` 和 `TB6612` 同样属于电机测试，必须先架空车轮。
+- `Speed PID`、`Duty Sweep` 与 `TB6612` 会驱动车轮，必须先架空。
+- `Step Motor` 会驱动摆杆，且当前软限位取 ±100000° 等效于不限位，摆杆装机后须自行
+  注意行程，随时可按 `ENTER` 暂停或 `BACK` 退出。
 
 上电初始化成功后，OLED 显示 `Main Menu`。四个按键均使用短按：
 
@@ -159,14 +155,9 @@ Pop-Location
 | 入口 | 用途 |
 |---|---|
 | `Line Follow` | Yahboom 八路循线外环与角速度内环测试 |
-| `Line Guided 80` | 80% 直接起步，外侧黑线直控灰度 PID，未命中时航向保持 |
-| `Line->Left->Line` | 首段循迹丢线后制动 250 ms，再左转至 X4/X5 重获线 |
-| `Vision Red` | K230 红线位置/方向融合循迹；1 s 角速度起步，稳定阶段持续视觉控制 |
-| `Straight Test` | 4 种基础直行控制与 5 种斜坡/启动阶段切换实验 |
-| `Turn Test` | 80% 与满速两种转向：直行 2 m 后左轮反转、右轮降至 0%，到达左转 90° 后沿新航向直行 1 m |
-| `Device Check` | JY61P、Yaw A/B、MPU6050、三种灰度、TB6612、编码器、速度 PID、占空比扫描和蓝牙检查 |
+| `Device Check` | JY61P、Yahboom 灰度、TB6612、摆杆步进标定、编码器、速度 PID、占空比扫描 |
 
-两个循迹页面均按 `X1 → X8` 显示 Yahboom 归一化掩码：`1` 表示该路检测到黑线。
+循迹页面按 `X1 → X8` 显示 Yahboom 归一化掩码：`1` 表示该路检测到黑线。
 
 ## 串口遥测与可视化
 
@@ -225,8 +216,7 @@ python tools/checks/check_docs.py
   - JY61P：[`bsp_wit_sdk.md`](docs/interfaces/bsp_wit_sdk.md)
 - 摆杆步进电机上板标定流程：[`docs/step-motor-calibration.md`](docs/step-motor-calibration.md)
 - 当前待办和上板风险：[`docs/todo.md`](docs/todo.md)
-- K230 v1.8 固件更新、VS Code CanMV 扩展和 MCP/Preview 连接流程：
-  [`docs/k230-development.md`](docs/k230-development.md)
-- K230 Wi-Fi 程序上传、远程执行、调试输出与恢复流程：
+- K230 开发与远程部署流程（**2025E 历史资料**，2026H 视觉已改用树莓派）：
+  [`docs/k230-development.md`](docs/k230-development.md) /
   [`docs/k230-remote-development.md`](docs/k230-remote-development.md)
 - 电脑端工具、K230 探针、J-Link 脚本和遥测可视化索引：[`tools/README.md`](tools/README.md)

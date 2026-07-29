@@ -120,10 +120,6 @@ typedef struct {
 丢线时返回 `BSP_STATUS_NOT_READY`，不自行刹车或搜索。JY61P 的初始化与
 `JY61P_I2C_Poll()`、Yahboom 阻塞读取及共享 I2C0 分时仍由 app 任务负责。
 
-### `BSP_STATUS LineFollow_Update(float dt_s)`
-
-保留的 GPIO 兼容入口，会直接调用 `GrayscaleSensor_Read()`；当前菜单任务不调用它。
-
 ### `LineFollow_Observe()` / `LineFollow_ObserveDetectedMask()`
 
 两个接口只计算 `level_mask`、`black_mask`、命中数量和质心误差，不读硬件、不持有 PID 状态。

@@ -124,7 +124,3 @@ Device Check 共 7 项（均在 `app_checks.c`），演示了 enter 复位、tic
   IMU 用「定时器 kick + I2C ISR 完成」；控制任务只消费快照（降低控制环输入抖动）。
 - **命令层**：调试 UART 的 RX/TX 中断 + 环形缓冲 + 命令解析，按需在 app 层新增
   `UARTx_IRQHandler`。
-- **MPU6050 DMP 姿态**：当前 Device Check 使用基础模式 `MPU6050_GetMeasurement()`，
-  UP/DOWN 在加速度/温度页与角速度/静态 pitch/roll 页之间切换。DMP 已有阻塞式 bring-up
-  入口 `MPU6050_RunDmpTest()`；若要集成到协作式 app，仍需把初始化与 FIFO 消费改造成
-  非阻塞任务状态机。

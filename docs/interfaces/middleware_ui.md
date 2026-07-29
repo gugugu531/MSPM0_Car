@@ -140,7 +140,7 @@ typedef struct {
 
 ### `void Ui_RenderLines(...)`
 
-文本页便利接口，适合替代旧的 `App_ShowLines()`。
+文本页便利接口：一次调用传标题与至多 6 行正文，内部只 Flush 一次。
 
 ### `void Ui_RenderStatusPage(const char *title, UI_STATUS_LEVEL level, const char *message, const char *hint)`
 

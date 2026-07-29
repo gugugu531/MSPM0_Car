@@ -11,7 +11,7 @@
 - `board/`：SysConfig、启动和链接资源
 - `project/`：CCS 和 Keil 工程文件
 - `third_party/`：外部依赖 submodule
-- `k230/`：K230 视觉、RTSP 和无线开发代理板端程序
+- `k230/`：K230 视觉、RTSP 和无线开发代理板端程序（2025E 历史资料，2026H 视觉改用树莓派）
 - `docs/`：工程文档
 - `tools/`：按 checks/jlink/k230/visualizers 分类的开发与调试工具
 
@@ -55,7 +55,6 @@
 - `pid/`：位置式和增量式 PID 控制器。
 - `filter/`：一阶低通（EMA）与中心死区等通用信号调理算法。
 - `kinematics/`：角度、位姿、差速混控与两轮差速运动学模型（车体参数一律传参，不在层内固化）。
-- `yaw_estimator/`：纯角速度积分航向与融合角偏移计算，不包含硬件和阶段策略。
 
 该层保持硬件无关，不包含 `app`、`middleware` 或 `bsp` 头文件。
 
@@ -65,10 +64,6 @@
 
 - `chassis/`：底盘组合服务（开环占空比 + 每轮速度闭环 PID）
 - `line_follow/`：八路黑线观测、巡线偏差计算、PID/陀螺修正和底盘输出
-- `line_guided_drive/`：80% 直接起步、外侧灰度 PID 与中间通道航向保持状态机
-- `vision_line_drive/`：K230 红线协议解析、角速度起步和位置/方向融合循迹
-- `straight_drive/`：九种直行模式的指令、启动阶段切换、姿态反馈、PID 与底盘输出
-- `turn_drive/`：80%/满速两种直行 2 m、左转 90°、再直行 1 m 的状态机
 - `ui/`：轻量 OLED UI 渲染层
 - `fault/`：系统故障处理服务
 
@@ -82,15 +77,12 @@
 
 - `common/`
 - `imu/`（JY61P，WIT 协议，I2C0 中断驱动）
-- `mpu6050/`（MPU6050 基础六轴/温度/静态倾角及 DMP 姿态，I2C0 共享总线）
-- `cy_z/`（创源 CY-Z 串口角度/角速度、CRC 与控制命令，UART3）
 - `key/`
 - `motor/`（TB6612 直流电机 + 左右双轮霍尔编码器）
 - `oled/`（SSD1306，帧缓冲模型）
-- `grayscale_sensor/`（数字量 GPIO 版 8 路灰度）
+- `step_motor/`（摆杆步进开环控制 + QEI 位置读取）
 - `yahboom_track/`（Yahboom 8 路循线模块，I2C0，与 JY61P 共总线）
 - `debug_uart/`（Debug_Ex/UART1，非阻塞遥测输出）
-- `bluetooth/`（BlueTooth/UART0，9600 8N1 收发）
 - `time/`
 
 该层禁止包含 `app`、`core`、`middleware` 头文件。需要基础时间或阻塞延时能力时，统一调用 `bsp/time`。

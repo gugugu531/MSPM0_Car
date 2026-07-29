@@ -28,13 +28,13 @@
 ```
 MSPM0_Car/
 ├── app/                  # 初始化、调度、状态机、菜单与测试任务
-├── bsp/                  # 板级驱动 (motor, imu, grayscale, uart, oled, key, time...)
+├── bsp/                  # 板级驱动 (motor, step_motor, imu, yahboom_track, uart, oled, key, time)
 ├── board/
 │   ├── startup/          # 启动文件, 链接脚本
 │   └── sys_config/       # SysConfig 源文件及生成代码
 ├── core/                 # 纯计算算法 (pid, filter, kinematics, common)
-├── middleware/           # 中间件 (chassis, line_follow, straight_drive, ui, fault)
-├── k230/                 # K230 视觉、RTSP 与无线开发代理板端程序
+├── middleware/           # 中间件 (chassis, line_follow, ui, fault)
+├── k230/                 # K230 板端程序 (2025E 历史资料, 2026H 视觉改用树莓派)
 ├── project/{keil,ccs}/     # Keil（MDK 5 + MDK 6/CMSIS Solution）与 CCS 工程
 ├── third_party/mspm0-sdk/ # TI 官方 SDK submodule（2.10.00.04）
 ├── docs/                 # 架构/接口/构建文档
