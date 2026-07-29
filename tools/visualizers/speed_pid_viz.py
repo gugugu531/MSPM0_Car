@@ -5,15 +5,20 @@
 每控制拍 (20ms/50Hz) 输出一行遥测:
 
   [SPD] t=<ms> tl=<目标左> tr=<目标右> l=<实测左> r=<实测右> dl=<占空左> dr=<占空右>
+        il=<积分左> ir=<积分右>
 
-  - t            设备时间戳 (ms)
+  - t            设备时间戳 (ms), 取自每拍 on_tick 入口; 相邻行的差即实际控制周期
   - tl/tr        左/右轮目标线速度 (m/s)
   - l/r          左/右轮实测线速度 (m/s)
   - dl/dr        左/右轮应用占空比 (%, 为上一控制拍值)
+  - il/ir        左/右轮速度环 PID 积分累加值 (输出中的积分项为 KI*本值); 旧固件无此
+                 字段时按 0 处理
 
 窗口:
   - 上图: 左右轮 目标(虚线) vs 实测(实线) 线速度, 横轴=设备时间戳
-  - 下图: 左右轮 应用占空比
+  - 中图: 左右轮 应用占空比
+  - 下图: 左右轮 积分累加值, 附 output_limit/ki 参考线 (越线即积分项已单独占满输出,
+          之上属过度累积, 退绕时会拖长恢复时间)
   - 标题: 每轮 目标/实测/误差 + 滚动窗口内跟踪误差 RMS, 便于判断 收敛/振荡/稳态偏差
 
 热键: 空格=暂停/继续, c=清空, q=退出
@@ -21,6 +26,7 @@
 用法:
   python speed_pid_viz.py --port COM7 [--baud 115200] [--window 12]
   python speed_pid_viz.py --port COM7 --csv spd.csv --log raw.txt
+  python speed_pid_viz.py --port COM7 --ki 17 --output-limit 100   # 标注积分饱和参考线
   python speed_pid_viz.py --list          # 列出串口
 
 依赖: pip install pyserial matplotlib
@@ -57,7 +63,9 @@ plt.rcParams["axes.unicode_minus"] = False
 
 MAX_SAMPLES = 6000            # 每条曲线最多缓存点数
 DEFAULT_WINDOW_S = 12.0       # 滚动时间窗 (秒)
-FIELDS = ("tl", "tr", "l", "r", "dl", "dr")
+FIELDS = ("tl", "tr", "l", "r", "dl", "dr", "il", "ir")
+# 旧固件的 [SPD] 行没有积分字段; 缺省补 0 以便老日志/老板子仍能解析。
+OPTIONAL_FIELDS = ("il", "ir")
 CSV_COLS = ["pc_time", "t", *FIELDS]
 
 
@@ -99,7 +107,9 @@ class SpeedTelemetry:
                 kv[k] = v
         try:
             t = int(kv["t"])
-            vals = {k: float(kv[k]) for k in FIELDS}
+            vals = {k: float(kv[k]) if k in kv
+                    else (0.0 if k in OPTIONAL_FIELDS else float(kv[k]))
+                    for k in FIELDS}
         except (KeyError, ValueError):
             self.dropped_lines += 1
             return
@@ -169,8 +179,8 @@ def _rms(seq):
     return (sum(v * v for v in seq) / len(seq)) ** 0.5
 
 
-def build_figure():
-    fig, (ax_spd, ax_duty) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+def build_figure(ki, output_limit):
+    fig, (ax_spd, ax_duty, ax_integ) = plt.subplots(3, 1, figsize=(12, 9.5), sharex=True)
     try:
         fig.canvas.manager.set_window_title("Speed PID 遥测")
     except Exception:
@@ -190,12 +200,24 @@ def build_figure():
     lines["dl"], = ax_duty.plot([], [], "-", color="#1f77b4", lw=1.3, label="左 占空比")
     lines["dr"], = ax_duty.plot([], [], "-", color="#d62728", lw=1.3, label="右 占空比")
     ax_duty.set_ylabel("占空比 (%)")
-    ax_duty.set_xlabel("时间 (秒, 相对首样本)")
     ax_duty.axhline(0, color="gray", lw=0.5)
     ax_duty.grid(True, alpha=0.3)
     ax_duty.legend(loc="upper right", ncol=2, fontsize=8)
 
-    return fig, (ax_spd, ax_duty), lines
+    lines["il"], = ax_integ.plot([], [], "-", color="#1f77b4", lw=1.3, label="左 积分")
+    lines["ir"], = ax_integ.plot([], [], "-", color="#d62728", lw=1.3, label="右 积分")
+    # 积分项在输出中是 ki*integral, 故越过这条线时积分项已单独占满输出 -> 之上全是过度累积。
+    if ki > 0.0:
+        ax_integ.axhline(output_limit / ki, color="#ff7f0e", lw=1.0, ls=":",
+                         label=f"积分项占满输出 ({output_limit / ki:.2f})")
+        ax_integ.axhline(-output_limit / ki, color="#ff7f0e", lw=1.0, ls=":")
+    ax_integ.set_ylabel("速度环积分累加值")
+    ax_integ.set_xlabel("时间 (秒, 相对首样本)")
+    ax_integ.axhline(0, color="gray", lw=0.5)
+    ax_integ.grid(True, alpha=0.3)
+    ax_integ.legend(loc="upper right", ncol=3, fontsize=8)
+
+    return fig, (ax_spd, ax_duty, ax_integ), lines
 
 
 def main(argv=None):
@@ -206,6 +228,10 @@ def main(argv=None):
     ap.add_argument("--log", help="原始行存到文件")
     ap.add_argument("--csv", help="解析后的遥测存为 CSV")
     ap.add_argument("--list", action="store_true", help="列出串口后退出")
+    ap.add_argument("--ki", type=float, default=17.0,
+                    help="固件 CHASSIS_SPEED_KI, 用于在积分图上标注饱和参考线")
+    ap.add_argument("--output-limit", type=float, default=100.0,
+                    help="固件 CHASSIS_SPEED_OUTPUT_LIMIT")
     args = ap.parse_args(argv)
 
     if args.list:
@@ -230,7 +256,7 @@ def main(argv=None):
     reader.start()
     print(f"监听 {args.port} @ {args.baud}。空格=暂停 c=清空 q=退出")
 
-    fig, (ax_spd, ax_duty), lines = build_figure()
+    fig, (ax_spd, ax_duty, ax_integ), lines = build_figure(args.ki, args.output_limit)
     state = {"paused": False}
 
     def on_key(event):
@@ -257,7 +283,7 @@ def main(argv=None):
         if t:
             t_max = t[-1]
             ax_spd.set_xlim(max(0.0, t_max - args.window), t_max + 0.3)
-        for ax in (ax_spd, ax_duty):
+        for ax in (ax_spd, ax_duty, ax_integ):
             ax.relim()
             ax.autoscale_view(scalex=False, scaley=True)
 

@@ -25,26 +25,58 @@
 
 - `CHASSIS_CONTROL_DUTY`（默认，开环）：`Chassis_SetDuty()` 直接下发占空比。
 - `CHASSIS_CONTROL_SPEED`（闭环）：`Chassis_SetWheelSpeed()`/`Chassis_SetSpeed()` 设定目标轮速后，
-  由 **每轮独立的位置式速度环 PID**（复用 `core/pid`）跟踪：setpoint=目标轮速(m/s)、feedback=
-  `HallEncoder_GetSpeed(id)`、output=占空比%(±100 限幅)。目标可为负（倒转）。
+  由 **每轮独立的「前馈 + PI 残差修正」** 跟踪：setpoint=目标轮速(m/s)、feedback=
+  `HallEncoder_GetSpeed(id)`、output=占空比%。目标可为负（倒转）。
+
+每轮出力 = **前馈** + **PI 修正**：
+
+- 前馈由实测「占空比 → 稳态轮速」曲线反解，左右轮分别标定（`CHASSIS_FF_*`），承担主出力；
+- PI（复用 `core/pid`，位置式）只补残差，修正量限幅 `CHASSIS_SPEED_OUTPUT_LIMIT`；
+  反馈先过 `core/filter` 的一阶低通（`CHASSIS_SPEED_FEEDBACK_ALPHA`，fc≈6 Hz）再进 PI，
+  压编码器量化跳变；前馈走目标值，不受该滞后影响。`HallEncoder_GetSpeed()` 与 `[SPD]`
+  遥测的 `l`/`r` 仍是**原始**未滤波值，便于诊断；
+
+- 目标绝对值低于 `CHASSIS_SPEED_ZERO_TARGET_MPS` 时视为**停止指令**：复位该轮 PID 并
+  **主动刹车**，不让 PI 在起转死区内渐近爬行。
 
 调用 `Chassis_SetWheelSpeed/SetSpeed` 进入闭环（从开环切入时复位 PID）；`Chassis_SetDuty/Stop/
-Brake/Coast` 切回开环并清目标。实际出力由 `Chassis_UpdateSpeedControl(dt_s)` 周期驱动——当前
-接在 `App_ControlTick`（RUN 态、20ms）：任务每拍设目标速度，速度环随后跑一步。退出 RUN 时
-`App_ExitRun` 会 `Chassis_Brake` 自动停环。
+Brake/Coast` 切回开环、清目标并复位 PID。实际出力由 `Chassis_UpdateSpeedControl(dt_s)` 周期
+驱动——当前接在 `App_ControlTick`（RUN 态、20ms）：任务每拍设目标速度，速度环随后跑一步。
+退出 RUN 时 `App_ExitRun` 会 `Chassis_Brake` 自动停环。
 
-默认增益（`chassis.h`，**须上板整定**，可用 Device Check「Speed PID」自检）：
+参数（`chassis.h`，可用 Device Check「Speed PID」自检）：
 
 ```c
-#define CHASSIS_SPEED_KP             200.00f
-#define CHASSIS_SPEED_KI             17.0f
+/* 前馈: 2026-07-29 Duty Sweep 抬轮空载标定, 10%~80% 区间拟合残差 < 2.4% */
+#define CHASSIS_FF_LEFT_GAIN         81.85f   /* 左 duty% = 81.85*v + 1.03 */
+#define CHASSIS_FF_LEFT_OFFSET        1.03f
+#define CHASSIS_FF_RIGHT_GAIN        77.25f   /* 右 duty% = 77.25*v + 1.70 */
+#define CHASSIS_FF_RIGHT_OFFSET       1.70f
+
+#define CHASSIS_SPEED_KP             60.0f
+#define CHASSIS_SPEED_KI             60.0f
 #define CHASSIS_SPEED_KD             0.0f
-#define CHASSIS_SPEED_INTEGRAL_LIMIT 96.0f
-#define CHASSIS_SPEED_OUTPUT_LIMIT   100.0f
+#define CHASSIS_SPEED_OUTPUT_LIMIT   40.0f    /* PI 修正量限幅 */
+#define CHASSIS_SPEED_INTEGRAL_LIMIT (CHASSIS_SPEED_OUTPUT_LIMIT / CHASSIS_SPEED_KI)
+#define CHASSIS_SPEED_FEEDBACK_ALPHA  0.53f   /* fc≈6Hz @20ms; 取 1.0 即直通 */
+#define CHASSIS_SPEED_ZERO_TARGET_MPS 0.01f
 ```
+
+> ⚠ 前馈曲线是**抬轮空载**标定；落地后负载更大、同占空比对应更低速度，上地面后应重扫
+> Duty Sweep 重新拟合这四个常数。
+>
+> ⚠ `CHASSIS_SPEED_INTEGRAL_LIMIT` **必须**从 `OUTPUT_LIMIT/KI` 派生，不要写成独立常数：
+> `PID_Limit` 限的是积分累加量本身，而输出中的积分项是 `ki*integral`，两者配比错开就等于
+> 抗积分饱和失效。旧配置 `ki=17 / integral_limit=96` 相差 16 倍，实测目标清零后 55 s 才退绕完。
 
 `CHASSIS_SPEED_INTEGRAL_LIMIT` 限制的是 PID 内部积分累计值本身，不是已乘 `Ki` 的积分项；
 最终占空比仍由 `CHASSIS_SPEED_OUTPUT_LIMIT` 限制。
+
+**这组参数的抬轮空载实测表现**（2026-07-29，16043 拍）：目标归零后 189 ms 完全停住且此后
+165 s 无蠕动；积分全程停在 −0.087~+0.045，远未触及 0.667 的限值；占空比无一拍饱和
+（峰值 84.7% @1.0 m/s）；稳态占空比 σ 0.26~0.55%；0.2/0.4/0.6/1.0 m/s 四个已收敛长段的
+跟踪误差为 +0.003~−0.000 m/s，已低于编码器 0.0295 m/s 的量化步长，该数字本身不再可分辨。
+短阶梯（0.5~0.7 s）上可见 +0.012 左右的误差，那是 PI 尚未收敛的暂态，不是稳态偏差。
 
 > 差速转向（车体 v/ω → 双轮目标）需 `track_width`（暂缺）；有了轮距后用 `core/kinematics`
 > 的 `Kinematics_BodyToWheel` 在 `Chassis_SetWheelSpeed` 之上加一层即可。
@@ -118,6 +150,14 @@ Chassis_SetDuty(-30.0f, 30.0f);
 ### `float Chassis_GetWheelSpeedTarget(HALL_ENCODER_ID wheel)`
 
 返回指定轮当前目标线速度（m/s），仅闭环模式有意义。
+
+### `float Chassis_GetWheelSpeedIntegral(HALL_ENCODER_ID wheel)`
+
+返回指定轮速度环 PID 的积分累加值，仅闭环模式有意义。诊断/整定用：输出中的积分项为
+`CHASSIS_SPEED_KI * 本值`，故本值达到 `CHASSIS_SPEED_OUTPUT_LIMIT / CHASSIS_SPEED_KI`
+时积分项已单独占满输出，继续累积即为过度累积（退绕时会拖长恢复时间）。切回开环不清零
+（下次进闭环时才 `PID_Reset`），开环期间读到的是上次残留值。Device Check「Speed PID」
+的 `[SPD]` 遥测以 `il`/`ir` 字段输出本值。
 
 ### `BSP_STATUS Chassis_Stop(CHASSIS_STOP_MODE mode)`
 

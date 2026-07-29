@@ -94,8 +94,17 @@ MDK 6 使用 `project/keil/NUEDC2025_MSPM0G3507.csolution.yml`，通过 Keil Stu
 
 ### Keil 工程维护
 - `.uvprojx` 是 XML，可手编增删 `<File>` 条目；漏加会在链接阶段报 `L6218E`。
+- **`.uvprojx` 必须保存为不带 BOM 的 UTF-8**。带 BOM 时 uVision 无法解析，`UV4.exe` 直接以
+  exit code 15（error reading import XML file）退出且不产生日志，报错完全指不到 BOM 上。
+  PowerShell 的 `Set-Content`/`Out-File` 在部分场景默认写 BOM，改这个文件时须留意。
 - 已删文件引用须同步维护 MDK 5、MDK 6 与 CCS 三套工程。
 - MDK 5 与 MDK 6 的源码/库输入必须通过 `tools/checks/check_keil_project_sync.py` 核对一致。
+- MDK 5 与 MDK 6 的优化级别必须同步：`.uvprojx` 的 `<Optim>1</Optim>` 对应 `csolution.yml` 的
+  `optimize: none`，两者都是 `-O0`。本工程含步进脉冲时序与控制周期预算，两侧不一致会导致
+  一边上板标定过的时序在另一边不成立。
+- `csolution.yml` 用了 `target-set` 节点，**要求 CMSIS-Toolbox ≥ 2.12.0**。MDK 5 自带的
+  `<KEIL>\ARM\cmsis-toolbox` 是 2.6.0，会报 `schema check failed, verify syntax` 而非版本错误；
+  命令行构建须使用 `vcpkg-configuration.json` 激活的 toolbox。
 - CCS projectspec 已改用仓库内 SDK 并修正已知元数据，但重新构建验证前不要宣称 CCS 可用。
 
 ### 提交
