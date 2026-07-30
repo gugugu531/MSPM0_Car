@@ -71,7 +71,8 @@ extern "C" {
 
 /**
  * 默认控制路径不是上述 PID，而是“灰度偏差 P 外环 + 角速度 P 内环”：
- *   omega_ref = clamp(gyro_line_kp * error, ±omega_ref_limit)
+ *   omega_line = clamp(gyro_line_kp * error, ±omega_line_limit)
+ *   omega_ref = clamp(omega_feedforward + omega_line, ±omega_ref_limit)
  *   correction = gyro_stab_kp * (omega_ref - gyro_z_sign * gz)
  *
  * 它利用 gz 反馈补偿左右电机/轮径不对称，并为航向变化提供阻尼。
@@ -83,6 +84,8 @@ extern "C" {
 #define LINE_FOLLOW_DEFAULT_GYRO_STAB_KP               0.20f
 /** 期望航向角速度绝对值上限，单位 deg/s。 */
 #define LINE_FOLLOW_DEFAULT_OMEGA_REF_LIMIT            60.0f
+/** 灰度误差贡献的角速度残差限幅；默认与总参考限幅相同以保持旧行为。 */
+#define LINE_FOLLOW_DEFAULT_OMEGA_LINE_LIMIT           60.0f
 /** 陀螺 z 轴符号校正；若实机表现为正反馈，应改为 -1.0f。 */
 #define LINE_FOLLOW_DEFAULT_GYRO_Z_SIGN                (1.0f)
 
@@ -122,6 +125,8 @@ typedef struct {
     float gyro_stab_kp;
     /** omega_ref 限幅，单位 deg/s。 */
     float omega_ref_limit;
+    /** 灰度误差角速度残差限幅，单位 deg/s；与曲率前馈相加前单独限制。 */
+    float omega_line_limit;
     /** gz 符号系数：使陀螺内环成为负反馈。 */
     float gyro_z_sign;
 } LINE_FOLLOW_CONFIG;
@@ -138,6 +143,10 @@ typedef struct {
     float error;
     /** 当前控制路径计算得到的转向修正量；可能来自陀螺串级或纯位置 PID。 */
     float correction;
+    /** 本拍陀螺内环总角速度参考，单位 deg/s。 */
+    float omega_ref_deg_s;
+    /** 本拍已完成符号校正的实测航向角速度，单位 deg/s。 */
+    float omega_measured_deg_s;
     /** 左轮占空比输出。 */
     float left_duty;
     /** 右轮占空比输出。 */
@@ -178,6 +187,22 @@ BSP_STATUS LineFollow_EvaluateDetectedMask(uint8_t detected_mask, float dt_s,
                                            LINE_FOLLOW_OUTPUT *out);
 
 /**
+ * @brief 带标称角速度前馈地推进控制器，但不驱动底盘。
+ * @param omega_feedforward_deg_s 与 gyro_z_sign 校正后 gz 同号的标称角速度，单位 deg/s。
+ * @note 陀螺内环先单独限制灰度角速度残差，再与曲率前馈相加，供曲线循迹使用。
+ */
+BSP_STATUS LineFollow_EvaluateDetectedMaskWithOmegaFeedforward(
+    uint8_t detected_mask, float dt_s, float omega_feedforward_deg_s,
+    LINE_FOLLOW_OUTPUT *out);
+
+/**
+ * @brief 不使用灰度位置，仅按标称角速度和 JY61P gz 计算陀螺内环输出。
+ * @note 仅供上层在曲线灰度短时中断时有界降级；该模式不能观测横向位置，不可长期运行。
+ */
+BSP_STATUS LineFollow_EvaluateOmegaFeedforwardOnly(
+    float omega_feedforward_deg_s, LINE_FOLLOW_OUTPUT *out);
+
+/**
  * @brief 将标准化数字电平转换为黑线掩码和质心误差，不使用控制器运行状态。
  * @param input 灰度观测，0=黑线、1=非黑线。
  * @param position_scale 传感器毫米坐标到误差的缩放系数；传 1 时输出单位 mm。
@@ -206,6 +231,11 @@ BSP_STATUS LineFollow_Compute(const LINE_FOLLOW_INPUT *input,
                               float dt_s,
                               float omega_deg_s,
                               LINE_FOLLOW_OUTPUT *out);
+
+/** @brief `LineFollow_Compute()` 的曲线角速度前馈版本。 */
+BSP_STATUS LineFollow_ComputeWithOmegaFeedforward(
+    const LINE_FOLLOW_INPUT *input, float dt_s, float omega_deg_s,
+    float omega_feedforward_deg_s, LINE_FOLLOW_OUTPUT *out);
 
 /** @brief 获取最近一次巡线输出和观测摘要。 */
 LINE_FOLLOW_OUTPUT LineFollow_GetOutput(void);

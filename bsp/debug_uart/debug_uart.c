@@ -25,7 +25,8 @@
 
 /* 单条 Printf 格式化上限。当前 [STR] 直行遥测行约 140 字符，256 留有余量；
  * 115200 baud 下每拍 20ms 发一行仍低于线路持续吞吐上限。 */
-#define DEBUG_UART_PRINTF_MAX 256U
+/* [TRK] 含 run/fs/gm 后约 260 字节；预留格式化余量，避免行尾被截断。 */
+#define DEBUG_UART_PRINTF_MAX 288U
 
 static uint8_t tx_buf[DEBUG_UART_TX_BUF_LEN];
 static volatile uint16_t tx_head;   /* 生产者(线程) 写入位置 */

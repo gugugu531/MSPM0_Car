@@ -78,8 +78,10 @@ Brake/Coast` 切回开环、清目标并复位 PID。实际出力由 `Chassis_Up
 跟踪误差为 +0.003~−0.000 m/s，已低于编码器 0.0295 m/s 的量化步长，该数字本身不再可分辨。
 短阶梯（0.5~0.7 s）上可见 +0.012 左右的误差，那是 PI 尚未收敛的暂态，不是稳态偏差。
 
-> 差速转向（车体 v/ω → 双轮目标）需 `track_width`（暂缺）；有了轮距后用 `core/kinematics`
-> 的 `Kinematics_BodyToWheel` 在 `Chassis_SetWheelSpeed` 之上加一层即可。
+> 实测轮距为 `0.206 m`。通用 `Chassis_SetSpeed()` 目前仍只下发同速直行目标；循迹应用按
+> `v_L = v + v·L/(2r)`、`v_R = v - v·L/(2r)` 计算差速，并通过 `Chassis_SetWheelSpeed()`
+> 分别下发。若后续开放通用车体 `v/ω` 接口，可直接复用 `core/kinematics` 的
+> `Kinematics_BodyToWheel()`。
 
 ## 公开类型
 
@@ -137,7 +139,8 @@ Chassis_SetDuty(-30.0f, 30.0f);
 
 ### `void Chassis_SetSpeed(float body_mps)`
 
-设置车体直行目标线速度（两轮同速），进入速度闭环。差速转向需 `track_width`（暂缺）。
+设置车体直行目标线速度（两轮同速），进入速度闭环。该接口不接收角速度；差速转向由上层按
+实测轮距 `0.206 m` 换算后调用 `Chassis_SetWheelSpeed()`。
 
 ### `BSP_STATUS Chassis_UpdateSpeedControl(float dt_s)`
 
@@ -177,7 +180,9 @@ Chassis_SetDuty(-30.0f, 30.0f);
 
 ### `float Chassis_GetSpeed(void)`
 
-返回车体估计线速度（左右轮均值），单位 m/s。内部用 `core/kinematics` 的 `Kinematics_WheelToBody` 取 `linear` 分量（角速度分量需 `track_width`，暂缺，故只取线速度）。
+返回车体估计线速度（左右轮均值），单位 m/s。内部用 `core/kinematics` 的
+`Kinematics_WheelToBody` 取 `linear` 分量；该接口只公开与轮距无关的线速度，若后续需要同时
+输出角速度，应向运动学函数传入实测轮距 `0.206 m` 并扩展返回接口。
 
 ### `float Chassis_GetWheelSpeed(HALL_ENCODER_ID wheel)`
 

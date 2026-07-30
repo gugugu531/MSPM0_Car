@@ -3,9 +3,11 @@
 
 固件经 Debug_Ex/UART1（115200 8N1）每 50 ms 输出：
 
-  [TRK] t=<ms> req=<2|4|5|6> seg=<S1|S2|S3|S4> st=<FOLLOW|OFFSET|STOP>
+  [TRK] t=<ms> run=<id> req=<2|4|5|6> seg=<S1|S2|S3|S4>
+        st=<FOLLOW|XLINE|OFFSET|STOP> fs=<NONE|LINE|ODOM|END> gm=<0|1>
         sen=<0|1> mask=<hex> n=<0..8>
-        err=<...> cor=<...> vc=<m/s> ac=<m/s2> vl=<m/s> vr=<m/s>
+        err=<...> cor=<...> vc=<m/s> ac=<m/s2> vs=<m/s>
+        wref=<deg/s> wz=<deg/s> vl=<m/s> vr=<m/s>
         dl=<%> dr=<%> sl=<m> sr=<m> s=<m> rem=<m> drop=<bytes>
 
 窗口从上到下显示八路灰度、目标/实测轮速、指令/实测纵向加速度、左右轮占空比、
@@ -42,11 +44,13 @@ DEFAULT_ACCEL_LIMIT_MPS2 = 0.12
 REQUIREMENT_ACCEL_LIMITS = {2: 0.30, 4: 0.12, 5: 0.12, 6: 0.12}
 MAX_SAMPLES = 6000
 FLOAT_FIELDS = (
-    "err", "cor", "vc", "ac", "vl", "vr", "dl", "dr",
+    "err", "cor", "vc", "ac", "vs", "wref", "wz", "vl", "vr", "dl", "dr",
     "sl", "sr", "s", "rem",
 )
+OPTIONAL_FLOAT_FIELDS = ("vs", "wref", "wz")
 CSV_COLUMNS = (
-    "pc_time", "t", "req", "seg", "st", "sen", "mask", "n", *FLOAT_FIELDS, "drop",
+    "pc_time", "t", "run", "req", "seg", "st", "fs", "gm", "sen", "mask", "n",
+    *FLOAT_FIELDS, "drop",
 )
 
 _CJK_CANDIDATES = (
@@ -84,13 +88,20 @@ def parse_track_line(line: str):
     try:
         parsed = {
             "t": int(fields["t"]),
+            "run": int(fields.get("run", "0")),
             "req": int(fields.get("req", "0")),
             "seg": fields.get("seg", "?"),
             "st": fields["st"],
+            "fs": fields.get("fs", "NONE"),
+            "gm": int(fields.get("gm", "0")),
             "sen": int(fields["sen"]),
             "mask": int(fields["mask"], 16),
             "n": int(fields["n"]),
-            **{key: float(fields[key]) for key in FLOAT_FIELDS},
+            **{
+                key: float(fields.get(key, "0.0"))
+                if key in OPTIONAL_FLOAT_FIELDS else float(fields[key])
+                for key in FLOAT_FIELDS
+            },
             "drop": int(fields["drop"]),
         }
     except (KeyError, ValueError) as exc:
@@ -98,6 +109,8 @@ def parse_track_line(line: str):
 
     if parsed["sen"] not in (0, 1):
         raise ValueError(f"sen 超出范围: {parsed['sen']}")
+    if parsed["gm"] not in (0, 1):
+        raise ValueError(f"gm 超出范围: {parsed['gm']}")
     if not 0 <= parsed["mask"] <= 0xFF:
         raise ValueError(f"mask 超出范围: {parsed['mask']}")
     if not 0 <= parsed["n"] <= 8:
@@ -112,7 +125,10 @@ class TrackTelemetry:
         self._lock = threading.Lock()
         self._csv_file = csv_file
         self._time_ms = deque(maxlen=MAX_SAMPLES)
+        self._run = deque(maxlen=MAX_SAMPLES)
         self._state = deque(maxlen=MAX_SAMPLES)
+        self._finish_source = deque(maxlen=MAX_SAMPLES)
+        self._gyro_only = deque(maxlen=MAX_SAMPLES)
         self._requirement = deque(maxlen=MAX_SAMPLES)
         self._segment = deque(maxlen=MAX_SAMPLES)
         self._sensor_ready = deque(maxlen=MAX_SAMPLES)
@@ -127,7 +143,10 @@ class TrackTelemetry:
     def clear(self) -> None:
         with self._lock:
             self._time_ms.clear()
+            self._run.clear()
             self._state.clear()
+            self._finish_source.clear()
+            self._gyro_only.clear()
             self._requirement.clear()
             self._segment.clear()
             self._sensor_ready.clear()
@@ -159,9 +178,12 @@ class TrackTelemetry:
 
         with self._lock:
             self._time_ms.append(parsed["t"])
+            self._run.append(parsed["run"])
             self._requirement.append(parsed["req"])
             self._segment.append(parsed["seg"])
             self._state.append(parsed["st"])
+            self._finish_source.append(parsed["fs"])
+            self._gyro_only.append(parsed["gm"])
             self._sensor_ready.append(parsed["sen"])
             self._mask.append(parsed["mask"])
             self._black_count.append(parsed["n"])
@@ -172,8 +194,9 @@ class TrackTelemetry:
 
         if self._csv_file is not None:
             row = [
-                f"{time.time():.3f}", str(parsed["t"]), str(parsed["req"]),
-                parsed["seg"], parsed["st"],
+                f"{time.time():.3f}", str(parsed["t"]), str(parsed["run"]),
+                str(parsed["req"]), parsed["seg"], parsed["st"], parsed["fs"],
+                str(parsed["gm"]),
                 str(parsed["sen"]), f"{parsed['mask']:02X}", str(parsed["n"]),
                 *(f"{parsed[field]:.6f}" for field in FLOAT_FIELDS),
                 str(parsed["drop"]),
@@ -185,9 +208,12 @@ class TrackTelemetry:
         with self._lock:
             return {
                 "t": list(self._time_ms),
+                "run": list(self._run),
                 "req": list(self._requirement),
                 "seg": list(self._segment),
                 "state": list(self._state),
+                "fs": list(self._finish_source),
+                "gm": list(self._gyro_only),
                 "sen": list(self._sensor_ready),
                 "mask": list(self._mask),
                 "n": list(self._black_count),
@@ -300,11 +326,13 @@ def build_figure(accel_limit):
 
     lines = {}
     lines["vc"], = axis_speed.plot([], [], "--", color="#111111", lw=1.4, label="纵向指令")
+    lines["vlt"], = axis_speed.plot([], [], "--", color="#1f77b4", lw=1.0, label="左轮目标")
+    lines["vrt"], = axis_speed.plot([], [], "--", color="#d62728", lw=1.0, label="右轮目标")
     lines["vl"], = axis_speed.plot([], [], color="#1f77b4", lw=1.2, label="左轮实测")
     lines["vr"], = axis_speed.plot([], [], color="#d62728", lw=1.2, label="右轮实测")
     lines["vavg"], = axis_speed.plot([], [], color="#2ca02c", lw=1.6, label="平均实测")
     axis_speed.set_ylabel("速度 (m/s)")
-    axis_speed.legend(loc="upper right", ncol=4, fontsize=8)
+    axis_speed.legend(loc="upper right", ncol=3, fontsize=8)
 
     lines["ac"], = axis_accel.plot([], [], color="#111111", lw=1.5, label="指令 ac")
     lines["ameas"], = axis_accel.plot([], [], color="#ff7f0e", lw=1.2, label="实测估计 EMA")
@@ -411,6 +439,17 @@ def main(argv=None) -> int:
                 lines[field].set_data(timeline[:count], data[field][:count])
 
         speed_count = min(len(timeline), len(data["vl"]), len(data["vr"]))
+        target_count = min(len(timeline), len(data["vc"]), len(data["vs"]))
+        left_target = [
+            data["vc"][index] + data["vs"][index]
+            for index in range(target_count)
+        ]
+        right_target = [
+            data["vc"][index] - data["vs"][index]
+            for index in range(target_count)
+        ]
+        lines["vlt"].set_data(timeline[:target_count], left_target)
+        lines["vrt"].set_data(timeline[:target_count], right_target)
         average_speed = [
             (data["vl"][index] + data["vr"][index]) * 0.5
             for index in range(speed_count)
@@ -451,14 +490,19 @@ def main(argv=None) -> int:
                 alerts.append("加速度指令超限")
             if latest["drop"]:
                 alerts.append(f"MCU TX丢{latest['drop']}B")
+            if latest["gm"]:
+                alerts.append("弯道纯陀螺保持")
             if snapshot["bad_lines"]:
                 alerts.append(f"解析坏行{snapshot['bad_lines']}")
             connection = "已连接" if snapshot["connected"] else "已断开/重连中"
             alert_text = " | ⚠ " + ", ".join(alerts) if alerts else ""
             figure.suptitle(
-                f"{connection} | H{latest['req']} {latest['seg']} {latest['st']} | "
+                f"{connection} | run={latest['run']} H{latest['req']} "
+                f"{latest['seg']} {latest['st']} fs={latest['fs']} | "
                 f"t={latest['t'] / 1000.0:.2f}s | "
                 f"v 指令/实测={latest['vc']:.3f}/{actual_speed:.3f}m/s | "
+                f"半差速={latest['vs']:+.3f}m/s | "
+                f"ω参考/实测={latest['wref']:+.1f}/{latest['wz']:+.1f}°/s | "
                 f"ac={latest['ac']:+.3f}m/s² | err={latest['err']:+.1f}mm "
                 f"cor={latest['cor']:+.2f} | s={latest['s']:.3f}m "
                 f"rem={latest['rem']:.3f}m{alert_text}",

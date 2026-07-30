@@ -45,6 +45,7 @@ LINE_FOLLOW_CONFIG LineFollow_GetDefaultConfig(void){
         .gyro_line_kp = LINE_FOLLOW_DEFAULT_GYRO_LINE_KP,
         .gyro_stab_kp = LINE_FOLLOW_DEFAULT_GYRO_STAB_KP,
         .omega_ref_limit = LINE_FOLLOW_DEFAULT_OMEGA_REF_LIMIT,
+        .omega_line_limit = LINE_FOLLOW_DEFAULT_OMEGA_LINE_LIMIT,
         .gyro_z_sign = LINE_FOLLOW_DEFAULT_GYRO_Z_SIGN,
     };
 
@@ -77,6 +78,8 @@ void LineFollow_Reset(void){
     line_follow_output.black_count = 0U;
     line_follow_output.error = 0.0f;
     line_follow_output.correction = 0.0f;
+    line_follow_output.omega_ref_deg_s = 0.0f;
+    line_follow_output.omega_measured_deg_s = 0.0f;
     line_follow_output.left_duty = 0.0f;
     line_follow_output.right_duty = 0.0f;
     line_follow_output.line_lost = true;
@@ -84,6 +87,13 @@ void LineFollow_Reset(void){
 
 BSP_STATUS LineFollow_EvaluateDetectedMask(uint8_t detected_mask, float dt_s,
                                            LINE_FOLLOW_OUTPUT *out){
+    return LineFollow_EvaluateDetectedMaskWithOmegaFeedforward(
+        detected_mask, dt_s, 0.0f, out);
+}
+
+BSP_STATUS LineFollow_EvaluateDetectedMaskWithOmegaFeedforward(
+    uint8_t detected_mask, float dt_s, float omega_feedforward_deg_s,
+    LINE_FOLLOW_OUTPUT *out){
     if (out == NULL){
         return BSP_STATUS_NULL;
     }
@@ -104,7 +114,8 @@ BSP_STATUS LineFollow_EvaluateDetectedMask(uint8_t detected_mask, float dt_s,
         }
     }
 
-    BSP_STATUS status = LineFollow_Compute(&input, dt_s, omega_deg_s, out);
+    BSP_STATUS status = LineFollow_ComputeWithOmegaFeedforward(
+        &input, dt_s, omega_deg_s, omega_feedforward_deg_s, out);
     if (status != BSP_STATUS_OK){
         return status;
     }
@@ -113,6 +124,54 @@ BSP_STATUS LineFollow_EvaluateDetectedMask(uint8_t detected_mask, float dt_s,
         return BSP_STATUS_NOT_READY;
     }
 
+    return BSP_STATUS_OK;
+}
+
+BSP_STATUS LineFollow_EvaluateOmegaFeedforwardOnly(
+    float omega_feedforward_deg_s, LINE_FOLLOW_OUTPUT *out){
+    if (out == NULL){
+        return BSP_STATUS_NULL;
+    }
+
+    LineFollow_EnsureInitialized();
+    if (!line_follow_config.gyro_stab_enabled){
+        return BSP_STATUS_NOT_READY;
+    }
+
+    JY61P_I2C_SAMPLE sample;
+    if (!JY61P_I2C_GetSnapshot(&sample)){
+        return BSP_STATUS_NOT_READY;
+    }
+
+    float omega_deg_s = line_follow_config.gyro_z_sign *
+                        sample.data.gyro_deg_s.z;
+    float omega_ref = Kinematics_Clamp(
+        omega_feedforward_deg_s,
+        -line_follow_config.omega_ref_limit,
+        line_follow_config.omega_ref_limit);
+    float correction = line_follow_config.gyro_stab_kp *
+                       (omega_ref - omega_deg_s);
+    if (line_follow_config.differential_limit > 0.0f){
+        float correction_limit = line_follow_config.differential_limit * 0.5f;
+        correction = Kinematics_Clamp(correction,
+                                      -correction_limit,
+                                      correction_limit);
+    }
+
+    KINEMATICS_DIFFERENTIAL_OUTPUT duty =
+        Kinematics_DifferentialMix(line_follow_config.base_duty,
+                                   correction,
+                                   line_follow_config.output_limit);
+    out->level_mask = 0xFFU;
+    out->black_count = 0U;
+    out->error = 0.0f;
+    out->correction = correction;
+    out->omega_ref_deg_s = omega_ref;
+    out->omega_measured_deg_s = omega_deg_s;
+    out->left_duty = duty.left;
+    out->right_duty = duty.right;
+    out->line_lost = true;
+    line_follow_output = *out;
     return BSP_STATUS_OK;
 }
 
@@ -177,6 +236,13 @@ BSP_STATUS LineFollow_Compute(const LINE_FOLLOW_INPUT *input,
                               float dt_s,
                               float omega_deg_s,
                               LINE_FOLLOW_OUTPUT *out){
+    return LineFollow_ComputeWithOmegaFeedforward(
+        input, dt_s, omega_deg_s, 0.0f, out);
+}
+
+BSP_STATUS LineFollow_ComputeWithOmegaFeedforward(
+    const LINE_FOLLOW_INPUT *input, float dt_s, float omega_deg_s,
+    float omega_feedforward_deg_s, LINE_FOLLOW_OUTPUT *out){
     if ((input == NULL) || (out == NULL)){
         return BSP_STATUS_NULL;
     }
@@ -197,6 +263,8 @@ BSP_STATUS LineFollow_Compute(const LINE_FOLLOW_INPUT *input,
     if (out->line_lost){
         out->error = 0.0f;
         out->correction = 0.0f;
+        out->omega_ref_deg_s = 0.0f;
+        out->omega_measured_deg_s = omega_deg_s;
         out->left_duty = 0.0f;
         out->right_duty = 0.0f;
         return BSP_STATUS_OK;
@@ -212,13 +280,21 @@ BSP_STATUS LineFollow_Compute(const LINE_FOLLOW_INPUT *input,
         LINE_FOLLOW_ERROR_DEADBAND);
 
     if (line_follow_config.gyro_stab_enabled){
-        float omega_ref = Kinematics_Clamp(
+        float omega_line = Kinematics_Clamp(
             line_follow_config.gyro_line_kp * control_error,
+            -line_follow_config.omega_line_limit,
+            line_follow_config.omega_line_limit);
+        float omega_ref = Kinematics_Clamp(
+            omega_feedforward_deg_s + omega_line,
             -line_follow_config.omega_ref_limit,
             line_follow_config.omega_ref_limit);
+        out->omega_ref_deg_s = omega_ref;
+        out->omega_measured_deg_s = omega_deg_s;
         out->correction = line_follow_config.gyro_stab_kp *
                           (omega_ref - omega_deg_s);
     } else{
+        out->omega_ref_deg_s = 0.0f;
+        out->omega_measured_deg_s = omega_deg_s;
         out->correction = PID_Update(&line_follow_pid, control_error, 0.0f, dt_s);
     }
 

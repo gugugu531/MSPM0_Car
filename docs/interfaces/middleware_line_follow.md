@@ -66,17 +66,21 @@ typedef struct {
 #define LINE_FOLLOW_DEFAULT_GYRO_LINE_KP               3.0f
 #define LINE_FOLLOW_DEFAULT_GYRO_STAB_KP               0.20f
 #define LINE_FOLLOW_DEFAULT_OMEGA_REF_LIMIT            60.0f
+#define LINE_FOLLOW_DEFAULT_OMEGA_LINE_LIMIT           60.0f
 #define LINE_FOLLOW_DEFAULT_GYRO_Z_SIGN                (1.0f)
 ```
 
 默认使用“灰度偏差 P 外环 + 角速度 P 内环”，只有关闭 `gyro_stab_enabled` 时才调用通用
 位置式 PID。`DIFFERENTIAL_LIMIT=16` 表示左右轮占空比差值不超过 16，因此最终
-`correction` 会限制在 `±8`。
+`correction` 会限制在 `±8`。曲线调用者可传入 `omega_feedforward`；灰度贡献先由
+`omega_line_limit` 单独限制，再与前馈相加并受 `omega_ref_limit` 限制，避免灰度误差瞬间
+反转整条曲率参考，也避免陀螺内环抵消调用者的曲率前馈。
 
 ## 配置与输出
 
 `LINE_FOLLOW_CONFIG` 保存基础占空比、毫米坐标标定缩放、输出/差值限幅、退化 PID 配置及陀螺串级
-配置。
+配置。H 题 app 基于默认配置覆盖 `gyro_line_kp=1.25`，并分别设置空载/载球的
+`omega_line_limit=20/15 deg/s` 与 `omega_ref_limit=75/50 deg/s`；不改变其他任务的默认参数。
 
 ```c
 typedef struct {
@@ -129,6 +133,16 @@ typedef struct {
 `LINE_FOLLOW_OUTPUT`，不向底盘写占空比。需要保持纵向平均轮速、把循迹修正映射成反对称
 左右轮速度差的任务使用该接口；当前 H 题一圈循迹任务即走此路径。
 
+### `BSP_STATUS LineFollow_EvaluateDetectedMaskWithOmegaFeedforward(...)`
+
+在上述只计算入口基础上增加标称角速度参数，单位 `deg/s`，符号须与 `gyro_z_sign` 校正后的
+`gz` 一致。H 题 S2/S4 使用该接口，将曲线角速度和灰度误差共同组成陀螺内环参考。
+
+`LineFollow_EvaluateOmegaFeedforwardOnly()` 不使用灰度横向位置，只按曲率角速度前馈与 JY61P
+`gz` 计算内环输出。它仅供 app 在弯道灰度瞬时全白时做有时限的重捕降级，不应作为整段弯道
+的长期控制方式。
+`LINE_FOLLOW_OUTPUT` 的 `omega_ref_deg_s/omega_measured_deg_s` 可用于遥测核对参考与实测。
+
 ### `LineFollow_Observe()` / `LineFollow_ObserveDetectedMask()`
 
 两个接口只计算 `level_mask`、`black_mask`、命中数量和质心误差，不读硬件、不持有 PID 状态。
@@ -149,6 +163,9 @@ BSP_STATUS LineFollow_Compute(const LINE_FOLLOW_INPUT *input,
 level[]（0=黑线）→ 毫米坐标线中心均值 → EMA → 中心死区
            → 陀螺串级或位置 PID → 差值限幅 → 差速混控
 ```
+
+`LineFollow_ComputeWithOmegaFeedforward()` 是对应的纯计算前馈版本；原接口保持兼容并以
+`omega_feedforward=0` 调用它。
 
 ### `LINE_FOLLOW_OUTPUT LineFollow_GetOutput(void)`
 
