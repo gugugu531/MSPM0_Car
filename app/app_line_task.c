@@ -79,6 +79,13 @@
 #define LT_CURVE_TAPER_MARGIN_M 0.030f
 #define LT_CURVE_EXIT_SETTLE_DISTANCE_M \
     (APP_TRACK_MEASURE_TO_SENSOR_M - APP_TRACK_MEASURE_TO_AXLE_M)
+#define LT_S2_YAW_TARGET_TURN_DEG 180.0f
+#define LT_S2_YAW_EXIT_MIN_TURN_DEG 177.0f
+#define LT_S2_YAW_EXIT_MAX_RATE_DEGPS 8.0f
+#define LT_S2_YAW_EXIT_FALLBACK_M 3.35f
+#define LT_S2_YAW_FINISH_KP 2.0f
+#define LT_S2_YAW_FINISH_MAX_DEGPS 20.0f
+#define LT_S2_YAW_SAMPLE_MAX_AGE_MS 200U
 /*
  * 编码器里程从车尾位于 A 时清零。灰度阵列比轮轴前探 12.5 cm，四段控制边界以
  * 灰度阵列到达 B/C/D/A 为准，给差速变化率限制留出预瞄建立距离。
@@ -204,6 +211,12 @@ static LT_SEGMENT lt_segment;
 /* 当前弯道已锁存进入提前撤前馈阶段，避免触发边界随速度变化反复开关。 */
 static bool lt_curve_taper_active;
 static float lt_curve_taper_release_distance_m;
+static bool lt_s2_yaw_tracking_valid;
+static uint32_t lt_s2_yaw_sample_count;
+static float lt_s2_last_yaw_deg;
+static float lt_s2_turn_deg;
+static float lt_s2_yaw_rate_deg_s;
+static bool lt_s2_yaw_sample_fresh;
 /* 空推标定模式：全部逻辑照跑并发遥测，但不驱动电机（电机 Coast，供手推采数据）。 */
 static bool lt_dry_run;
 
@@ -310,7 +323,48 @@ static bool LineFollowTest_InLapTerminal(float distance_m){
         (distance_m >= (LT_LAP_STOP_DISTANCE_M - LT_LAP_TERMINAL_ARM_M));
 }
 
-static void LineFollowTest_UpdateSegment(uint32_t now, float distance_m){
+static float LineFollowTest_NormalizeAngleDelta(float angle_deg){
+    while (angle_deg > 180.0f){
+        angle_deg -= 360.0f;
+    }
+    while (angle_deg < -180.0f){
+        angle_deg += 360.0f;
+    }
+    return angle_deg;
+}
+
+static void LineFollowTest_UpdateS2Yaw(uint32_t now,
+                                      const JY61P_I2C_SAMPLE *imu_sample){
+    lt_s2_yaw_sample_fresh =
+        (imu_sample != NULL) && (imu_sample->sample_count != 0U) &&
+        ((uint32_t)(now - imu_sample->timestamp_ms) <=
+         LT_S2_YAW_SAMPLE_MAX_AGE_MS);
+    if ((lt_segment != LT_SEGMENT_S2) || (imu_sample == NULL) ||
+        !lt_s2_yaw_sample_fresh ||
+        (imu_sample->sample_count == lt_s2_yaw_sample_count)){
+        return;
+    }
+
+    float yaw_deg = imu_sample->data.attitude_deg.yaw;
+    if (!lt_s2_yaw_tracking_valid){
+        lt_s2_yaw_tracking_valid = true;
+        lt_s2_last_yaw_deg = yaw_deg;
+    } else{
+        float yaw_delta_deg = LineFollowTest_NormalizeAngleDelta(
+            yaw_deg - lt_s2_last_yaw_deg);
+        /* Right turns are positive in the controller but decrease JY61P yaw. */
+        lt_s2_turn_deg -= yaw_delta_deg;
+        if (lt_s2_turn_deg < 0.0f){
+            lt_s2_turn_deg = 0.0f;
+        }
+        lt_s2_last_yaw_deg = yaw_deg;
+    }
+    lt_s2_yaw_rate_deg_s = imu_sample->data.gyro_deg_s.z;
+    lt_s2_yaw_sample_count = imu_sample->sample_count;
+}
+
+static void LineFollowTest_UpdateSegment(uint32_t now, float distance_m,
+                                         const JY61P_I2C_SAMPLE *imu_sample){
     if ((lt_profile == NULL) || (lt_profile->route != LT_ROUTE_LAP)){
         return;
     }
@@ -320,9 +374,19 @@ static void LineFollowTest_UpdateSegment(uint32_t now, float distance_m){
         (distance_m >= LT_SEGMENT_S1_END_M)){
         lt_segment = LT_SEGMENT_S2;
         lt_curve_taper_active = false;
+        lt_s2_yaw_tracking_valid = false;
+        lt_s2_yaw_sample_count = 0U;
+        lt_s2_turn_deg = 0.0f;
+        lt_s2_yaw_rate_deg_s = 0.0f;
     }
+    LineFollowTest_UpdateS2Yaw(now, imu_sample);
     if ((lt_segment == LT_SEGMENT_S2) &&
-        (distance_m >= LT_SEGMENT_S2_END_M)){
+        (distance_m >= LT_SEGMENT_S2_END_M) &&
+        ((!lt_s2_yaw_tracking_valid) || !lt_s2_yaw_sample_fresh ||
+         ((lt_s2_turn_deg >= LT_S2_YAW_EXIT_MIN_TURN_DEG) &&
+          (fabsf(lt_s2_yaw_rate_deg_s) <=
+           LT_S2_YAW_EXIT_MAX_RATE_DEGPS)) ||
+         (distance_m >= LT_S2_YAW_EXIT_FALLBACK_M))){
         lt_segment = LT_SEGMENT_S3;
     }
     if ((lt_segment == LT_SEGMENT_S3) &&
@@ -527,7 +591,7 @@ static void LineFollowTest_UpdateCurveFeedforward(uint32_t now,
         lt_profile->steer_slew_mps2 * dt_s);
 
     /* 离开物理弯道且前馈确已归零后释放锁存，供下一弯重新触发。 */
-    if (lt_curve_taper_active &&
+    if (lt_curve_taper_active && !LineFollowTest_IsRightCurve(distance_m) &&
         (distance_m >= lt_curve_taper_release_distance_m) &&
         (fabsf(lt_curve_feedforward_mps) <= 0.0001f)){
         lt_curve_taper_active = false;
@@ -535,7 +599,16 @@ static void LineFollowTest_UpdateCurveFeedforward(uint32_t now,
 }
 
 static float LineFollowTest_CurveOmegaFeedforwardDegS(float distance_m){
-    (void)distance_m;
+    if ((lt_segment == LT_SEGMENT_S2) && lt_curve_taper_active &&
+        lt_s2_yaw_tracking_valid && lt_s2_yaw_sample_fresh &&
+        (distance_m >= LT_SEGMENT_S2_END_M) &&
+        (lt_s2_turn_deg < LT_S2_YAW_EXIT_MIN_TURN_DEG)){
+        float finish_omega_deg_s = LT_S2_YAW_FINISH_KP *
+            (LT_S2_YAW_TARGET_TURN_DEG - lt_s2_turn_deg);
+        return (finish_omega_deg_s < LT_S2_YAW_FINISH_MAX_DEGPS)
+                   ? finish_omega_deg_s
+                   : LT_S2_YAW_FINISH_MAX_DEGPS;
+    }
     /* 与已建立的轮速半差速同步，避免分段切换时角速度参考阶跃。 */
     return (2.0f * lt_curve_feedforward_mps /
             LT_EFFECTIVE_TRACK_WIDTH_M) * LT_RAD_TO_DEG;
@@ -559,9 +632,26 @@ static void LineFollowTest_UpdateSteering(const LINE_FOLLOW_OUTPUT *out,
                          feedback_limit_mps;
     float steer_target_mps = lt_curve_feedforward_mps + feedback_mps;
     /* EXIT may brake/reverse, but must not rebuild same-direction steer. */
-    if (lt_curve_taper_active &&
-        (steer_target_mps > lt_curve_feedforward_mps)){
-        steer_target_mps = lt_curve_feedforward_mps;
+    if (lt_curve_taper_active){
+        float same_direction_limit_mps = lt_curve_feedforward_mps;
+        if ((lt_segment == LT_SEGMENT_S2) &&
+            lt_s2_yaw_tracking_valid &&
+            (distance_m >= LT_SEGMENT_S2_END_M) &&
+            (lt_s2_turn_deg < LT_S2_YAW_EXIT_MIN_TURN_DEG)){
+            float remaining_turn_deg =
+                LT_S2_YAW_TARGET_TURN_DEG - lt_s2_turn_deg;
+            float finish_omega_deg_s =
+                LT_S2_YAW_FINISH_KP * remaining_turn_deg;
+            if (finish_omega_deg_s > LT_S2_YAW_FINISH_MAX_DEGPS){
+                finish_omega_deg_s = LT_S2_YAW_FINISH_MAX_DEGPS;
+            }
+            same_direction_limit_mps =
+                0.5f * LT_EFFECTIVE_TRACK_WIDTH_M *
+                (finish_omega_deg_s / LT_RAD_TO_DEG);
+        }
+        if (steer_target_mps > same_direction_limit_mps){
+            steer_target_mps = same_direction_limit_mps;
+        }
     }
     if (steer_target_mps > steer_limit_mps){
         steer_target_mps = steer_limit_mps;
@@ -650,7 +740,7 @@ static void LineFollowTest_Telemetry(uint32_t now, bool sensor_ready){
     DebugUart_Printf(
         "[TRK] t=%lu run=%lu req=%u seg=%s ph=%s st=%s fs=%s gm=%u sen=%u mask=%02X n=%u err=%.1f cor=%.2f "
         "cff=%.3f vc=%.3f ac=%.3f "
-        "vs=%.3f wref=%.1f wz=%.1f yaw=%.1f vl=%.3f vr=%.3f dl=%.1f dr=%.1f sl=%.3f sr=%.3f s=%.3f "
+        "vs=%.3f wref=%.1f wz=%.1f yaw=%.1f turn=%.1f vl=%.3f vr=%.3f dl=%.1f dr=%.1f sl=%.3f sr=%.3f s=%.3f "
         "rem=%.3f drop=%lu\r\n",
         (unsigned long)(now - lt_start_ms),
         (unsigned long)lt_run_id, (unsigned int)lt_profile->requirement,
@@ -664,6 +754,7 @@ static void LineFollowTest_Telemetry(uint32_t now, bool sensor_ready){
         lt_speed_command_mps, lt_accel_command_mps2,
         lt_steer_command_mps,
         out.omega_ref_deg_s, out.omega_measured_deg_s, yaw_deg,
+        lt_s2_turn_deg,
         Chassis_GetWheelSpeed(HALL_ENCODER_LEFT),
         Chassis_GetWheelSpeed(HALL_ENCODER_RIGHT),
         duty.left_percent, duty.right_percent,
@@ -717,6 +808,12 @@ static void LineFollowTask_EnterCommon(const LT_PROFILE *profile){
     lt_segment = LT_SEGMENT_S1;
     lt_curve_taper_active = false;
     lt_curve_taper_release_distance_m = 0.0f;
+    lt_s2_yaw_tracking_valid = false;
+    lt_s2_yaw_sample_count = 0U;
+    lt_s2_last_yaw_deg = 0.0f;
+    lt_s2_turn_deg = 0.0f;
+    lt_s2_yaw_rate_deg_s = 0.0f;
+    lt_s2_yaw_sample_fresh = false;
     DebugUart_Printf(
         "[TRK] --- enter run=%lu req=%u dry=%u rear->axle=%.3fm rear->sensor=%.3fm "
         "sensor->axle=%.3fm track=%.3fm radius=%.3fm v=%.3f a=%.3f "
@@ -765,6 +862,11 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
     bool sensor_ready = LineSensor_Tick(&detected_mask);
     uint32_t now = BSP_Time_GetMs();
     float distance_m = Chassis_GetDistance();
+    JY61P_I2C_SAMPLE segment_imu_sample;
+    const JY61P_I2C_SAMPLE *segment_imu =
+        JY61P_I2C_GetSnapshot(&segment_imu_sample)
+            ? &segment_imu_sample
+            : NULL;
 
     lt_curve_gyro_only = false;
     lt_line_reacquire_active = false;
@@ -772,7 +874,7 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
         lt_last_line_seen_ms = now;
     }
 
-    LineFollowTest_UpdateSegment(now, distance_m);
+    LineFollowTest_UpdateSegment(now, distance_m, segment_imu);
 
     if ((lt_profile->route == LT_ROUTE_STRAIGHT) &&
         !lt_straight_b_passed &&

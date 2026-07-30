@@ -44,10 +44,10 @@ DEFAULT_ACCEL_LIMIT_MPS2 = 0.12
 REQUIREMENT_ACCEL_LIMITS = {2: 0.30, 4: 0.12, 5: 0.12, 6: 0.12}
 MAX_SAMPLES = 6000
 FLOAT_FIELDS = (
-    "err", "cor", "cff", "vc", "ac", "vs", "wref", "wz", "yaw", "vl", "vr", "dl", "dr",
+    "err", "cor", "cff", "vc", "ac", "vs", "wref", "wz", "yaw", "turn", "vl", "vr", "dl", "dr",
     "sl", "sr", "s", "rem",
 )
-OPTIONAL_FLOAT_FIELDS = ("cff", "vs", "wref", "wz", "yaw")
+OPTIONAL_FLOAT_FIELDS = ("cff", "vs", "wref", "wz", "yaw", "turn")
 CSV_COLUMNS = (
     "pc_time", "t", "run", "req", "seg", "ph", "st", "fs", "gm", "sen", "mask", "n",
     *FLOAT_FIELDS, "drop",
