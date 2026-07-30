@@ -20,6 +20,8 @@ extern "C" {
 
 /** 赛题要求 2：空载高速整圈。 */
 extern const APP_TASK_DESC APP_H2_EMPTY_LAP;
+/** H2 空推标定：不驱动电机，仅发遥测，供手推小车采集分段里程标定。 */
+extern const APP_TASK_DESC APP_H2_EMPTY_LAP_DRYRUN;
 /** 赛题要求 3：静态滚球；水管控制未接入时只提供安全占位入口。 */
 extern const APP_TASK_DESC APP_H3_BALL_STATIC;
 /** 赛题要求 4：载球 A→B 直线。 */

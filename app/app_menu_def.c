@@ -29,6 +29,7 @@ static const MENU_NODE device_check_menu = {
 /* --- 根菜单 --- */
 static const MENU_ITEM root_items[] = {
     { .name = "H2 Empty Lap",  .kind = MENU_ENTRY_TASK,    .u.task = &APP_H2_EMPTY_LAP },
+    { .name = "H2 Push Calib", .kind = MENU_ENTRY_TASK,    .u.task = &APP_H2_EMPTY_LAP_DRYRUN },
     { .name = "H3 Ball Static", .kind = MENU_ENTRY_TASK,   .u.task = &APP_H3_BALL_STATIC },
     { .name = "H4 Loaded A-B", .kind = MENU_ENTRY_TASK,    .u.task = &APP_H4_LOADED_STRAIGHT },
     { .name = "H5 Loaded Lap O", .kind = MENU_ENTRY_TASK,  .u.task = &APP_H5_LOADED_LAP_CENTER },

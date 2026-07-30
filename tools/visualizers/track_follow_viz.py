@@ -44,12 +44,12 @@ DEFAULT_ACCEL_LIMIT_MPS2 = 0.12
 REQUIREMENT_ACCEL_LIMITS = {2: 0.30, 4: 0.12, 5: 0.12, 6: 0.12}
 MAX_SAMPLES = 6000
 FLOAT_FIELDS = (
-    "err", "cor", "vc", "ac", "vs", "wref", "wz", "yaw", "vl", "vr", "dl", "dr",
+    "err", "cor", "cff", "vc", "ac", "vs", "wref", "wz", "yaw", "vl", "vr", "dl", "dr",
     "sl", "sr", "s", "rem",
 )
-OPTIONAL_FLOAT_FIELDS = ("vs", "wref", "wz", "yaw")
+OPTIONAL_FLOAT_FIELDS = ("cff", "vs", "wref", "wz", "yaw")
 CSV_COLUMNS = (
-    "pc_time", "t", "run", "req", "seg", "st", "fs", "gm", "sen", "mask", "n",
+    "pc_time", "t", "run", "req", "seg", "ph", "st", "fs", "gm", "sen", "mask", "n",
     *FLOAT_FIELDS, "drop",
 )
 
@@ -91,6 +91,7 @@ def parse_track_line(line: str):
             "run": int(fields.get("run", "0")),
             "req": int(fields.get("req", "0")),
             "seg": fields.get("seg", "?"),
+            "ph": fields.get("ph", "?"),
             "st": fields["st"],
             "fs": fields.get("fs", "NONE"),
             "gm": int(fields.get("gm", "0")),
@@ -195,8 +196,8 @@ class TrackTelemetry:
         if self._csv_file is not None:
             row = [
                 f"{time.time():.3f}", str(parsed["t"]), str(parsed["run"]),
-                str(parsed["req"]), parsed["seg"], parsed["st"], parsed["fs"],
-                str(parsed["gm"]),
+                str(parsed["req"]), parsed["seg"], parsed["ph"], parsed["st"],
+                parsed["fs"], str(parsed["gm"]),
                 str(parsed["sen"]), f"{parsed['mask']:02X}", str(parsed["n"]),
                 *(f"{parsed[field]:.6f}" for field in FLOAT_FIELDS),
                 str(parsed["drop"]),
