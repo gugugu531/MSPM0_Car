@@ -6,6 +6,7 @@
  */
 #include "app_menu.h"
 #include "app_checks.h"
+#include "app_ball_task.h"
 #include "app_line_task.h"
 
 /* --- Device Check 子菜单：在用外设自检 --- */

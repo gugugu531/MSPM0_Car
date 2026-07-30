@@ -15,9 +15,10 @@
 - `app_menu.h`：菜单树类型 `MENU_NODE`/`MENU_ITEM` 与 `Menu_Tick` 导航；`app_menu_def.c` 定义菜单树实例 `APP_ROOT_MENU`。
 - `app_checks.h`：外设自检任务描述符 `APP_CHK_*`（JY61P / Gray I2C / TB6612 / Encoder /
   Speed PID / Duty Sweep）。
-- `app_line_task.h`：赛题要求 2～6 的五个任务入口；要求 2/4/5/6 复用 Yahboom 循迹与
-  JY61P 共享 I2C0 分时调度，整圈任务含 S1～S4 里程状态机和弯道差速前馈；要求 3 在
-  水管控制未接入时保持安全占位。
+- `app_line_task.h`：赛题要求 2/4/5/6 的循迹任务入口，复用 Yahboom 循迹与 JY61P 共享
+  I2C0 分时调度，整圈任务含 S1～S4 里程状态机和弯道差速前馈。
+- `app_ball_task.h`：要求 3 的滚球任务入口；当前完成小车静止、树莓派反馈守 0 cm，完整
+  ±5 cm 往返尚未接入。实机参数集中在 `app_ball_config.h`。
 
 ## core
 
@@ -28,6 +29,9 @@
 
 ## middleware
 
+- `ball_balance.h`：纯计算的一维滚球非线性串级控制；停止距离修正后由位置生成目标速度，
+  速度内环使用 `tanh` 软饱和，按位置和制动方向调度角速度，并输出截停与低通加速度诊断。
+  正倾角定义为使球向正方向加速。
 - `chassis.h`：底盘组合服务（开环占空比 + 每轮速度闭环 PID），详细说明见 `docs/interfaces/middleware_chassis.md`。
 - `line_follow.h`：标准化八路黑线观测、巡线偏差计算、PID/陀螺修正和底盘输出，详细说明见
   `docs/interfaces/middleware_line_follow.md`。
@@ -48,7 +52,8 @@
 - `debug_uart.h`：调试串口（Debug_Ex/UART1，115200）非阻塞收发，供文本遥测和调试使用；
   树莓派视觉数据不走此接口。
 - `rpi_uart.h`：树莓派滚球视觉专线（Rpi_UART/UART2，PA24 RX，115200）11 字节协议解析、
-  诊断统计、失效判定与按测量龄前推接口；与 Debug_Ex 完全独立。
+  诊断统计、失效判定、旧版倾角动力学前推接口，以及不注入倾角加速度的可信观测接口；
+  H3 使用后者，与 Debug_Ex 完全独立。
 
 ### 灰度接口的位序与极性
 

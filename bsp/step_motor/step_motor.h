@@ -201,7 +201,7 @@ extern "C" {
  *
  * 坐标轴(当前实测值):
  *
- *         0        20              154              430      450
+ *         0        20              220              430      450
  *         │         │               │                │        │
  *     HARD_MIN  SOFT_MIN          水平位          SOFT_MAX  HARD_MAX
  *    上电参考位   ├──── 合法工作区间 ────────────────┤   另一端机械端
@@ -240,10 +240,11 @@ extern "C" {
     (STEP_MOTOR_ENC_HARD_MAX_COUNTS - STEP_MOTOR_ENC_LIMIT_MARGIN_COUNTS)
 
 /*
- * 水管水平位的计数,即「从上电参考位到水平位」的距离。不是限位,
- * 是上电抬升的默认目标,也是上层摆杆角闭环该用的零点。
+ * 水管名义水平位的计数,即「从上电参考位到水平位」的估计距离。不是限位。
+ * 目前水平观测范围为 200~240 cnt，220 只作上电抬升名义目标；H3 不把它当作
+ * safe return，也不假设它就是动力学真零点。
  */
-#define STEP_MOTOR_ENC_LEVEL_COUNTS 206
+#define STEP_MOTOR_ENC_LEVEL_COUNTS 220
 
 /* ===== 上电自动抬升 ===== */
 /*

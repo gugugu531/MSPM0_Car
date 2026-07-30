@@ -837,29 +837,8 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
     return APP_TASK_RUNNING;
 }
 
-static void H3_Enter(void){
-    lt_start_ms = BSP_Time_GetMs();
-    lt_last_ui = 0U;
-    DebugUart_Printf("[TRK] --- enter req=3 pipe-control=not-connected ---\r\n");
-}
-
-static APP_TASK_STATUS H3_Tick(float dt){
-    (void)dt;
-    uint32_t now = BSP_Time_GetMs();
-    if ((now - lt_last_ui) >= LT_UI_PERIOD_MS){
-        lt_last_ui = now;
-        Ui_RenderLines("H3 Ball Static", "NOT READY", "Pipe disabled",
-                       "No actuator", "No motion", "SAFE / BACK",
-                       "BACK: exit");
-    }
-    return APP_TASK_RUNNING;
-}
-
 const APP_TASK_DESC APP_H2_EMPTY_LAP = {
     "H2 Empty Lap", H2_Enter, LineFollowTest_Tick, NULL
-};
-const APP_TASK_DESC APP_H3_BALL_STATIC = {
-    "H3 Ball Static", H3_Enter, H3_Tick, NULL
 };
 const APP_TASK_DESC APP_H4_LOADED_STRAIGHT = {
     "H4 Loaded A-B", H4_Enter, LineFollowTest_Tick, NULL

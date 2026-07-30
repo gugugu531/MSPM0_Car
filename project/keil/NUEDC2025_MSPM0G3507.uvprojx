@@ -341,7 +341,7 @@
               <MiscControls></MiscControls>
               <Define>__MSPM0G3507__</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\debug_uart;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\rpi_uart;..\..\bsp\step_motor;..\..\bsp\time;..\..\bsp\yahboom_track;..\..\board\sys_config;..\..\third_party\mspm0-sdk\source;..\..\third_party\mspm0-sdk\source\third_party\CMSIS\Core\Include</IncludePath>
+              <IncludePath>..\..;..\..\app;..\..\core;..\..\core\common;..\..\core\filter;..\..\core\kinematics;..\..\core\pid;..\..\middleware\ball_balance;..\..\middleware\chassis;..\..\middleware\fault;..\..\middleware\line_follow;..\..\middleware\ui;..\..\bsp\common;..\..\bsp\debug_uart;..\..\bsp\imu;..\..\bsp\key;..\..\bsp\motor;..\..\bsp\oled;..\..\bsp\rpi_uart;..\..\bsp\step_motor;..\..\bsp\time;..\..\bsp\yahboom_track;..\..\board\sys_config;..\..\third_party\mspm0-sdk\source;..\..\third_party\mspm0-sdk\source\third_party\CMSIS\Core\Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -411,6 +411,11 @@
               <FilePath>..\..\app\app_checks.c</FilePath>
             </File>
             <File>
+              <FileName>app_ball_task.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_ball_task.c</FilePath>
+            </File>
+            <File>
               <FileName>app_line_task.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\app\app_line_task.c</FilePath>
@@ -465,6 +470,11 @@
         <Group>
           <GroupName>MiddleWare</GroupName>
           <Files>
+            <File>
+              <FileName>ball_balance.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\middleware\ball_balance\ball_balance.c</FilePath>
+            </File>
             <File>
               <FileName>chassis.c</FileName>
               <FileType>1</FileType>

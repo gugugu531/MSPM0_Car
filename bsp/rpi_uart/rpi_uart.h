@@ -51,6 +51,8 @@ typedef struct {
 } RPI_UART_STATS;
 
 typedef struct {
+    float measured_x_mm;
+    float measured_velocity_mm_s;
     float x_mm;
     float velocity_mm_s;
     float age_ms;
@@ -59,6 +61,7 @@ typedef struct {
     bool  moving;
     bool  edge;
     bool  velocity_trusted;
+    bool  position_extrapolated;
     uint8_t quality;
 } RPI_UART_PREDICTION;
 
@@ -79,11 +82,19 @@ void RpiUart_GetStats(RPI_UART_STATS *stats);
 
 /**
  * 按 a=(5/7)g*sin(theta) 把球状态前推到当前时刻。
- * 超过 200 ms 没有 VALID 帧时返回 false；调用方必须关闭球环并让摆杆回水平角。
- * 最近一帧 VALID=0 时 hold_output=true，调用方必须保持上一次控制输出。
+ * 超过 200 ms 没有 VALID 帧时返回 false；调用方应退出闭环并按任务策略处理执行器。
+ * 最近一帧 VALID=0 时 hold_output=true，供调用方判断是否保持上一次控制输出。
  * 速度不可信时，前推会去掉测量速度项，只保留已知倾角产生的模型项。
+ * @note 该自由滚动模型忽略静摩擦，不适合 H3 静止守球；H3 使用 RpiUart_Observe()。
  */
 bool RpiUart_Predict(float theta_rad, RPI_UART_PREDICTION *prediction);
+
+/**
+ * 返回面向闭环的可信观测，不注入水管倾角模型。
+ * 静止时直接返回树莓派原始 x/v；仅当 MOVING=1 时用原始速度对位置作匀速时延补偿。
+ * 超过 200 ms 没有 VALID 帧时返回 false。其余质量标志只随结果回传供诊断。
+ */
+bool RpiUart_Observe(RPI_UART_PREDICTION *observation);
 
 /** CRC-8：多项式 0x07、初值 0xFF、不反转、无最终异或；公开以便跑固定测试向量。 */
 uint8_t RpiUart_Crc8(const uint8_t *data, uint8_t len);

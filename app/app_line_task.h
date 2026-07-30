@@ -20,8 +20,6 @@ extern "C" {
 
 /** 赛题要求 2：空载高速整圈。 */
 extern const APP_TASK_DESC APP_H2_EMPTY_LAP;
-/** 赛题要求 3：静态滚球；水管控制未接入时只提供安全占位入口。 */
-extern const APP_TASK_DESC APP_H3_BALL_STATIC;
 /** 赛题要求 4：载球 A→B 直线。 */
 extern const APP_TASK_DESC APP_H4_LOADED_STRAIGHT;
 /** 赛题要求 5：载球、目标 O 点整圈；当前只运行底盘部分。 */

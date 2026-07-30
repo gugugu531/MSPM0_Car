@@ -5,7 +5,8 @@
 > **当前状态**：面向 2026 电赛 H 题（车载平衡滚球）。原 2025E 二维云台/瞄准子系统，
 > 以及直行测试、转向测试、航向辅助循迹与 K230 视觉循迹等实验任务已按赛题需求整体移除。
 > `app` 为菜单驱动的裸机协作式调度框架，主菜单按赛题要求 2～6 拆为五个任务入口，另有
-> `Device Check` 子菜单；水管控制未接入前，要求 3 为安全占位，要求 5/6 只运行底盘部分。
+> `Device Check` 子菜单；要求 3 已接入“静止守 0 cm”首版闭环，完整 ±5 cm 往返尚未实现；
+> 要求 5/6 仍只运行底盘部分。
 >
 > **摆杆步进电机**：细分数、编码器每转计数与方向、EN/DIR 极性均已上板标定完成；最大步进
 > 频率、摆杆减速比与软限位待机械装配后测定，流程见
@@ -35,7 +36,7 @@ app ─► middleware ─► bsp
 
 - `app`：初始化、协作式调度器、状态机、菜单树与具体测试任务。
 - `core`：PID、滤波、运动学与纯角速度积分等纯计算能力。
-- `middleware`：组合 core 与 BSP 的系统能力（`chassis` / `line_follow` / `ui` / `fault`）。
+- `middleware`：组合 core 与 BSP 的系统能力（`ball_balance` / `chassis` / `line_follow` / `ui` / `fault`）。
 - `bsp`：直接面向板级外设的驱动（见上表 + `time` / `common`）。
 - `board`：SysConfig 源文件与生成代码、启动/链接资源。
 - `third_party/mspm0-sdk`：TI 官方 MSPM0 SDK 2.10.00.04 submodule，供各工程使用相对路径。
@@ -184,7 +185,7 @@ Pop-Location
 | 入口 | 用途 |
 |---|---|
 | `H2 Empty Lap` | 要求 2：空载高速整圈 |
-| `H3 Ball Static` | 要求 3：静态滚球安全占位（水管控制未接入） |
+| `H3 Ball Static` | 要求 3 第一阶段：停止距离修正的位置—速度串级 `tanh` 控制、扰动制动与精确连杆查表，静止守住 0 cm；±5 cm 往返待实现 |
 | `H4 Loaded A-B` | 要求 4：载球 A→B 直线循迹 |
 | `H5 Loaded Lap O` | 要求 5：目标 O 点载球整圈，当前只运行底盘 |
 | `H6 Loaded Any` | 要求 6：任意目标载球整圈，当前只运行底盘 |
@@ -223,6 +224,13 @@ python tools/visualizers/straight_test_viz.py --port COM7 --csv straight.csv --l
 python tools/visualizers/speed_pid_viz.py --port COM7 --csv spd.csv --log raw.txt
 ```
 
+H3 静止守球通过 `[BALL]` 以 20 Hz 回传位置、速度、低通加速度、非线性反馈分量、动态
+限斜率、摆杆角、控制量和视觉链路状态：
+
+```powershell
+python tools/visualizers/ball_balance_viz.py --port COM7 --csv ball.csv --log ball_raw.txt
+```
+
 `raw.txt`、`spd.csv`、`straight_raw.txt` 和 `straight.csv` 已默认忽略。蓝牙测试使用
 UART0，参数为 `9600 8N1`；它与 UART1 调试遥测是两条不同通道。
 
@@ -252,6 +260,7 @@ python tools/checks/check_docs.py
   - Yahboom I2C 循线：[`bsp_yahboom_track.md`](docs/interfaces/bsp_yahboom_track.md)
   - JY61P：[`bsp_wit_sdk.md`](docs/interfaces/bsp_wit_sdk.md)
 - H 题控制方案（循迹 + 摆杆滚球的控制律与参数）：[`docs/control-plan.md`](docs/control-plan.md)
+- 静止稳球上板与机械标定：[`docs/ball-balance-bringup.md`](docs/ball-balance-bringup.md)
 - 摆杆步进电机上板标定流程：[`docs/step-motor-calibration.md`](docs/step-motor-calibration.md)
 - 当前待办和上板风险：[`docs/todo.md`](docs/todo.md)
 - K230 开发与远程部署流程（**2025E 历史资料**，2026H 视觉已改用树莓派）：

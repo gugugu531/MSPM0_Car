@@ -36,11 +36,18 @@ python tools/k230/k230_video_viewer.py rtsp://<K230-IP>:8554/test --stats-frames
 python tools/visualizers/straight_test_viz.py --list
 python tools/visualizers/speed_pid_viz.py --list
 python tools/visualizers/track_follow_viz.py --list
+python tools/visualizers/ball_balance_viz.py --list
 
 # H 题循迹实时遥测（含 JY61P 航向角，默认加速度告警线 ±0.12 m/s²）
 python tools/visualizers/track_follow_viz.py --port COM7
 python tools/visualizers/track_follow_viz.py --port COM7 --csv track.csv --log track_raw.txt
+
+# H3 静止守球实时遥测
+python tools/visualizers/ball_balance_viz.py --port COM7 --csv ball.csv --log ball_raw.txt
 ```
+
+H3 图中同时显示 `xr` 原始位置、`x` 匀速时延补偿位置、`stop` 停止坐标和 `vref` 目标速度；
+标题栏的 `brake/stuck` 用于判断扰动制动与工具截停状态。
 
 航向角使用固件 `[TRK]` 遥测中的 `yaw` 字段，在独立曲线和窗口顶部显示，并随其他字段写入 CSV。
 
