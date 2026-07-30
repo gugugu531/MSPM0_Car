@@ -46,7 +46,7 @@ class TrackFollowVizTest(unittest.TestCase):
         self.assertAlmostEqual(parsed["turn"], 0.0)
 
     def test_parse_turn_angle(self):
-        parsed = parse_track_line(SAMPLE_LINE.replace(
+        parsed = parse_track_line(SAMPLE.replace(
             "yaw=87.3 ", "yaw=87.3 turn=176.4 "))
         self.assertAlmostEqual(parsed["turn"], 176.4)
 
