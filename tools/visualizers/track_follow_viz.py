@@ -7,11 +7,11 @@
         st=<FOLLOW|XLINE|OFFSET|STOP> fs=<NONE|LINE|ODOM|END> gm=<0|1>
         sen=<0|1> mask=<hex> n=<0..8>
         err=<...> cor=<...> vc=<m/s> ac=<m/s2> vs=<m/s>
-        wref=<deg/s> wz=<deg/s> vl=<m/s> vr=<m/s>
+        wref=<deg/s> wz=<deg/s> yaw=<deg> vl=<m/s> vr=<m/s>
         dl=<%> dr=<%> sl=<m> sr=<m> s=<m> rem=<m> drop=<bytes>
 
-窗口从上到下显示八路灰度、目标/实测轮速、指令/实测纵向加速度、左右轮占空比、
-双轮里程与终点余量。默认以 0.12 m/s^2 为指令加速度告警线。
+窗口从上到下显示八路灰度、目标/实测轮速、航向角、指令/实测纵向加速度、
+左右轮占空比、双轮里程与终点余量。默认以 0.12 m/s^2 为指令加速度告警线。
 
 用法：
   python tools/visualizers/track_follow_viz.py --list
@@ -44,10 +44,10 @@ DEFAULT_ACCEL_LIMIT_MPS2 = 0.12
 REQUIREMENT_ACCEL_LIMITS = {2: 0.30, 4: 0.12, 5: 0.12, 6: 0.12}
 MAX_SAMPLES = 6000
 FLOAT_FIELDS = (
-    "err", "cor", "vc", "ac", "vs", "wref", "wz", "vl", "vr", "dl", "dr",
+    "err", "cor", "vc", "ac", "vs", "wref", "wz", "yaw", "vl", "vr", "dl", "dr",
     "sl", "sr", "s", "rem",
 )
-OPTIONAL_FLOAT_FIELDS = ("vs", "wref", "wz")
+OPTIONAL_FLOAT_FIELDS = ("vs", "wref", "wz", "yaw")
 CSV_COLUMNS = (
     "pc_time", "t", "run", "req", "seg", "st", "fs", "gm", "sen", "mask", "n",
     *FLOAT_FIELDS, "drop",
@@ -292,13 +292,16 @@ def filtered_measured_accel(time_ms, left_speed, right_speed, alpha=0.25):
 
 
 def build_figure(accel_limit):
-    figure = plt.figure(figsize=(13, 10.5))
-    grid = figure.add_gridspec(5, 1, height_ratios=(0.65, 2.1, 1.7, 1.5, 2.0))
+    figure = plt.figure(figsize=(13, 11.5))
+    grid = figure.add_gridspec(
+        6, 1, height_ratios=(0.65, 2.0, 1.25, 1.6, 1.4, 1.9)
+    )
     axis_sensor = figure.add_subplot(grid[0])
     axis_speed = figure.add_subplot(grid[1])
-    axis_accel = figure.add_subplot(grid[2], sharex=axis_speed)
-    axis_duty = figure.add_subplot(grid[3], sharex=axis_speed)
-    axis_distance = figure.add_subplot(grid[4], sharex=axis_speed)
+    axis_yaw = figure.add_subplot(grid[2], sharex=axis_speed)
+    axis_accel = figure.add_subplot(grid[3], sharex=axis_speed)
+    axis_duty = figure.add_subplot(grid[4], sharex=axis_speed)
+    axis_distance = figure.add_subplot(grid[5], sharex=axis_speed)
     axis_remaining = axis_distance.twinx()
 
     try:
@@ -334,6 +337,12 @@ def build_figure(accel_limit):
     axis_speed.set_ylabel("速度 (m/s)")
     axis_speed.legend(loc="upper right", ncol=3, fontsize=8)
 
+    lines["yaw"], = axis_yaw.plot(
+        [], [], color="#9467bd", lw=1.5, label="JY61P yaw"
+    )
+    axis_yaw.set_ylabel("航向角 (°)")
+    axis_yaw.legend(loc="upper right", fontsize=8)
+
     lines["ac"], = axis_accel.plot([], [], color="#111111", lw=1.5, label="指令 ac")
     lines["ameas"], = axis_accel.plot([], [], color="#ff7f0e", lw=1.2, label="实测估计 EMA")
     lines["alim_pos"] = axis_accel.axhline(
@@ -358,11 +367,11 @@ def build_figure(accel_limit):
     axis_distance.legend(loc="upper left", ncol=3, fontsize=8)
     axis_remaining.legend(loc="upper right", fontsize=8)
 
-    for axis in (axis_speed, axis_accel, axis_duty, axis_distance):
+    for axis in (axis_speed, axis_yaw, axis_accel, axis_duty, axis_distance):
         axis.axhline(0.0, color="gray", linewidth=0.5)
         axis.grid(True, alpha=0.3)
 
-    axes = (axis_speed, axis_accel, axis_duty, axis_distance)
+    axes = (axis_speed, axis_yaw, axis_accel, axis_duty, axis_distance)
     return (figure, axes, axis_remaining, lines, sensor_boxes,
             sensor_labels, sensor_caption)
 
@@ -503,6 +512,7 @@ def main(argv=None) -> int:
                 f"v 指令/实测={latest['vc']:.3f}/{actual_speed:.3f}m/s | "
                 f"半差速={latest['vs']:+.3f}m/s | "
                 f"ω参考/实测={latest['wref']:+.1f}/{latest['wz']:+.1f}°/s | "
+                f"航向={latest['yaw']:+.1f}° | "
                 f"ac={latest['ac']:+.3f}m/s² | err={latest['err']:+.1f}mm "
                 f"cor={latest['cor']:+.2f} | s={latest['s']:.3f}m "
                 f"rem={latest['rem']:.3f}m{alert_text}",

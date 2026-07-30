@@ -6,7 +6,7 @@ from track_follow_viz import TrackTelemetry, filtered_measured_accel, parse_trac
 
 SAMPLE = (
     "[TRK] t=1250 run=7 req=5 seg=S2 st=FOLLOW fs=LINE gm=1 sen=1 mask=18 n=2 err=0.0 cor=-1.25 "
-    "vc=0.123 ac=0.120 vs=0.020 wref=30.0 wz=28.5 "
+    "vc=0.123 ac=0.120 vs=0.020 wref=30.0 wz=28.5 yaw=87.3 "
     "vl=0.110 vr=0.120 dl=31.0 dr=32.0 "
     "sl=0.150 sr=0.151 s=0.151 rem=0.000 drop=0"
 )
@@ -27,6 +27,7 @@ class TrackFollowVizTest(unittest.TestCase):
         self.assertAlmostEqual(parsed["vs"], 0.02)
         self.assertAlmostEqual(parsed["wref"], 30.0)
         self.assertAlmostEqual(parsed["wz"], 28.5)
+        self.assertAlmostEqual(parsed["yaw"], 87.3)
 
     def test_parse_legacy_line_without_steer_command(self):
         parsed = parse_track_line(
@@ -35,10 +36,12 @@ class TrackFollowVizTest(unittest.TestCase):
                   .replace("gm=1 ", "")
                   .replace("vs=0.020 ", "")
                   .replace("wref=30.0 ", "")
-                  .replace("wz=28.5 ", ""))
+                  .replace("wz=28.5 ", "")
+                  .replace("yaw=87.3 ", ""))
         self.assertAlmostEqual(parsed["vs"], 0.0)
         self.assertAlmostEqual(parsed["wref"], 0.0)
         self.assertAlmostEqual(parsed["wz"], 0.0)
+        self.assertAlmostEqual(parsed["yaw"], 0.0)
         self.assertEqual(parsed["run"], 0)
         self.assertEqual(parsed["fs"], "NONE")
         self.assertEqual(parsed["gm"], 0)

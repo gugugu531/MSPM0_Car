@@ -37,10 +37,12 @@ python tools/visualizers/straight_test_viz.py --list
 python tools/visualizers/speed_pid_viz.py --list
 python tools/visualizers/track_follow_viz.py --list
 
-# H 题循迹实时遥测（默认加速度告警线 ±0.12 m/s²）
+# H 题循迹实时遥测（含 JY61P 航向角，默认加速度告警线 ±0.12 m/s²）
 python tools/visualizers/track_follow_viz.py --port COM7
 python tools/visualizers/track_follow_viz.py --port COM7 --csv track.csv --log track_raw.txt
 ```
+
+航向角使用固件 `[TRK]` 遥测中的 `yaw` 字段，在独立曲线和窗口顶部显示，并随其他字段写入 CSV。
 
 K230 的完整连接和恢复流程见 [`../docs/k230-development.md`](../docs/k230-development.md) 与
 [`../docs/k230-remote-development.md`](../docs/k230-remote-development.md)。探针的用途见
