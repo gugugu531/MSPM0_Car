@@ -47,6 +47,11 @@ docs/datasheets/*.pdf
 /spd.csv
 /straight_raw.txt
 /straight.csv
+/track.csv
+/track_raw.txt
+
+# 可视化工具生成的诊断报告与归档采集数据（本地留存，不入库）
+/reports/
 
 # CMSIS Solution / MDK 6 本地生成文件（工程输入 YAML 与工具清单保留）
 /project/keil/out/
