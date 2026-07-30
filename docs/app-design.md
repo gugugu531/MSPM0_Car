@@ -121,7 +121,7 @@ S4(D→A)` 单向状态机；`[TRK] seg` 输出当前段。直线段无曲率前
 9. **UI**：RUN 运行页由任务 `on_tick` 低频自渲染；MENU/FAULT 页归框架。
 
 ### 参考实现
-Device Check 共 7 项（均在 `app_checks.c`），演示了 enter 复位、tick 非阻塞采样、
+Device Check 共 8 项（均在 `app_checks.c`），演示了 enter 复位、tick 非阻塞采样、
 按变化节流刷屏、仅靠 BACK 短按退出；灰度检查页还示范了 on_enter/on_exit
 挂起/恢复 JY61P，以分时共用 I2C0。
 

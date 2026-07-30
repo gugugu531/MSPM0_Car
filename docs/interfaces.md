@@ -45,7 +45,10 @@
 - `hall_encoder.h`：左右双轮霍尔编码器计数、速度和距离估计接口（按 `HALL_ENCODER_ID` 选轮），详细说明见 `docs/interfaces/bsp_hall_encoder.md`。
 - `yahboom_track.h`：Yahboom 8 路循线模块 I2C 驱动（I2C0，地址 `0x12`），详细说明见 `docs/interfaces/bsp_yahboom_track.md`。
 - `step_motor.h`：摆杆步进电机开环控制（STEP=PA29/TIMG6，DIR=PB14，EN=PB11），含速度限幅与开环位置限位，详细说明见 `docs/interfaces/bsp_step_motor.md`。
-- `debug_uart.h`：调试串口（Debug_Ex/UART1，115200）非阻塞收发——TX 遥测环形缓冲与 RX 视觉板字节流。
+- `debug_uart.h`：调试串口（Debug_Ex/UART1，115200）非阻塞收发，供文本遥测和调试使用；
+  树莓派视觉数据不走此接口。
+- `rpi_uart.h`：树莓派滚球视觉专线（Rpi_UART/UART2，PA24 RX，115200）11 字节协议解析、
+  诊断统计、失效判定与按测量龄前推接口；与 Debug_Ex 完全独立。
 
 ### 灰度接口的位序与极性
 

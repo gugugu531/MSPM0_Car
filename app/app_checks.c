@@ -10,6 +10,7 @@
 #include "bsp_time.h"
 #include "bsp_common.h"
 #include "debug_uart.h"
+#include "rpi_uart.h"
 #include "chassis.h"
 #include "yahboom_track.h"
 #include "hall_encoder.h"
@@ -1105,6 +1106,103 @@ static APP_TASK_STATUS ChkDutySweep_Tick(float dt){
 
 /* ============================ 描述符 ============================ */
 
+/* ======================= Raspberry Pi UART2 通信诊断 ======================= */
+
+static uint32_t rpi_last_ui;
+static uint8_t rpi_page;
+
+static void ChkRpiUart_Enter(void){
+    RpiUart_ResetStats();
+    rpi_last_ui = 0U;
+    rpi_page = 0U;
+}
+
+static APP_TASK_STATUS ChkRpiUart_Tick(float dt){
+    (void)dt;
+    uint32_t now = BSP_Time_GetMs();
+
+    if (Key_GetEvent(KEY_ID_ENTER) == KEY_EVENT_SHORT_PRESS){
+        rpi_page ^= 1U;
+        rpi_last_ui = 0U;
+    }
+    if ((now - rpi_last_ui) < CHK_UI_PERIOD_MS){
+        return APP_TASK_RUNNING;
+    }
+    rpi_last_ui = now;
+
+    RPI_UART_STATS stats;
+    RPI_UART_MEASUREMENT measurement;
+    RPI_UART_PREDICTION prediction;
+    bool have_measurement = RpiUart_GetLatest(&measurement);
+    bool live = RpiUart_Predict(0.0f, &prediction);
+    RpiUart_GetStats(&stats);
+
+    char l1[20];
+    char l2[20];
+    char l3[20];
+    char l4[20];
+    char l5[20];
+    uint8_t n;
+
+    if (rpi_page == 0U){
+        (void)PutStr(l1, live ? (prediction.hold_output ? "LINK HOLD" :
+                                (prediction.degraded ? "LINK DEGRADED" : "LINK OK"))
+                             : (have_measurement ? "LINK TIMEOUT" : "WAIT FRAME"));
+        l1[live ? (prediction.hold_output ? 9U : (prediction.degraded ? 13U : 7U))
+                : (have_measurement ? 12U : 10U)] = '\0';
+
+        n = PutStr(l2, "seq ");
+        AppFmt_I32(&l2[n], have_measurement ? (int32_t)measurement.seq : -1);
+
+        n = PutStr(l3, "x ");
+        AppFmt_Fixed(&l3[n], have_measurement ? ((float)measurement.x_01mm * 0.1f) : 0.0f, 1);
+        while (l3[n] != '\0'){ n++; }
+        n += PutStr(&l3[n], " v ");
+        AppFmt_I32(&l3[n], have_measurement ? (int32_t)measurement.velocity_mm_s : 0);
+
+        n = PutStr(l4, "age ");
+        AppFmt_Fixed(&l4[n], live ? prediction.age_ms : 0.0f, 1);
+        while (l4[n] != '\0'){ n++; }
+        n += PutStr(&l4[n], "ms");
+        l4[n] = '\0';
+
+        n = PutStr(l5, "Q");
+        AppFmt_I32(&l5[n], live ? (int32_t)prediction.quality : 0);
+        while (l5[n] != '\0'){ n++; }
+        n += PutStr(&l5[n], live && prediction.velocity_trusted ? " V+" : " V-");
+        n += PutStr(&l5[n], live && prediction.moving ? " M" : " -");
+        l5[n] = '\0';
+    } else {
+        n = PutStr(l1, "rx ");
+        AppFmt_I32(&l1[n], (int32_t)stats.rx_frames);
+
+        n = PutStr(l2, "crc ");
+        AppFmt_I32(&l2[n], (int32_t)stats.crc_fail);
+        while (l2[n] != '\0'){ n++; }
+        n += PutStr(&l2[n], " ver ");
+        AppFmt_I32(&l2[n], (int32_t)stats.ver_fail);
+
+        n = PutStr(l3, "gap ");
+        AppFmt_I32(&l3[n], (int32_t)stats.seq_gap);
+        while (l3[n] != '\0'){ n++; }
+        n += PutStr(&l3[n], " inv ");
+        AppFmt_I32(&l3[n], (int32_t)stats.invalid);
+
+        n = PutStr(l4, "maxage ");
+        AppFmt_I32(&l4[n], (int32_t)stats.max_age_ms);
+        while (l4[n] != '\0'){ n++; }
+        n += PutStr(&l4[n], "ms");
+        l4[n] = '\0';
+
+        n = PutStr(l5, "fps ");
+        AppFmt_Fixed(&l5[n], (float)stats.frame_rate_x10 * 0.1f, 1);
+    }
+
+    Ui_RenderLines("Chk Rpi UART2", l1, l2, l3, l4, l5,
+                   rpi_page == 0U ? "ENTER: stats" : "ENTER: live");
+    return APP_TASK_RUNNING;
+}
+
 const APP_TASK_DESC APP_CHK_GYRO_JY61P = {
     "Gyro JY61P", ChkGyroJy_Enter, ChkGyroJy_Tick, NULL
 };
@@ -1125,4 +1223,7 @@ const APP_TASK_DESC APP_CHK_SPEED_PID = {
 };
 const APP_TASK_DESC APP_CHK_DUTY_SWEEP = {
     "Duty Sweep", ChkDutySweep_Enter, ChkDutySweep_Tick, NULL
+};
+const APP_TASK_DESC APP_CHK_RPI_UART = {
+    "Rpi UART", ChkRpiUart_Enter, ChkRpiUart_Tick, NULL
 };

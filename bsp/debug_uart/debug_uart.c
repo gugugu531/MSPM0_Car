@@ -150,7 +150,8 @@ uint32_t DebugUart_GetRxDroppedBytes(void){ return rx_dropped; }
 uint32_t DebugUart_GetRxErrors(void){ return rx_errors; }
 
 /*
- * Debug_Ex/UART1 ISR：TX 排空遥测环形缓冲；RX 搬运 K230 视觉帧原始字节。
+ * Debug_Ex/UART1 ISR：TX 排空遥测环形缓冲；RX 仅保留给普通调试输入。
+ * 树莓派视觉帧由 bsp/rpi_uart 独占 UART2 接收，绝不经过这里。
  */
 void Debug_Ex_INST_IRQHandler(void){
     switch (DL_UART_Main_getPendingInterrupt(DEBUG_UART_INST)){

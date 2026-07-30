@@ -1,6 +1,6 @@
 /**
  * @file  debug_uart.h
- * @brief Debug_Ex/UART1 非阻塞收发：TX 遥测 + RX 视觉帧字节流。
+ * @brief Debug_Ex/UART1 非阻塞调试收发；树莓派视觉链路使用独立的 Rpi_UART/UART2。
  *
  * 控制环只把字节写入环形缓冲即返回 (缓冲满则丢弃并计数, 绝不忙等), TX 由 Debug_Ex
  * (UART1) TX 中断慢慢排空, 对控制链路零阻塞。生产者(线程) 写 head, 消费者(TX ISR)

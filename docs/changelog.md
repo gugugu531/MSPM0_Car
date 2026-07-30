@@ -40,8 +40,10 @@
   - Keil/AC6 构建 `0 Error(s), 0 Warning(s)`。**尚未上板验证。**
 - **SysConfig 新增 `Rpi_UART`（UART2，115200，TX PB15 / RX PA24）**，作为树莓派视觉链路的
   下行通道——球位置由树莓派检测后经此串口发给 MSPM0，协议见
-  [`docs/control-plan.md`](control-plan.md) §5.4。当前只有外设与引脚配置，**驱动尚未实现**；
-  与 `Debug_Ex/UART1` 的调试遥测是两条独立通道。
+  [`docs/control-plan.md`](control-plan.md) §5.4。现已实现 `bsp/rpi_uart`：UART2 RX/错误中断、
+  带末字节时刻的环形缓冲、11 字节帧 CRC/版本校验与逐字节重同步、SEQ/无效帧/龄统计、
+  速度信任恢复、60 ms 降级、200 ms 超时和按倾角模型前推；与 `Debug_Ex/UART1` 调试遥测
+  完全独立。Device Check 新增 `Rpi UART` 实时/统计页，并提供树莓派测试发送脚本。
 - **速度闭环由「纯 PI」改为「前馈 + PI 残差修正」**，依据 2026-07-29 上板遥测（14153 拍）：
   - 前馈用 Duty Sweep 实测的占空比→稳态轮速曲线反解，左右轮分开标定（`CHASSIS_FF_*`，
     10%~80% 区间拟合残差 < 2.4%），承担主出力；PI 只补残差。

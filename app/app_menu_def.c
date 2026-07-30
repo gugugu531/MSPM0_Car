@@ -17,6 +17,7 @@ static const MENU_ITEM device_check_items[] = {
     { .name = "Encoder",      .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_ENCODER },
     { .name = "Speed PID",    .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_SPEED_PID },
     { .name = "Duty Sweep",   .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_DUTY_SWEEP },
+    { .name = "Rpi UART",     .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_RPI_UART },
 };
 
 static const MENU_NODE device_check_menu = {

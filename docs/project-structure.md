@@ -83,6 +83,7 @@
 - `step_motor/`（摆杆步进开环控制 + QEI 位置读取）
 - `yahboom_track/`（Yahboom 8 路循线模块，I2C0，与 JY61P 共总线）
 - `debug_uart/`（Debug_Ex/UART1，非阻塞遥测输出）
+- `rpi_uart/`（Rpi_UART/UART2，树莓派球位置协议接收、诊断与测量前推）
 - `time/`
 
 该层禁止包含 `app`、`core`、`middleware` 头文件。需要基础时间或阻塞延时能力时，统一调用 `bsp/time`。

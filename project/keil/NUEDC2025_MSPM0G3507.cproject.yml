@@ -21,6 +21,7 @@ project:
         - ../../bsp/key
         - ../../bsp/motor
         - ../../bsp/oled
+        - ../../bsp/rpi_uart
         - ../../bsp/step_motor
         - ../../bsp/time
         - ../../bsp/yahboom_track
@@ -120,6 +121,7 @@ project:
         - file: ../../bsp/motor/hall_encoder.c
         - file: ../../bsp/motor/tb6612fng.c
         - file: ../../bsp/oled/oled.c
+        - file: ../../bsp/rpi_uart/rpi_uart.c
         - file: ../../bsp/step_motor/step_motor.c
         - file: ../../bsp/time/bsp_time.c
         - file: ../../bsp/yahboom_track/yahboom_track.c

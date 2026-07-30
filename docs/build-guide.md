@@ -189,8 +189,8 @@ armasm 语法，因此 MDK 6 有一条 `A1950W` 弃用警告；这是兼容性�
 
 - 上电后 OLED 显示 `Main Menu`，含赛题 H2～H6 五个任务入口与 `Device Check` 子菜单
 - 短按 UP/DOWN 移动选择、ENTER 进入、BACK 返回上级
-- `Device Check` 子菜单内 7 个自检（Gyro JY61P / Gray I2C / TB6612 / Step Motor /
-  Encoder / Speed PID / Duty Sweep）可进入并刷新数据
+- `Device Check` 子菜单内 8 个自检（Gyro JY61P / Gray I2C / TB6612 / Step Motor /
+  Encoder / Speed PID / Duty Sweep / Rpi UART）可进入并刷新数据
 - `Gray I2C` 进入后显示 8 路数字量二进制、`act` 触发数与 `ok/er`、`W/R/s` 诊断计数；
   断开传感器应显示 `READ FAIL` 且 `er` 递增
 - TB6612 自检短按发单次脉冲、左右轮编码器计数（`encL`/`encR`）随之变化

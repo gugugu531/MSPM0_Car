@@ -51,12 +51,13 @@ app ─► middleware ─► bsp
     `TIMER_0_INST_IRQHandler`（编码器采样定时器，20ms）
   - `bsp/imu/wit_sdk.c` → `I2C0_IRQHandler`（JY61P I2C 中断驱动状态机）
   - `bsp/debug_uart/debug_uart.c` → `Debug_Ex_INST_IRQHandler`（UART1，TX 环形缓冲排空 + RX 入环形缓冲）
+  - `bsp/rpi_uart/rpi_uart.c` → `Rpi_UART_INST_IRQHandler`（UART2，树莓派视觉帧入环形缓冲并记录到达时刻）
 - **`app` 持有需跨子系统分发或属应用调度的中断**：
   - `app/app_scheduler.c` → `SysTick_Handler`（1ms：`BSP_Time_TickInc` 时基递增 + `Key_Scan`
     按键消抖）。`tick_active` 门控确保初始化完成前不误触发。调度器时基即取自此。
 
-> UART 中断按同一原则归属：当前只启用 UART1（`Debug_Ex`），由 `bsp/debug_uart` 独占，
-> 故其 ISR 放在该 BSP 源文件内。TX 侧发遥测，RX 侧留给视觉板回传球位置。
-> 若将来该串口需向多个上层子系统分发命令，再上移到 app 层。
+> UART 中断按同一原则归属：UART1（`Debug_Ex`）由 `bsp/debug_uart` 独占，UART2
+> （`Rpi_UART`）由 `bsp/rpi_uart` 独占，故各自 ISR 放在对应 BSP 源文件内。UART1 TX 发文本
+> 遥测；树莓派球位置只走 UART2 RX，不与调试链路混用。
 
 > 新增外设时遵循同一原则：仅该驱动使用的中断放进对应 BSP 源文件；需要唤醒多个上层子系统或承担应用级调度的中断放进 `app`。不要在 `middleware` 里写"转发到下层驱动"的空壳 ISR 入口。

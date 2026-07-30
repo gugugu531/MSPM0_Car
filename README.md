@@ -23,7 +23,7 @@
 | 摆杆执行器 | 步进电机 + 驱动器 | STEP PA29（TIMG6）/ DIR PB14 / EN PB11 | `bsp/step_motor` |
 | 人机 | OLED + 独立按键 | I2C1 / GPIO | `bsp/oled`, `bsp/key` |
 | 调试遥测 | Debug_Ex | UART1 115200（PA8 TX / PA9 RX） | `bsp/debug_uart` |
-| 视觉链路 | 树莓派（球位置检测） | Rpi_UART 115200（PB15 TX / PA24 RX） | 驱动待实现 |
+| 视觉链路 | 树莓派（球位置检测） | Rpi_UART/UART2 115200（Pi TX → PA24 RX） | `bsp/rpi_uart` |
 
 ## 分层架构
 
@@ -75,6 +75,20 @@ SDK 固定为 `mspm0_sdk_2_10_00_04`，位于 `third_party/mspm0-sdk`。Keil 与
 
 ### Keil MDK 6 / VS Code
 
+0. 建议在工作区 `settings.json` 里配 `cmsis-csolution.exclude`：
+
+   ```json
+   "cmsis-csolution.exclude": "{**/third_party/**,**/out/**,**/tmp/**,**/Objects/**}"
+   ```
+
+   CMSIS 扩展按 `**/*.csolution.yml` 与 `**/*.uvprojx` 搜索工程，而 `third_party/mspm0-sdk`
+   里有 **1309 个** TI 示例 `.uvprojx`。加上这条后候选从 1311 个降到 2 个，扩展的工程发现
+   明显更快、更不容易认错活动 Solution。
+
+   > 若 `${command:cmsis-csolution.getCbuildRunFile}` 返回空串（表现为 `.vscode/tasks.json`
+   > 里的 pyocd 任务报 `argument --cbuild-run: expected one argument`），说明扩展当时没有
+   > 活动 Solution，按第 2 步手动激活即可。`.vscode/tasks.json` 也可以直接写死
+   > `out/<solution>+<target>.cbuild-run.yml` 绕开这个变量。
 1. 用 VS Code 打开仓库根目录。
 2. 打开 `project/keil/NUEDC2025_MSPM0G3507.csolution.yml`，将其设为活动 Solution。
 3. 等待 Keil Studio Pack 完成 CMSIS Pack 和工具环境解析。
@@ -90,6 +104,9 @@ AC6、CMSIS Toolbox、CMake 与 Ninja；需要时可右键该文件并执行 **A
   "AC6_TOOLCHAIN_6_22_0": "<KEIL>\\ARM\\ARMCLANG\\bin"
 }
 ```
+
+> 上面的 `\\` 在 JSON 里就是**一个**反斜杠，照抄时不要再加一层写成 `\\\\`——那样解析出来是
+> `D:\\Keil_v5\\ARM\\ARMCLANG\\bin`，扩展找不到编译器。
 
 本机 Keil 安装在 D 盘时，`<KEIL>` 例如 `D:\Keil_v5`。修改后执行
 `Developer: Reload Window`，再重新构建。成功日志应包含：
@@ -171,7 +188,7 @@ Pop-Location
 | `H4 Loaded A-B` | 要求 4：载球 A→B 直线循迹 |
 | `H5 Loaded Lap O` | 要求 5：目标 O 点载球整圈，当前只运行底盘 |
 | `H6 Loaded Any` | 要求 6：任意目标载球整圈，当前只运行底盘 |
-| `Device Check` | JY61P、Yahboom 灰度、TB6612、摆杆步进标定、编码器、速度 PID、占空比扫描 |
+| `Device Check` | JY61P、Yahboom 灰度、TB6612、摆杆步进标定、编码器、速度 PID、占空比扫描、Rpi UART |
 
 循迹页面按 `X1 → X8` 显示 Yahboom 归一化掩码：`1` 表示该路检测到黑线。
 H2/H5/H6 整圈任务按平均轮轴里程切换 `S1～S4`，弯道段使用差速前馈；Debug_Ex 的

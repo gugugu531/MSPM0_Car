@@ -23,6 +23,7 @@ extern const APP_TASK_DESC APP_CHK_STEP_MOTOR;    /**< 摆杆步进六模式页�
 extern const APP_TASK_DESC APP_CHK_ENCODER;       /**< 霍尔编码器计数/速度/里程。 */
 extern const APP_TASK_DESC APP_CHK_SPEED_PID;     /**< 双轮速度闭环 PID（主动，整定用）。 */
 extern const APP_TASK_DESC APP_CHK_DUTY_SWEEP;    /**< 开环占空比扫描, 查各占空比下编码器读速。 */
+extern const APP_TASK_DESC APP_CHK_RPI_UART;       /**< 树莓派球视觉 Rpi_UART/UART2 协议诊断。 */
 
 #ifdef __cplusplus
 }

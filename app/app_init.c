@@ -9,6 +9,7 @@
 #include "ti_msp_dl_config.h"
 #include "bsp_time.h"
 #include "debug_uart.h"
+#include "rpi_uart.h"
 #include "ui.h"
 #include "key.h"
 #include "chassis.h"
@@ -18,6 +19,7 @@
 /* 控制/UI 两个调度任务的周期，单位 ms。 */
 #define APP_CONTROL_PERIOD_MS 20U
 #define APP_UI_PERIOD_MS      50U
+#define APP_RPI_POLL_PERIOD_MS 2U
 
 /*
  * 步进电机的调度周期，取自驱动给出的值。
@@ -35,10 +37,16 @@ static void App_StepMotorTick(void){
     StepMotor_Tick(BSP_Time_GetMs());
 }
 
+/* UART2 ISR 只收字节；CRC、重同步和状态更新留在主循环上下文。 */
+static void App_RpiUartTick(void){
+    RpiUart_Poll();
+}
+
 void App_Init(void){
     SYSCFG_DL_init();
     BSP_Time_Init();
     DebugUart_Init();   /* 非阻塞 debug 串口(Debug_Ex/UART1): Speed PID 等遥测输出用。 */
+    RpiUart_Init();     /* 树莓派视觉专线 Rpi_UART/UART2：PA24 RX，115200 8N1。 */
 
     /*
      * Ui/Chassis 先于任何可能触发 SystemFault 的步骤初始化，
@@ -62,6 +70,7 @@ void App_Init(void){
     (void)Scheduler_AddTask(App_ControlTick, APP_CONTROL_PERIOD_MS);
     (void)Scheduler_AddTask(App_UiTick, APP_UI_PERIOD_MS);
     (void)Scheduler_AddTask(App_StepMotorTick, APP_STEP_TICK_PERIOD_MS);
+    (void)Scheduler_AddTask(App_RpiUartTick, APP_RPI_POLL_PERIOD_MS);
 
     /* 全部就绪后放开 SysTick 时基/按键扫描。 */
     Scheduler_EnableTick();
