@@ -44,6 +44,9 @@ python tools/visualizers/track_follow_viz.py --port COM7 --csv track.csv --log t
 
 # H3 静止守球实时遥测
 python tools/visualizers/ball_balance_viz.py --port COM7 --csv ball.csv --log ball_raw.txt
+
+# H3 S 曲线主机仿真（编译、运行全部场景并绘图）
+python tools/visualizers/scurve_sim_plot.py --build --run
 ```
 
 H3 图中同时显示 `xr/x` 原始/控制位置、`xref/vref/aref` 在线五次预瞄参考、实际水管角

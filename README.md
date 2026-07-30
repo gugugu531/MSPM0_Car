@@ -36,7 +36,7 @@ app ─► middleware ─► bsp
 
 - `app`：初始化、协作式调度器、状态机、菜单树与具体测试任务。
 - `core`：PID、滤波、运动学与纯角速度积分等纯计算能力。
-- `middleware`：组合 core 与 BSP 的系统能力（`ball_balance` / `chassis` / `line_follow` / `ui` / `fault`）。
+- `middleware`：组合 core 与 BSP 的系统能力（`ball_balance` / `ball_scurve` / `chassis` / `line_follow` / `ui` / `fault`）。
 - `bsp`：直接面向板级外设的驱动（见上表 + `time` / `common`）。
 - `board`：SysConfig 源文件与生成代码、启动/链接资源。
 - `third_party/mspm0-sdk`：TI 官方 MSPM0 SDK 2.10.00.04 submodule，供各工程使用相对路径。
@@ -186,6 +186,7 @@ Pop-Location
 |---|---|
 | `H2 Empty Lap` | 要求 2：空载高速整圈 |
 | `H3 Ball Static` | 要求 3 第一阶段：每拍重规划的五次终端约束、倾角动力学前馈与精确连杆查表，静止守住 0 cm；±5 cm 往返待实现 |
+| `H3 Ball SCurve` | 要求 3 的 O→+5 cm→−5 cm 前馈主导 S 曲线基线；以实机效果最佳的 `MSPM0_Car_SCurve_Profile` 当前工作树为准 |
 | `H4 Loaded A-B` | 要求 4：载球 A→B 直线循迹 |
 | `H5 Loaded Lap O` | 要求 5：目标 O 点载球整圈，当前只运行底盘 |
 | `H6 Loaded Any` | 要求 6：任意目标载球整圈，当前只运行底盘 |
@@ -261,6 +262,7 @@ python tools/checks/check_docs.py
   - JY61P：[`bsp_wit_sdk.md`](docs/interfaces/bsp_wit_sdk.md)
 - H 题控制方案（循迹 + 摆杆滚球的控制律与参数）：[`docs/control-plan.md`](docs/control-plan.md)
 - 静止稳球上板与机械标定：[`docs/ball-balance-bringup.md`](docs/ball-balance-bringup.md)
+- S 曲线滚球控制、参数与仿真：[`docs/ball-scurve.md`](docs/ball-scurve.md)
 - 摆杆步进电机上板标定流程：[`docs/step-motor-calibration.md`](docs/step-motor-calibration.md)
 - 当前待办和上板风险：[`docs/todo.md`](docs/todo.md)
 - K230 开发与远程部署流程（**2025E 历史资料**，2026H 视觉已改用树莓派）：
