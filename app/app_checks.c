@@ -224,29 +224,32 @@ static void ChkTb_Exit(void){
     (void)Chassis_Brake();
 }
 
-/* ======================= 摆杆步进电机标定（主动） ======================= */
+/* ======================= 摆杆步进电机（主动） ======================= */
 /*
- * 五个标定模式，ENTER 长按循环切换，BACK 退出整页。每个模式只覆盖
- * docs/step-motor-calibration.md 里的一到两项，并把该填回 step_motor.h 的那个数
- * 直接算好显示出来，免得在现场心算。
+ * 六个模式，ENTER 长按循环切换，BACK 退出整页。**进入本页落在 JOG**——点动是最常用
+ * 的操作；其余五个是标定模式，每个只覆盖 docs/step-motor-calibration.md 里的一到两项，
+ * 并把该填回 step_motor.h 的那个数直接算好显示出来，免得在现场心算。
  *
- *  1/5 RUN    持续正/反转（目标设到远处，被限位夹在边界上），ENTER 暂停。
+ *  1/6 JOG    点动对位。UP/DOWN **单击**各走一步，**长按**调步长（三档）；
+ *             屏上给编码器计数、步长（计数）与步长对应的轴角。
+ *             用来精确找位置，例如实测 STEP_MOTOR_ENC_LEVEL_COUNTS（水管水平位）。
+ *  2/6 RUN    持续正/反转（目标设到远处，被限位夹在边界上），ENTER 暂停。
  *             看 cnt 的增减方向、err 是否收敛、g 行的守护状态。
  *             → DIR 极性 STEP_MOTOR_BEAM_POSITIVE_DIR_HIGH（按 UP 看摆杆倒向）
  *             → 编码器方向 STEP_MOTOR_ENCODER_INVERT（按 UP 时 cnt 应增大）
- *  2/5 TURN   走 N 整圈后自动停。走完看轴上标记实际转过几圈：
+ *  3/6 TURN   走 N 整圈后自动停。走完看轴上标记实际转过几圈：
  *             → 细分数 STEP_MOTOR_MICROSTEP = 当前值 / 实际圈数
  *             ⚠ 装机后行程通常不足一圈，目标会被限位夹住（l4 显示 CLAMPED），
  *               这项标定得先拆下摆杆，或临时把 ENC_LIMIT_ENABLED 设 0 重编译。
- *  3/5 HAND   进入即断电，轴可手转；手转 N 圈后 cpr 栏就是实测每转计数。
+ *  4/6 HAND   进入即断电，轴可手转；手转 N 圈后 cpr 栏就是实测每转计数。
  *             → STEP_MOTOR_ENCODER_COUNTS_PER_REV
  *             进本模式轴应能拧动、回 RUN/TURN 应拧不动，据此定
  *             → STEP_MOTOR_BEAM_ENABLE_HIGH
- *  4/5 SWEEP  在软限位内**往复**跑，转速逐档上扫并记录 |err| 峰值。
+ *  5/6 SWEEP  在软限位内**往复**跑，转速逐档上扫并记录 |err| 峰值。
  *             不丢步时 err 稳定在跟踪误差附近，峰值明显跳高即已丢步，退一档：
  *             → STEP_MOTOR_MAX_STEP_FREQ_HZ 取 f 栏的值
  *             ⚠ 必须装上摆杆带真实负载测，空载能跑的频率挂上摆杆通常要打对折。
- *  5/5 SPAN   进入即断电，**用手**把摆杆推到两端机械极限，ENTER 交替打 A/B 点。
+ *  6/6 SPAN   进入即断电，**用手**把摆杆推到两端机械极限，ENTER 交替打 A/B 点。
  *             A/B 显示原始计数，直接抄进
  *             → STEP_MOTOR_ENC_HARD_MIN/MAX_COUNTS
  *             d 栏给出两点间的电机轴角，配合量角器读到的摆杆角 θ 得减速比 k = d/θ。
@@ -276,6 +279,29 @@ static const float sm_sweep_speed[] = {
 #define SM_RUN_SPEED_DEG_S 30.0f
 /* TURN 模式转速上限：慢一些，减小加减速带来的丢步，让圈数判读干净。 */
 #define SM_TURN_SPEED_DEG_S 45.0f
+/* JOG 模式转速上限：一步只有几度，慢一点看得清，也不至于冲过目标。 */
+#define SM_JOG_SPEED_DEG_S 20.0f
+
+/*
+ * JOG 的三档步长，单位编码器计数。
+ *
+ * 最细一档取「到位容差 + 3」而不是「一个微步」：一个微步是
+ * STEP_ANGLE_DEG / MICROSTEP = 0.225°，换算过来只有 1.25 个编码器计数，远小于伺服的
+ * 到位容差 STEP_MOTOR_POSITION_TOLERANCE_COUNTS（5）——那样的目标伺服直接判为已到位，
+ * 一个脉冲都不会发。**闭环下的「最小可指令位移」由到位容差决定，不是由细分数决定**，
+ * 所以这一档按容差派生，容差以后改了也不会失效。
+ *
+ * 中/粗两档按细档的 5 倍、15 倍取：软限位内可用行程只有几百个计数
+ * （SOFT_MAX - SOFT_MIN），粗档大约三四下就能从一端走到另一端。
+ */
+#define SM_JOG_STEP_FINE   (STEP_MOTOR_POSITION_TOLERANCE_COUNTS + 3)
+#define SM_JOG_STEP_MID    (SM_JOG_STEP_FINE * 5)
+#define SM_JOG_STEP_COARSE (SM_JOG_STEP_FINE * 15)
+
+static const int32_t sm_jog_step[] = {
+    SM_JOG_STEP_FINE, SM_JOG_STEP_MID, SM_JOG_STEP_COARSE
+};
+#define SM_JOG_STEP_COUNT ((uint8_t)(sizeof(sm_jog_step) / sizeof(sm_jog_step[0])))
 
 #define SM_TURN_MAX 10U
 #define SM_HAND_MAX 20U
@@ -284,7 +310,8 @@ static const float sm_sweep_speed[] = {
 #define SM_TELEMETRY_PERIOD_MS 20U
 
 typedef enum {
-    SM_MODE_RUN = 0,
+    SM_MODE_JOG = 0,     /* 进页默认落在这里：点动对位比标定常用得多。 */
+    SM_MODE_RUN,
     SM_MODE_TURN,
     SM_MODE_HAND,
     SM_MODE_SWEEP,
@@ -293,13 +320,15 @@ typedef enum {
 } SM_MODE;
 
 static const char *const sm_mode_tag[SM_MODE_MAX] = {
-    "SM 1/5 RUN", "SM 2/5 TURN", "SM 3/5 HAND", "SM 4/5 SWEEP", "SM 5/5 SPAN"
+    "SM 1/6 JOG",   "SM 2/6 RUN",   "SM 3/6 TURN",
+    "SM 4/6 HAND",  "SM 5/6 SWEEP", "SM 6/6 SPAN"
 };
 
 static SM_MODE  sm_mode;
 static uint32_t sm_last_ui;
 static uint32_t sm_last_telemetry;
 static bool     sm_running;
+static uint8_t  sm_jog_idx;          /* JOG：当前步长档索引。 */
 static uint8_t  sm_turn_target;      /* TURN：目标圈数。 */
 static uint8_t  sm_hand_turns;       /* HAND：操作者已手转的圈数。 */
 static uint8_t  sm_sweep_idx;        /* SWEEP：当前转速档索引。 */
@@ -410,6 +439,32 @@ static void ChkStepMotor_Render(const char *action){
     int32_t cnt = StepMotor_GetEncoderCount();
 
     switch (sm_mode){
+    case SM_MODE_JOG: {
+        int32_t step = sm_jog_step[sm_jog_idx];
+        int32_t tgt  = StepMotor_GetTargetCount();
+
+        SmLineI(l1, "cnt ", cnt);
+        SmLineI(l2, "step ", step);
+        /* 这一步实际转多少度——「最小移动角度」看的就是这一行。 */
+        SmLineF(l3, "sdeg ", StepMotor_CountsToDeg(step), 2U);
+        /*
+         * 目标已经顶在软限位上时优先报限位：JOG 点不动最常见的原因就是这个，
+         * 光在动作栏闪一下不够（200ms 后就被 idle 覆盖了）。
+         * 限位关掉时这两个边界不生效，此时别误报——条件里的宏是编译期常量。
+         */
+        if ((STEP_MOTOR_ENC_LIMIT_ENABLED != 0U) &&
+            (tgt >= STEP_MOTOR_ENC_SOFT_MAX_COUNTS)){
+            SmLineS(l4, "LIMIT max");
+        } else if ((STEP_MOTOR_ENC_LIMIT_ENABLED != 0U) &&
+                   (tgt <= STEP_MOTOR_ENC_SOFT_MIN_COUNTS)){
+            SmLineS(l4, "LIMIT min");
+        } else {
+            SmLineS(l4, SmGuardText());
+        }
+        hint = "UP/DN 1step LNG size";
+        break;
+    }
+
     case SM_MODE_TURN: {
         int32_t rel = SmRelCount();
         SmLineI(l1, "N ", (int32_t)sm_turn_target);
@@ -522,6 +577,7 @@ static void ChkStepMotor_Enter(void){
 
     sm_cnt_base       = StepMotor_GetEncoderCount();
     sm_sweep_forward  = true;
+    sm_jog_idx        = 0U;    /* 从最细一档起，误触也只走一两度。 */
     sm_turn_target    = 1U;
     sm_hand_turns     = 1U;
     sm_sweep_idx      = 0U;
@@ -541,7 +597,7 @@ static void ChkStepMotor_Enter(void){
                      (unsigned)STEP_MOTOR_MAX_STEP_FREQ_HZ,
                      (int)STEP_MOTOR_MICROSTEP,
                      (int)STEP_MOTOR_ENCODER_COUNTS_PER_REV);
-    ChkStepMotor_SetMode(SM_MODE_RUN);
+    ChkStepMotor_SetMode(SM_MODE_JOG);
     ChkStepMotor_Render("idle");
 }
 
@@ -550,6 +606,63 @@ static const char *ChkStepMotor_HandleKeys(KEY_EVENT ev_up,
                                            KEY_EVENT ev_dn,
                                            KEY_EVENT ev_en){
     switch (sm_mode){
+    case SM_MODE_JOG: {
+        /*
+         * 长按调步长：UP 变粗、DOWN 变细。到头**不回绕**——回绕的话一按过头就从最细
+         * 直接跳到最粗，下一次点动会把摆杆甩出去一大截。
+         */
+        if (ev_up == KEY_EVENT_LONG_PRESS){
+            if (sm_jog_idx + 1U < SM_JOG_STEP_COUNT){
+                sm_jog_idx++;
+                return "step+";
+            }
+            return NULL;
+        }
+        if (ev_dn == KEY_EVENT_LONG_PRESS){
+            if (sm_jog_idx > 0U){
+                sm_jog_idx--;
+                return "step-";
+            }
+            return NULL;
+        }
+
+        /*
+         * 走几步：单击 1 步，双击 2 步。
+         *
+         * 双击也认，是因为按键驱动的短按要等过双击窗口（KEY_DOUBLE_CLICK_MS）才上报——
+         * 手快连点两下只会得到一个 DOUBLE_CLICK，不认的话第二下就白按了。
+         */
+        int32_t n = 0;
+        if      (ev_up == KEY_EVENT_SHORT_PRESS) { n =  1; }
+        else if (ev_up == KEY_EVENT_DOUBLE_CLICK){ n =  2; }
+        else if (ev_dn == KEY_EVENT_SHORT_PRESS) { n = -1; }
+        else if (ev_dn == KEY_EVENT_DOUBLE_CLICK){ n = -2; }
+
+        if (n != 0){
+            /*
+             * 以**目标**为基准累加，不是以实测计数：连点时上一步往往还没走完，
+             * 按实测算会把没走完的那段吃掉，点 n 次走不满 n 步。
+             */
+            int32_t want = StepMotor_GetTargetCount() + (n * sm_jog_step[sm_jog_idx]);
+            (void)StepMotor_SetSpeedLimit(SM_JOG_SPEED_DEG_S);
+            (void)StepMotor_MoveToCount(want);
+            sm_running = true;
+            /* 目标被限幅夹掉要直说，否则看着像按键没响应。 */
+            if (StepMotor_GetTargetCount() != want){
+                return "CLAMPED";
+            }
+            return (n > 0) ? "jog +" : "jog -";
+        }
+
+        if (ev_en == KEY_EVENT_SHORT_PRESS){
+            /* 连点攒下的目标一次撤掉：就地停住，目标钉回当前实测位置。 */
+            (void)StepMotor_Stop();
+            sm_running = false;
+            return "STOP";
+        }
+        break;
+    }
+
     case SM_MODE_TURN:
         if (ev_up == KEY_EVENT_SHORT_PRESS && sm_turn_target < SM_TURN_MAX){
             sm_turn_target++;
@@ -702,6 +815,16 @@ static APP_TASK_STATUS ChkStepMotor_Tick(float dt){
         action = sm_mode_tag[sm_mode];
     } else {
         action = ChkStepMotor_HandleKeys(ev_up, ev_dn, ev_en);
+    }
+
+    /*
+     * JOG：走到位就落回 idle。点动只有几度，不清这个标志遥测会一直按运动期的
+     * 20ms 高频打，串口刷得看不清；这里不报 DONE，一步一条太吵。
+     */
+    if ((sm_mode == SM_MODE_JOG) && sm_running){
+        if (StepMotor_IsAtTarget()){
+            sm_running = false;
+        }
     }
 
     /* TURN：走到目标自动停。目标在 GO 时就设死了，这里只负责判到位并报 DONE。 */

@@ -128,4 +128,9 @@ uint32_t StepMotor_GetStepFrequencyHz(void);
 - **丢步看 `GetPositionErrorCount()`**：不丢步时它稳定在跟踪误差附近
   （约 `速度 ÷ SERVO_KP` 换算的计数），丢步时电机没走到、编码器落后，它会超出该值
   且不收敛。原先的开环 `est` / `slip` 已删除——闭环下 `err` 是更直接的同一件事。
+- **最小可指令位移由到位容差决定，不由细分数决定。**
+  `POSITION_TOLERANCE_COUNTS`（5）以内的位移，伺服直接判为已到位，一个脉冲都不会发。
+  一个微步是 `STEP_ANGLE_DEG / MICROSTEP` = 0.225°，只有 1.25 个编码器计数——**开环意义
+  上的最小步在闭环下是发不出去的**。要点动，位移得给到 `容差 + 余量`
+  （`Device Check -> Step Motor` 的 `JOG` 模式最细一档就是这么派生的）。
 - 软限位防的是控制器和操作者的失误，**不能替代物理限位开关**。

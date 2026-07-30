@@ -18,6 +18,9 @@
 > （当前位置 = 坐标系原点），延时后自动抬升到 `STARTUP_LIFT_TARGET_COUNTS` 并保持。
 > 行程边界写死在 `step_motor.h` 宏里，**限位全程有效、无运行期开关**——要越过软限位量
 > 机械行程就失能手推（`Device Check -> Step Motor` 的 `HAND`/`SPAN` 模式）。
+> 该页共六个模式、进页落在 `JOG`（点动，UP/DOWN 单击走一步、长按调步长三档）。
+> **最小可指令位移由到位容差决定，不由细分数决定**——一个微步只有 1.25 个编码器计数，
+> 小于 `POSITION_TOLERANCE_COUNTS`（5），伺服会直接判为已到位、一个脉冲都不发。
 > `StepMotor_Tick()` 由调度器每 10ms 跑位置伺服 + 抬升状态机 + 越界纠正，
 > **不调它电机不会动**。详见
 > [`docs/step-motor-calibration.md`](docs/step-motor-calibration.md) #11 与
