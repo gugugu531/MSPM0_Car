@@ -2,12 +2,13 @@
 """H3 静止守球 Debug_Ex 实时遥测可视化与 CSV 记录。
 
 固件在 ``H3 Ball Static`` 中经 Debug_Ex/UART1（115200 8N1）输出 ``[BALL]``。
-窗口显示原始/控制位置、实际/目标速度、停止坐标、估计加速度，以及水管角和控制状态。
+窗口显示在线五次参考、终端约束残差、模型加速度，以及水管角和控制分量。
 
 用法：
   python ball_balance_viz.py --list
   python ball_balance_viz.py --port COM7
   python ball_balance_viz.py --port COM7 --csv ball.csv --log ball_raw.txt
+  python ball_balance_viz.py --port COM7 --capture-only --duration 20 --csv ball.csv --log ball_raw.txt
 
 热键：空格=暂停/继续，c=清空，q=退出。
 依赖：pip install pyserial matplotlib
@@ -28,11 +29,14 @@ from serial.tools import list_ports
 
 MAX_SAMPLES = 7200
 DEFAULT_WINDOW_S = 15.0
-FLOAT_FIELDS = ("xr", "x", "v", "age", "stop", "vref", "ev", "beam", "fb",
-                "us", "ua", "acc", "rate", "u", "bias", "fps")
-INT_FIELDS = ("st", "ok", "cnt", "tgt", "sat", "brk", "stuck", "set", "mv",
-              "vv", "px", "edge", "deg", "hold", "q", "guard", "gap", "inv",
-              "crc", "drop")
+FLOAT_FIELDS = ("xr", "x", "v", "age", "et", "xref", "vref", "aref", "T",
+                "look", "pv", "pa", "a0", "ia", "iv", "rx", "rv", "ra", "ex",
+                "ev", "aff", "fbp", "fbv", "fb", "rate", "u", "bias", "beam",
+                "motor", "mspd", "mkp", "fps")
+INT_FIELDS = ("st", "ok", "cnt", "tgt", "sf", "arr", "cc", "ctr", "sdt",
+              "smax", "lim", "sat", "rl", "brk", "stuck", "set", "mv", "vv",
+              "px", "edge", "deg", "hold", "q", "guard", "gap", "inv", "crc",
+              "drop")
 FIELDS = FLOAT_FIELDS + INT_FIELDS
 CSV_COLS = ("pc_time", "t", *FIELDS)
 
@@ -140,8 +144,8 @@ def serial_reader(port, baud, telemetry, log_file, stop_event):
 
 
 def build_figure():
-    figure, (position_ax, velocity_ax, acceleration_ax, angle_ax) = plt.subplots(
-        4, 1, figsize=(12, 10), sharex=True)
+    figure, (position_ax, velocity_ax, constraint_ax, acceleration_ax,
+             angle_ax) = plt.subplots(5, 1, figsize=(12, 12), sharex=True)
     try:
         figure.canvas.manager.set_window_title("H3 静止守球遥测")
     except Exception:
@@ -152,8 +156,8 @@ def build_figure():
     lines["xr"], = position_ax.plot(
         [], [], color="#7f7f7f", lw=1.1, alpha=0.8, label="树莓派原始位置")
     lines["x"], = position_ax.plot([], [], color="#1f77b4", lw=1.6, label="控制位置")
-    lines["stop"], = position_ax.plot(
-        [], [], color="#ff7f0e", lw=1.2, ls="--", label="停止坐标")
+    lines["xref"], = position_ax.plot(
+        [], [], color="#ff7f0e", lw=1.2, ls="--", label="预瞄参考位置")
     position_ax.axhline(0.0, color="black", lw=0.8)
     position_ax.axhspan(-2.0, 2.0, color="#2ca02c", alpha=0.12, label="稳定区 ±2 mm")
     position_ax.set_ylabel("位置 x (mm)")
@@ -165,28 +169,41 @@ def build_figure():
     velocity_ax.axhspan(-5.0, 5.0, color="#2ca02c", alpha=0.12, label="稳定区 ±5 mm/s")
     velocity_ax.set_ylabel("速度 v (mm/s)")
 
-    lines["acc"], = acceleration_ax.plot(
-        [], [], color="#2ca02c", lw=1.4, label="低通加速度估计")
+    lines["rx"], = constraint_ax.plot(
+        [], [], color="#1f77b4", lw=1.3, label="终端位置残差 rx (mm)")
+    lines["rv"], = constraint_ax.plot(
+        [], [], color="#d62728", lw=1.2, ls="--", label="终端速度残差 rv (mm/s)")
+    lines["ra"], = constraint_ax.plot(
+        [], [], color="#2ca02c", lw=1.1, ls=":", label="终端加速度残差 ra (mm/s²)")
+    constraint_ax.axhline(0.0, color="black", lw=0.8)
+    constraint_ax.set_ylabel("终端残差")
+
+    lines["a0"], = acceleration_ax.plot(
+        [], [], color="#1f77b4", lw=1.3, label="由实际水管角得到的初始加速度")
+    lines["aref"], = acceleration_ax.plot(
+        [], [], color="#d62728", lw=1.4, ls="--", label="预瞄参考加速度")
     acceleration_ax.axhline(0.0, color="black", lw=0.8)
     acceleration_ax.set_ylabel("加速度 (mm/s²)")
 
     for key, label, style, color in (
             ("beam", "实际水管角", "-", "#1f77b4"),
             ("u", "命令角", "-", "#d62728"),
-            ("fb", "总反馈角", "--", "#ff7f0e"),
-            ("us", "速度环反馈", ":", "#8c564b"),
+            ("aff", "模型前馈角", "--", "#ff7f0e"),
+            ("fbp", "位置反馈", ":", "#8c564b"),
+            ("fbv", "速度反馈", ":", "#2ca02c"),
             ("bias", "零偏", ":", "#9467bd")):
         lines[key], = angle_ax.plot([], [], style, color=color, lw=1.4, label=label)
     angle_ax.axhline(0.0, color="black", lw=0.8)
-    angle_ax.axhline(3.0, color="gray", ls=":", lw=0.8)
-    angle_ax.axhline(-3.0, color="gray", ls=":", lw=0.8, label="基础控制限角 ±3.0°")
+    angle_ax.axhline(4.0, color="gray", ls=":", lw=0.8)
+    angle_ax.axhline(-4.0, color="gray", ls=":", lw=0.8, label="基础控制限角 ±4.0°")
     angle_ax.set_ylabel("水管角 (deg)")
     angle_ax.set_xlabel("设备运行时间 (s)")
 
-    for axis in (position_ax, velocity_ax, acceleration_ax, angle_ax):
+    for axis in (position_ax, velocity_ax, constraint_ax, acceleration_ax, angle_ax):
         axis.grid(True, alpha=0.3)
         axis.legend(loc="upper right", fontsize=8, ncol=2)
-    return figure, (position_ax, velocity_ax, acceleration_ax, angle_ax), lines
+    return figure, (position_ax, velocity_ax, constraint_ax, acceleration_ax,
+                    angle_ax), lines
 
 
 def main(argv=None):
@@ -198,6 +215,10 @@ def main(argv=None):
     parser.add_argument("--csv", help="保存解析后的 CSV")
     parser.add_argument("--log", help="保存全部原始串口行")
     parser.add_argument("--list", action="store_true", help="列出串口后退出")
+    parser.add_argument("--capture-only", action="store_true",
+                        help="不打开窗口，只做有界串口记录")
+    parser.add_argument("--duration", type=float, default=20.0,
+                        help="--capture-only 的记录时长，单位秒")
     args = parser.parse_args(argv)
 
     if args.list:
@@ -208,6 +229,9 @@ def main(argv=None):
         return 2
     if args.window <= 0.0:
         print("--window 必须大于 0。", file=sys.stderr)
+        return 2
+    if args.duration <= 0.0:
+        print("--duration 必须大于 0。", file=sys.stderr)
         return 2
 
     log_file = open(args.log, "w", encoding="utf-8") if args.log else None
@@ -221,6 +245,28 @@ def main(argv=None):
                               args=(args.port, args.baud, telemetry, log_file, stop_event),
                               daemon=True)
     reader.start()
+    if args.capture_only:
+        try:
+            stop_event.wait(args.duration)
+        finally:
+            stop_event.set()
+            reader.join(timeout=1.5)
+            if log_file is not None:
+                log_file.close()
+            if csv_file is not None:
+                csv_file.close()
+        t_ms, _, latest = telemetry.snapshot()
+        if latest:
+            print(
+                f"[系统] 已记录 {len(t_ms)} 帧，设备跨度 "
+                f"{(t_ms[-1] - t_ms[0]) * 0.001:.2f} s；"
+                f"末帧 x={latest['x']:+.2f} mm v={latest['v']:+.2f} mm/s "
+                f"beam={latest['beam']:+.3f} deg bias={latest['bias']:+.3f} deg")
+            return 0
+        print(f"[系统] {args.duration:.1f} s 内没有收到完整 [BALL] 数据帧。",
+              file=sys.stderr)
+        return 1
+
     figure, axes, lines = build_figure()
     state = {"paused": False}
 
@@ -254,9 +300,14 @@ def main(argv=None):
             st_text = state_name[st] if 0 <= st < len(state_name) else str(st)
             figure.suptitle(
                 f"{st_text}  x={latest['x']:+.2f} mm  v={latest['v']:+.1f} mm/s  "
-                f"vref={latest['vref']:+.1f} stop={latest['stop']:+.1f} mm  "
+                f"vref={latest['vref']:+.1f} aref={latest['aref']:+.0f} "
+                f"T/look={latest['T']:.2f}/{latest['look']:.2f}s "
                 f"u={latest['u']:+.2f}° beam={latest['beam']:+.2f}°  "
-                f"rate={latest['rate']:.1f}°/s acc={latest['acc']:+.0f} mm/s²  "
+                f"motor={latest['mspd']:+.0f}°/s sf={latest['sf']}Hz "
+                f"ARR/CC={latest['arr']}/{latest['cc']} tick={latest['sdt']}/{latest['smax']}ms  "
+                f"∫a={latest['ia']:+.1f}/ {-latest['v']:+.1f} "
+                f"∫v={latest['iv']:+.1f}/{latest['et']:+.1f} mm "
+                f"lim={latest['lim']} rate={latest['rate']:.0f}°/s "
                 f"brake={latest['brk']} stuck={latest['stuck']} stable={latest['set']}  |  "
                 f"age={latest['age']:.0f} ms fps={latest['fps']:.1f} Q={latest['q']} "
                 f"mv={latest['mv']} px={latest['px']} gap={latest['gap']} inv={latest['inv']} "

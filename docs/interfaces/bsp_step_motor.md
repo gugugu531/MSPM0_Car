@@ -54,6 +54,7 @@ MoveToCount(target) ──► 限幅 ──► target_counts
 | `STEP_MOTOR_ENCODER_COUNTS_PER_REV` | 2000 | QEI 每转计数（2 倍频，已实测） |
 | `STEP_MOTOR_MAX_SPEED_DEG_S` | 240 | 速度硬上限 |
 | `STEP_MOTOR_SERVO_KP` | 3.0 | 伺服比例增益，1/s |
+| `STEP_MOTOR_SERVO_KP_MAX` | 12.0 | 运行期增益上限；H3 可临时提高，退出恢复默认值 |
 | `STEP_MOTOR_POSITION_TOLERANCE_COUNTS` | 0 | 到位容差，**已压到 0**（只接受精确相等） |
 | `STEP_MOTOR_SERVO_RESUME_COUNTS` | 6 | 回差带：已到位后漂过它才重新出脉冲，须 > 容差 |
 | `STEP_MOTOR_SERVO_MIN_SPEED_DEG_S` | 5.0 | 末端最低出力速度，防蠕动 |
@@ -98,6 +99,9 @@ void                   StepMotor_AbortStartup(void);
 /* 诊断 */
 float    StepMotor_GetSpeed(void);            /* 伺服实际下发速度，只读 */
 uint32_t StepMotor_GetStepFrequencyHz(void);
+uint32_t StepMotor_GetPwmLoadValue(void);      /* TIMG6 LOAD */
+uint32_t StepMotor_GetPwmCompareValue(void);   /* TIMG6 CC0 */
+uint32_t StepMotor_GetPwmCounterValue(void);   /* TIMG6 CTR */
 ```
 
 ### 刻意不提供的能力

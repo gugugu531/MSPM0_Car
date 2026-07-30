@@ -29,9 +29,9 @@
 
 ## middleware
 
-- `ball_balance.h`：纯计算的一维滚球非线性串级控制；停止距离修正后由位置生成目标速度，
-  速度内环使用 `tanh` 软饱和，按位置和制动方向调度角速度，并输出截停与低通加速度诊断。
-  正倾角定义为使球向正方向加速。
+- `ball_balance.h`：纯计算的一维滚球在线终端约束控制；每拍从实测位置、速度和水管角
+  重规划到 `(target,0,0)` 的五次轨迹，以倾角动力学前馈配合轻量位置/速度反馈，
+  并提供受监督零偏学习、限斜率与截停诊断。正倾角定义为使球向正方向加速。
 - `chassis.h`：底盘组合服务（开环占空比 + 每轮速度闭环 PID），详细说明见 `docs/interfaces/middleware_chassis.md`。
 - `line_follow.h`：标准化八路黑线观测、巡线偏差计算、PID/陀螺修正和底盘输出，详细说明见
   `docs/interfaces/middleware_line_follow.md`。

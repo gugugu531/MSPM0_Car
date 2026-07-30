@@ -46,8 +46,12 @@ python tools/visualizers/track_follow_viz.py --port COM7 --csv track.csv --log t
 python tools/visualizers/ball_balance_viz.py --port COM7 --csv ball.csv --log ball_raw.txt
 ```
 
-H3 图中同时显示 `xr` 原始位置、`x` 匀速时延补偿位置、`stop` 停止坐标和 `vref` 目标速度；
-标题栏的 `brake/stuck` 用于判断扰动制动与工具截停状态。
+H3 图中同时显示 `xr/x` 原始/控制位置、`xref/vref/aref` 在线五次预瞄参考、实际水管角
+得到的 `a0`，以及 `aff/fbp/fbv` 前馈、位置反馈和速度反馈。约束面板显示终端残差
+`rx/rv/ra`；CSV 中 `ia/iv` 应分别等于 `-v` 和目标位移 `et`，可直接检查加速度/速度积分
+约束。`motor/beam` 同时记录电机相对水平轴角和查表水管角，供连杆与加速度关系辨识；
+`lim/brk/stuck` 用于判断继承超限状态、扰动制动与工具截停。`mspd/mkp/sf` 与
+`arr/cc/ctr/sdt/smax` 用于核对步进位置环、TIMG6 PWM 装填和调度及时性。
 
 航向角使用固件 `[TRK]` 遥测中的 `yaw` 字段，在独立曲线和窗口顶部显示，并随其他字段写入 CSV。
 
