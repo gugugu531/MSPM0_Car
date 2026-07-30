@@ -243,7 +243,7 @@ extern "C" {
  * 水管水平位的计数,即「从上电参考位到水平位」的距离。不是限位,
  * 是上电抬升的默认目标,也是上层摆杆角闭环该用的零点。
  */
-#define STEP_MOTOR_ENC_LEVEL_COUNTS 154
+#define STEP_MOTOR_ENC_LEVEL_COUNTS 206
 
 /* ===== 上电自动抬升 ===== */
 /*
