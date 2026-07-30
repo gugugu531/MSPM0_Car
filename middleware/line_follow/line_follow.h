@@ -21,8 +21,13 @@ extern "C" {
 #define LINE_FOLLOW_SENSOR_COUNT                       8U
 /** 参与巡线的灰度通道掩码；bit0..7 分别对应逻辑通道 0..7。 */
 #define LINE_FOLLOW_ACTIVE_SENSOR_MASK                 0xFFU
-/** 传感器位置到控制误差的缩放系数；当前 10 表示横向偏移一格约产生 10 单位误差。 */
-#define LINE_FOLLOW_DEFAULT_POSITION_SCALE             10.0f
+/** X1 与 X8 感光中心的实测横向间距，单位 mm。 */
+#define LINE_FOLLOW_SENSOR_SPAN_MM                     80.0f
+/** 八路等距分布，相邻感光中心间距为 80/7≈11.43 mm。 */
+#define LINE_FOLLOW_SENSOR_PITCH_MM \
+    (LINE_FOLLOW_SENSOR_SPAN_MM / (LINE_FOLLOW_SENSOR_COUNT - 1U))
+/** 传感器坐标已直接使用 mm，默认不再做抽象量纲缩放。 */
+#define LINE_FOLLOW_DEFAULT_POSITION_SCALE             1.0f
 /** 无转向修正时左右轮共同使用的基础占空比，单位 %。 */
 #define LINE_FOLLOW_DEFAULT_BASE_DUTY                  34.0f
 /** 左右轮最终占空比绝对值上限，单位 %。 */
@@ -41,7 +46,7 @@ extern "C" {
 /**
  * 滤波误差的中心死区半宽。
  *
- * 当前 POSITION_SCALE=10 时，10 约等于一个传感器间距；绝对误差小于该值时不修正。
+ * 当前误差单位为 mm；10 mm 略小于一个 11.43 mm 传感器间距。
  */
 #define LINE_FOLLOW_ERROR_DEADBAND                     10.0f
 
@@ -72,7 +77,7 @@ extern "C" {
  * 它利用 gz 反馈补偿左右电机/轮径不对称，并为航向变化提供阻尼。
  */
 #define LINE_FOLLOW_DEFAULT_GYRO_STAB_ENABLED          true
-/** 灰度误差到期望航向角速度的比例系数；误差 10 对应约 30 deg/s。 */
+/** 灰度误差到期望航向角速度的比例系数；横向误差 10 mm 对应约 30 deg/s。 */
 #define LINE_FOLLOW_DEFAULT_GYRO_LINE_KP               3.0f
 /** 航向角速度误差到占空比修正量的比例系数。 */
 #define LINE_FOLLOW_DEFAULT_GYRO_STAB_KP               0.20f
@@ -101,7 +106,7 @@ typedef struct {
 typedef struct {
     /** 基础占空比，左右轮在无偏差时使用该输出。 */
     float base_duty;
-    /** 传感器横向位置到控制误差的缩放系数。 */
+    /** 传感器毫米坐标到控制误差的缩放系数；默认 1，保留供标定。 */
     float sensor_position_scale;
     /** 左右轮最终输出绝对值限幅。 */
     float output_limit;
@@ -111,7 +116,7 @@ typedef struct {
     PID_CONFIG pid_config;
     /** 陀螺增稳串级使能；true 时灰度出 omega_ref，false 时使用纯位置 PID。 */
     bool gyro_stab_enabled;
-    /** 外环增益：灰度偏差（缩放后）到期望航向角速度 omega_ref。 */
+    /** 外环增益：灰度横向误差（默认单位 mm）到期望航向角速度 omega_ref。 */
     float gyro_line_kp;
     /** 内环增益：角速度误差（omega_ref-gz）到差速修正。 */
     float gyro_stab_kp;
@@ -129,7 +134,7 @@ typedef struct {
     uint8_t level_mask;
     /** 启用通道中检测到黑线的数量。 */
     uint8_t black_count;
-    /** 缩放后的原始巡线误差，负值表示线偏左，正值表示线偏右。 */
+    /** 原始巡线横向误差，单位 mm；负值表示线偏左，正值表示线偏右。 */
     float error;
     /** 当前控制路径计算得到的转向修正量；可能来自陀螺串级或纯位置 PID。 */
     float correction;
@@ -163,9 +168,19 @@ void LineFollow_Reset(void);
 BSP_STATUS LineFollow_UpdateDetectedMask(uint8_t detected_mask, float dt_s);
 
 /**
+ * @brief 使用归一化黑线掩码推进控制器，但不驱动底盘。
+ * @param detected_mask bit0..7 对应 X1..X8；1=检测到黑线。
+ * @param dt_s 控制周期，单位 s。
+ * @param out 返回本拍控制结果。
+ * @note 供需要自行把循迹修正映射到轮速目标的 app 状态机使用。
+ */
+BSP_STATUS LineFollow_EvaluateDetectedMask(uint8_t detected_mask, float dt_s,
+                                           LINE_FOLLOW_OUTPUT *out);
+
+/**
  * @brief 将标准化数字电平转换为黑线掩码和质心误差，不使用控制器运行状态。
  * @param input 灰度观测，0=黑线、1=非黑线。
- * @param position_scale 传感器位置到误差的缩放系数。
+ * @param position_scale 传感器毫米坐标到误差的缩放系数；传 1 时输出单位 mm。
  * @param out 纯观测结果。
  */
 BSP_STATUS LineFollow_Observe(const LINE_FOLLOW_INPUT *input,

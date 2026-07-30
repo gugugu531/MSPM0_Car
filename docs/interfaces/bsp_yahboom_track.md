@@ -43,7 +43,7 @@ void YahboomTrack_GetDiag(uint32_t *read_fail, uint32_t *write_fail,
 
 - 已接入 `Main Menu -> Device Check -> Gray I2C`，页面显示 X1→X8 的检测位图、有效路数、
   累计成功/失败次数与 I2C 诊断计数。
-- `Line Follow` 使用 `ReadDetectedMask()`；app 负责共享总线的时间片，middleware 只接收标准化
+- H2/H4/H5/H6 使用 `ReadDetectedMask()`；app 负责共享总线的时间片，middleware 只接收标准化
   掩码，不依赖本阻塞驱动。
 - Device Check 页面只读状态，不会主动进入校准模式；校准需显式调用接口并配合板载按键。
 

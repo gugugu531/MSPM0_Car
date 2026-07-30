@@ -27,7 +27,11 @@ static const MENU_NODE device_check_menu = {
 
 /* --- 根菜单 --- */
 static const MENU_ITEM root_items[] = {
-    { .name = "Line Follow",   .kind = MENU_ENTRY_TASK,    .u.task = &APP_LINE_FOLLOW_TEST },
+    { .name = "H2 Empty Lap",  .kind = MENU_ENTRY_TASK,    .u.task = &APP_H2_EMPTY_LAP },
+    { .name = "H3 Ball Static", .kind = MENU_ENTRY_TASK,   .u.task = &APP_H3_BALL_STATIC },
+    { .name = "H4 Loaded A-B", .kind = MENU_ENTRY_TASK,    .u.task = &APP_H4_LOADED_STRAIGHT },
+    { .name = "H5 Loaded Lap O", .kind = MENU_ENTRY_TASK,  .u.task = &APP_H5_LOADED_LAP_CENTER },
+    { .name = "H6 Loaded Any", .kind = MENU_ENTRY_TASK,    .u.task = &APP_H6_LOADED_LAP_TARGET },
     { .name = "Device Check",  .kind = MENU_ENTRY_SUBMENU, .u.submenu = &device_check_menu },
 };
 

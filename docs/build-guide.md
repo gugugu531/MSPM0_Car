@@ -187,7 +187,7 @@ armasm 语法，因此 MDK 6 有一条 `A1950W` 弃用警告；这是兼容性�
 
 编译通过后仍需上板验证（当前 app 框架，详见 `docs/app-design.md`）：
 
-- 上电后 OLED 显示 `Main Menu`，含 `Line Follow` 与 `Device Check` 两个入口
+- 上电后 OLED 显示 `Main Menu`，含赛题 H2～H6 五个任务入口与 `Device Check` 子菜单
 - 短按 UP/DOWN 移动选择、ENTER 进入、BACK 返回上级
 - `Device Check` 子菜单内 7 个自检（Gyro JY61P / Gray I2C / TB6612 / Step Motor /
   Encoder / Speed PID / Duty Sweep）可进入并刷新数据

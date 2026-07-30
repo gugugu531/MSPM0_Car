@@ -119,6 +119,7 @@ SysConfig CLI 重新生成。
 - `jlink/`：J-Link 烧录、探测、寄存器读取和恢复脚本。
 - `k230/`：K230 raw REPL、Wi-Fi 远程部署、RTSP 查看、CanMV MCP 辅助和数据集工具；
   `probes/` 保存有界诊断脚本，`runners/` 保存经 raw REPL 启动板端文件的薄包装。
-- `visualizers/`：底盘串口遥测可视化；当前包含 `[SPD]` 速度闭环和 `[STR]` 直行测试工具。
+- `visualizers/`：底盘串口遥测可视化；当前包含 `[SPD]` 速度闭环、`[STR]` 直行测试和
+  `[TRK]` H 题循迹工具。
 
 详细入口、依赖和维护边界见 [`../tools/README.md`](../tools/README.md)。

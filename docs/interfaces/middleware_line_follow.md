@@ -42,7 +42,9 @@ typedef struct {
 /* 传感器与输出。 */
 #define LINE_FOLLOW_SENSOR_COUNT                       GRAYSCALE_SENSOR_CHANNEL_COUNT
 #define LINE_FOLLOW_ACTIVE_SENSOR_MASK                 0xFFU
-#define LINE_FOLLOW_DEFAULT_POSITION_SCALE             10.0f
+#define LINE_FOLLOW_SENSOR_SPAN_MM                     80.0f
+#define LINE_FOLLOW_SENSOR_PITCH_MM                    (80.0f / 7U)
+#define LINE_FOLLOW_DEFAULT_POSITION_SCALE             1.0f
 #define LINE_FOLLOW_DEFAULT_BASE_DUTY                  34.0f
 #define LINE_FOLLOW_DEFAULT_OUTPUT_LIMIT               100.0f
 #define LINE_FOLLOW_DEFAULT_DIFFERENTIAL_LIMIT         16.0f
@@ -73,7 +75,7 @@ typedef struct {
 
 ## 配置与输出
 
-`LINE_FOLLOW_CONFIG` 保存基础占空比、误差缩放、输出/差值限幅、退化 PID 配置及陀螺串级
+`LINE_FOLLOW_CONFIG` 保存基础占空比、毫米坐标标定缩放、输出/差值限幅、退化 PID 配置及陀螺串级
 配置。
 
 ```c
@@ -90,7 +92,8 @@ typedef struct {
 
 - `level_mask`：本拍数字电平掩码；置 1 表示对应通道未检测到黑线，与 Device Check 一致。
 - `black_count`：启用通道中检测到黑线（`level==0`）的数量。
-- `error`：未经 EMA/死区处理的缩放误差。
+- `error`：未经 EMA/死区处理的横向误差，单位 mm。X1/X8 感光中心相距 80 mm，八路等距
+  分布，因此相邻通道间距约 11.43 mm，通道坐标为 `-40…+40 mm`。
 - `correction`：陀螺串级或退化 PID 产生并经过差值限幅的修正量。
 - `line_lost`：没有任何启用通道检测到线。
 
@@ -120,6 +123,12 @@ typedef struct {
 丢线时返回 `BSP_STATUS_NOT_READY`，不自行刹车或搜索。JY61P 的初始化与
 `JY61P_I2C_Poll()`、Yahboom 阻塞读取及共享 I2C0 分时仍由 app 任务负责。
 
+### `BSP_STATUS LineFollow_EvaluateDetectedMask(...)`
+
+与 `LineFollow_UpdateDetectedMask()` 使用相同的灰度、陀螺和控制器状态，但只返回本拍
+`LINE_FOLLOW_OUTPUT`，不向底盘写占空比。需要保持纵向平均轮速、把循迹修正映射成反对称
+左右轮速度差的任务使用该接口；当前 H 题一圈循迹任务即走此路径。
+
 ### `LineFollow_Observe()` / `LineFollow_ObserveDetectedMask()`
 
 两个接口只计算 `level_mask`、`black_mask`、命中数量和质心误差，不读硬件、不持有 PID 状态。
@@ -137,7 +146,7 @@ BSP_STATUS LineFollow_Compute(const LINE_FOLLOW_INPUT *input,
 纯计算入口，不读取灰度硬件、不驱动底盘。处理顺序为：
 
 ```text
-level[]（0=黑线）→ 线中心均值 → 缩放误差 → EMA → 中心死区
+level[]（0=黑线）→ 毫米坐标线中心均值 → EMA → 中心死区
            → 陀螺串级或位置 PID → 差值限幅 → 差速混控
 ```
 

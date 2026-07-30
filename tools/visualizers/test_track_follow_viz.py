@@ -1,0 +1,47 @@
+"""track_follow_viz 的纯解析/计算单元测试。"""
+import unittest
+
+from track_follow_viz import TrackTelemetry, filtered_measured_accel, parse_track_line
+
+
+SAMPLE = (
+    "[TRK] t=1250 req=5 seg=S2 st=FOLLOW sen=1 mask=18 n=2 err=0.0 cor=-1.25 "
+    "vc=0.123 ac=0.120 vl=0.110 vr=0.120 dl=31.0 dr=32.0 "
+    "sl=0.150 sr=0.151 s=0.151 rem=0.000 drop=0"
+)
+
+
+class TrackFollowVizTest(unittest.TestCase):
+    def test_parse_data_line(self):
+        parsed = parse_track_line(SAMPLE)
+        self.assertEqual(parsed["t"], 1250)
+        self.assertEqual(parsed["req"], 5)
+        self.assertEqual(parsed["seg"], "S2")
+        self.assertEqual(parsed["st"], "FOLLOW")
+        self.assertEqual(parsed["mask"], 0x18)
+        self.assertAlmostEqual(parsed["ac"], 0.12)
+
+    def test_ignore_event_line(self):
+        self.assertIsNone(parse_track_line("[TRK] finish detected t=23000 s=5.95"))
+
+    def test_reject_missing_field(self):
+        with self.assertRaises(ValueError):
+            parse_track_line("[TRK] t=1 st=FOLLOW")
+
+    def test_measured_acceleration(self):
+        accel = filtered_measured_accel(
+            [0, 100, 200], [0.0, 0.1, 0.2], [0.0, 0.1, 0.2], alpha=1.0)
+        self.assertEqual(len(accel), 3)
+        self.assertAlmostEqual(accel[1], 1.0)
+        self.assertAlmostEqual(accel[2], 1.0)
+
+    def test_enter_event_clears_previous_run(self):
+        telemetry = TrackTelemetry()
+        telemetry.feed_line(SAMPLE)
+        self.assertTrue(telemetry.snapshot()["t"])
+        telemetry.feed_line("[TRK] --- enter rear->axle=0.070m ---")
+        self.assertFalse(telemetry.snapshot()["t"])
+
+
+if __name__ == "__main__":
+    unittest.main()

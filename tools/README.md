@@ -35,6 +35,11 @@ python tools/k230/k230_video_viewer.py rtsp://<K230-IP>:8554/test --stats-frames
 # 底盘遥测
 python tools/visualizers/straight_test_viz.py --list
 python tools/visualizers/speed_pid_viz.py --list
+python tools/visualizers/track_follow_viz.py --list
+
+# H 题循迹实时遥测（默认加速度告警线 ±0.12 m/s²）
+python tools/visualizers/track_follow_viz.py --port COM7
+python tools/visualizers/track_follow_viz.py --port COM7 --csv track.csv --log track_raw.txt
 ```
 
 K230 的完整连接和恢复流程见 [`../docs/k230-development.md`](../docs/k230-development.md) 与

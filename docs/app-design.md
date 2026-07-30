@@ -30,7 +30,11 @@ run-to-completion 任务。
 
 ```
 Main Menu
-├── Line Follow         (task)   Yahboom 8 路循线 + 角速度内环, 黑线位图/误差/双轮占空比, 丢线刹停
+├── H2 Empty Lap        (task)   要求 2：空载高速整圈
+├── H3 Ball Static      (task)   要求 3：滚球静态往返；水管未接入时为安全占位
+├── H4 Loaded A-B       (task)   要求 4：载球 A→B，记录通过 B 的时间
+├── H5 Loaded Lap O     (task)   要求 5：目标 O 点载球整圈；当前只运行底盘
+├── H6 Loaded Any       (task)   要求 6：任意目标载球整圈；当前只运行底盘
 └── Device Check        (submenu)
     ├── Gyro JY61P      (task)   JY61P 陀螺/姿态/温度 + 诊断计数
     ├── Gray I2C        (task)   Yahboom I2C 版(0x12), 8 路数字量 + 成功/失败与 I2C 诊断计数
@@ -40,6 +44,10 @@ Main Menu
     ├── Speed PID       (task)   双轮速度闭环, 按键给目标 + 目标/实测对比, 整定用, 抬轮提示
     └── Duty Sweep      (task)   开环占空比阶梯, 查各占空比下编码器读速(死区/噪声诊断), 抬轮提示
 ```
+
+H2/H5/H6 的整圈任务内部继续按轮轴平均里程运行 `S1(A→B) → S2(B→C) → S3(C→D) →
+S4(D→A)` 单向状态机；`[TRK] seg` 输出当前段。直线段无曲率前馈，右半圆段叠加差速轮速
+前馈，灰度与陀螺闭环在四段内持续工作。
 
 导航按键（仍仅短按）：`UP/DOWN` 移动、`ENTER` 进入子菜单/任务、`BACK` 返回上级。
 

@@ -12,7 +12,8 @@
 #include <stddef.h>
 
 static const float sensor_position[LINE_FOLLOW_SENSOR_COUNT] = {
-    -3.5f, -2.5f, -1.5f, -0.5f, 0.5f, 1.5f, 2.5f, 3.5f,
+    -40.0000f, -28.5714f, -17.1429f, -5.7143f,
+      5.7143f,  17.1429f,  28.5714f, 40.0000f,
 };
 
 static bool LineFollow_IsSensorEnabled(uint8_t index){
@@ -81,7 +82,12 @@ void LineFollow_Reset(void){
     line_follow_output.line_lost = true;
 }
 
-BSP_STATUS LineFollow_UpdateDetectedMask(uint8_t detected_mask, float dt_s){
+BSP_STATUS LineFollow_EvaluateDetectedMask(uint8_t detected_mask, float dt_s,
+                                           LINE_FOLLOW_OUTPUT *out){
+    if (out == NULL){
+        return BSP_STATUS_NULL;
+    }
+
     LineFollow_EnsureInitialized();
 
     LINE_FOLLOW_INPUT input;
@@ -98,13 +104,23 @@ BSP_STATUS LineFollow_UpdateDetectedMask(uint8_t detected_mask, float dt_s){
         }
     }
 
-    BSP_STATUS status = LineFollow_Compute(&input, dt_s, omega_deg_s,
-                                           &line_follow_output);
+    BSP_STATUS status = LineFollow_Compute(&input, dt_s, omega_deg_s, out);
     if (status != BSP_STATUS_OK){
         return status;
     }
-    if (line_follow_output.line_lost){
+    line_follow_output = *out;
+    if (out->line_lost){
         return BSP_STATUS_NOT_READY;
+    }
+
+    return BSP_STATUS_OK;
+}
+
+BSP_STATUS LineFollow_UpdateDetectedMask(uint8_t detected_mask, float dt_s){
+    BSP_STATUS status = LineFollow_EvaluateDetectedMask(
+        detected_mask, dt_s, &line_follow_output);
+    if (status != BSP_STATUS_OK){
+        return status;
     }
 
     return Chassis_SetDuty(line_follow_output.left_duty,
@@ -186,7 +202,7 @@ BSP_STATUS LineFollow_Compute(const LINE_FOLLOW_INPUT *input,
         return BSP_STATUS_OK;
     }
 
-    /* 多路命中时取横向位置均值：负值表示线偏左，正值表示线偏右。 */
+    /* 多路命中时取横向位置均值，单位 mm：负值表示线偏左，正值表示线偏右。 */
     out->error = observation.error;
 
     /* 原始误差保存在 out；滤波和死区后的 control_error 进入控制律。 */
