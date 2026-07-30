@@ -50,7 +50,7 @@ MoveToCount(target) ──► 限幅 ──► target_counts
 | 宏 | 默认 | 说明 |
 |---|---|---|
 | `STEP_MOTOR_STEP_ANGLE_DEG` | 1.8 | 电机固有步距角 |
-| `STEP_MOTOR_MICROSTEP` | 8.0 | 细分数，**须与驱动器拨码一致**（已实测） |
+| `STEP_MOTOR_MICROSTEP` | 32.0 | 细分数 = **步进精细度**，**须与驱动器拨码一致** |
 | `STEP_MOTOR_ENCODER_COUNTS_PER_REV` | 2000 | QEI 每转计数（2 倍频，已实测） |
 | `STEP_MOTOR_MAX_SPEED_DEG_S` | 240 | 速度硬上限 |
 | `STEP_MOTOR_SERVO_KP` | 3.0 | 伺服比例增益，1/s |
@@ -131,10 +131,14 @@ uint32_t StepMotor_GetStepFrequencyHz(void);
   且不收敛。原先的开环 `est` / `slip` 已删除——闭环下 `err` 是更直接的同一件事。
 - **最小可指令位移由到位容差决定，不由细分数决定。**
   `POSITION_TOLERANCE_COUNTS`（2）以内的位移，伺服直接判为已到位，一个脉冲都不会发。
-  一个微步是 `STEP_ANGLE_DEG / MICROSTEP` = 0.225°，只有 1.25 个编码器计数——**开环意义
-  上的最小步在闭环下是发不出去的**。要点动，位移得给到 `容差 + 余量`
-  （`Device Check -> Step Motor` 的 `JOG` 模式最细一档就是这么派生的）。
-  提高细分数不会改善这一点（微步本来就比容差细），细节见标定手册「精细度的三道闸」。
+  一个微步是 `STEP_ANGLE_DEG / MICROSTEP` = 0.05625°（×32），只有 0.3125 个编码器计数
+  ——**开环意义上的最小步在闭环下是发不出去的**。要点动，位移得给到 `2 × 容差 + 1`
+  （`Device Check -> Step Motor` 的 `JOG` 最细一档就是这么派生的；`2×` 是因为伺服停下时的
+  残余误差与行进方向同号，换向会把它抵掉）。
+- **步进精细度与定位精细度是两件独立的事。** 前者 = 一个微步走多远，由**驱动器拨码**定
+  （固件只能跟随 `MICROSTEP`），管的是运动平顺度；后者 = 停下时离目标多远，由到位容差定，
+  管的是落点准不准。提高细分不会让定位更准（微步本就比容差细），细节见标定手册
+  「精细度：两件独立的事」。
 - **到位判定带回差**：进门看 `POSITION_TOLERANCE_COUNTS`（2）、出门看
   `SERVO_RESUME_COUNTS`（6）。这样「停多准」和「漂多少才重新动」是两个独立参数，
   收紧前者不会引出末端抖动。`IsAtTarget()` 直接返回该状态，不另算一遍；
