@@ -286,10 +286,11 @@ static const float sm_sweep_speed[] = {
  * JOG 的三档步长，单位编码器计数。
  *
  * 最细一档不是「一个微步」：一个微步是 STEP_ANGLE_DEG / MICROSTEP = 0.05625°（×32），
- * 换算过来只有 0.3125 个编码器计数，远小于伺服的到位容差
- * STEP_MOTOR_POSITION_TOLERANCE_COUNTS（2）——那样的目标伺服直接判为已到位，一个脉冲
+ * 换算过来只有 0.3125 个编码器计数，小于伺服的到位容差
+ * STEP_MOTOR_POSITION_TOLERANCE_COUNTS（1）——那样的目标伺服直接判为已到位，一个脉冲
  * 都不会发。**闭环下的「最小可指令位移」由到位容差决定，不是由细分数决定**；
  * 提高细分只让每一步更细（步进精细度），不会让定位落点更准。
+ * 编码器计数（0.18°）就是这条链的物理地板，容差已经压到它头上了。
  *
  * 取 `2 × 容差 + 1` 而不是「容差 + 1」，是为了让**换向后的第一下也一定动**：
  *
@@ -301,16 +302,18 @@ static const float sm_sweep_speed[] = {
  *   取「容差 + 1」的话换向后 |err| 恰好等于 1 ≤ 容差，伺服判为已到位——**换向第一下
  *   必然是死键**，而且是确定性的，不是偶发。
  *
- * 中/粗两档按细档的 5 倍、15 倍取：软限位内可用行程只有几百个计数
- * （SOFT_MAX - SOFT_MIN），粗档几下就能从一端走到另一端。
+ * 中/粗两档取细档的 8 倍、25 倍。倍数是按**绝对步长**倒推的，不是随手取的：软限位内
+ * 可用行程只有 SOFT_MAX - SOFT_MIN ≈ 410 计数，粗档 75 计数意味着五六下能从一端走到
+ * 另一端，中档 24 计数是「看得见但不过头」的调整量。容差以后再变，这两档跟着变，
+ * 倍数可能就得重挑一次。
  *
  * ⚠ 单次点动落点有 ±容差 的不确定度（换向后的第一下实际只走 `步长 − 容差`），
  *   但**位置不会累积误差**：点动加的是目标而不是实测位置，目标每次精确加一个步长，
  *   落点偏差不进下一步。
  */
 #define SM_JOG_STEP_FINE   ((2 * STEP_MOTOR_POSITION_TOLERANCE_COUNTS) + 1)
-#define SM_JOG_STEP_MID    (SM_JOG_STEP_FINE * 5)
-#define SM_JOG_STEP_COARSE (SM_JOG_STEP_FINE * 15)
+#define SM_JOG_STEP_MID    (SM_JOG_STEP_FINE * 8)
+#define SM_JOG_STEP_COARSE (SM_JOG_STEP_FINE * 25)
 
 static const int32_t sm_jog_step[] = {
     SM_JOG_STEP_FINE, SM_JOG_STEP_MID, SM_JOG_STEP_COARSE

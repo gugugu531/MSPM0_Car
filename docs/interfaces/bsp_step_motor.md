@@ -54,7 +54,7 @@ MoveToCount(target) ──► 限幅 ──► target_counts
 | `STEP_MOTOR_ENCODER_COUNTS_PER_REV` | 2000 | QEI 每转计数（2 倍频，已实测） |
 | `STEP_MOTOR_MAX_SPEED_DEG_S` | 240 | 速度硬上限 |
 | `STEP_MOTOR_SERVO_KP` | 3.0 | 伺服比例增益，1/s |
-| `STEP_MOTOR_POSITION_TOLERANCE_COUNTS` | 2 | 到位容差，**定位精细度的直接上限** |
+| `STEP_MOTOR_POSITION_TOLERANCE_COUNTS` | 1 | 到位容差，**定位精细度的直接上限**，已压到编码器分辨率 |
 | `STEP_MOTOR_SERVO_RESUME_COUNTS` | 6 | 回差带：已到位后漂过它才重新出脉冲，须 > 容差 |
 | `STEP_MOTOR_SERVO_MIN_SPEED_DEG_S` | 5.0 | 末端最低出力速度，防蠕动 |
 | `STEP_MOTOR_SERVO_DEFAULT_SPEED_LIMIT_DEG_S` | 90 | 速度上限的上电默认值 |
@@ -130,17 +130,20 @@ uint32_t StepMotor_GetStepFrequencyHz(void);
   （约 `速度 ÷ SERVO_KP` 换算的计数），丢步时电机没走到、编码器落后，它会超出该值
   且不收敛。原先的开环 `est` / `slip` 已删除——闭环下 `err` 是更直接的同一件事。
 - **最小可指令位移由到位容差决定，不由细分数决定。**
-  `POSITION_TOLERANCE_COUNTS`（2）以内的位移，伺服直接判为已到位，一个脉冲都不会发。
+  `POSITION_TOLERANCE_COUNTS`（1）以内的位移，伺服直接判为已到位，一个脉冲都不会发。
   一个微步是 `STEP_ANGLE_DEG / MICROSTEP` = 0.05625°（×32），只有 0.3125 个编码器计数
   ——**开环意义上的最小步在闭环下是发不出去的**。要点动，位移得给到 `2 × 容差 + 1`
-  （`Device Check -> Step Motor` 的 `JOG` 最细一档就是这么派生的；`2×` 是因为伺服停下时的
-  残余误差与行进方向同号，换向会把它抵掉）。
+  = 3 计数 = 0.54°（`Device Check -> Step Motor` 的 `JOG` 最细一档就是这么派生的；
+  `2×` 是因为伺服停下时的残余误差与行进方向同号，换向会把它抵掉）。
+  容差 1 = 编码器分辨率，**这一环已经压到物理地板**（误差是整数计数，再往下只剩
+  「精确相等」）。
 - **步进精细度与定位精细度是两件独立的事。** 前者 = 一个微步走多远，由**驱动器拨码**定
   （固件只能跟随 `MICROSTEP`），管的是运动平顺度；后者 = 停下时离目标多远，由到位容差定，
   管的是落点准不准。提高细分不会让定位更准（微步本就比容差细），细节见标定手册
   「精细度：两件独立的事」。
-- **到位判定带回差**：进门看 `POSITION_TOLERANCE_COUNTS`（2）、出门看
+- **到位判定带回差**：进门看 `POSITION_TOLERANCE_COUNTS`（1）、出门看
   `SERVO_RESUME_COUNTS`（6）。这样「停多准」和「漂多少才重新动」是两个独立参数，
-  收紧前者不会引出末端抖动。`IsAtTarget()` 直接返回该状态，不另算一遍；
+  收紧前者不会引出末端抖动——`RESUME` 挡的是摆杆自重下沉，与定位精度无关，所以容差
+  收到 1 时它刻意不跟着收。`IsAtTarget()` 直接返回该状态，不另算一遍；
   **新目标一下发即清掉到位状态**，所以回差不会吃掉小位移指令。
 - 软限位防的是控制器和操作者的失误，**不能替代物理限位开关**。
