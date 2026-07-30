@@ -164,8 +164,6 @@ static void StepMotor_ApplySpeed(float speed_deg_per_s){
         step_frequency = STEP_MOTOR_MAX_STEP_FREQ_HZ;
     }
 
-    StepMotor_SetDirection(speed_deg_per_s);
-
     /* 四舍五入取周期，减少低速端的量化偏差。 */
     uint32_t period = (STEP_MOTOR_STEP_TIMER_CLK_HZ + (step_frequency / 2U)) / step_frequency;
     if (period > (STEP_MOTOR_MAX_ARR + 1U)){
@@ -176,6 +174,15 @@ static void StepMotor_ApplySpeed(float speed_deg_per_s){
     }
 
     DL_TimerG_stopCounter(motor_pwm_timer);
+    /*
+     * DIR 必须在**停了脉冲之后**才翻。
+     *
+     * 反向时若上一拍的脉冲还在跑（伺服没经过到位带、直接换向就会这样），在计数器运行
+     * 中改 DIR 等于让驱动器在一个 STEP 周期内看到方向跳变，那一步走哪边取决于跳变落在
+     * 周期的哪个位置；驱动器还都要求 DIR 先于 STEP 边沿建立一段时间。停了再翻，同时
+     * 借后面几条寄存器写作为建立时间。
+     */
+    StepMotor_SetDirection(speed_deg_per_s);
     DL_TimerG_setLoadValue(motor_pwm_timer, period - 1U);
     DL_TimerG_setCaptureCompareValue(motor_pwm_timer, period / 2U, motor_pwm_channel);
     /* 先配好再放开输出，避免起停瞬间挤出半个周期的毛刺。 */
