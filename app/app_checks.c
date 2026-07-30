@@ -286,13 +286,16 @@ static const float sm_sweep_speed[] = {
  * JOG 的三档步长，单位编码器计数。
  *
  * 最细一档取「到位容差 + 3」而不是「一个微步」：一个微步是
- * STEP_ANGLE_DEG / MICROSTEP = 0.225°，换算过来只有 1.25 个编码器计数，远小于伺服的
- * 到位容差 STEP_MOTOR_POSITION_TOLERANCE_COUNTS（5）——那样的目标伺服直接判为已到位，
+ * STEP_ANGLE_DEG / MICROSTEP = 0.225°，换算过来只有 1.25 个编码器计数，小于伺服的
+ * 到位容差 STEP_MOTOR_POSITION_TOLERANCE_COUNTS（2）——那样的目标伺服直接判为已到位，
  * 一个脉冲都不会发。**闭环下的「最小可指令位移」由到位容差决定，不是由细分数决定**，
  * 所以这一档按容差派生，容差以后改了也不会失效。
  *
  * 中/粗两档按细档的 5 倍、15 倍取：软限位内可用行程只有几百个计数
- * （SOFT_MAX - SOFT_MIN），粗档大约三四下就能从一端走到另一端。
+ * （SOFT_MAX - SOFT_MIN），粗档几下就能从一端走到另一端。
+ *
+ * ⚠ 单次点动落点有 ±容差 的不确定度，但**位置不会累积误差**：点动加的是目标而不是
+ *   实测位置，目标每次精确加一个步长，落点偏差不进下一步。
  */
 #define SM_JOG_STEP_FINE   (STEP_MOTOR_POSITION_TOLERANCE_COUNTS + 3)
 #define SM_JOG_STEP_MID    (SM_JOG_STEP_FINE * 5)

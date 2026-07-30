@@ -20,7 +20,10 @@
 > 机械行程就失能手推（`Device Check -> Step Motor` 的 `HAND`/`SPAN` 模式）。
 > 该页共六个模式、进页落在 `JOG`（点动，UP/DOWN 单击走一步、长按调步长三档）。
 > **最小可指令位移由到位容差决定，不由细分数决定**——一个微步只有 1.25 个编码器计数，
-> 小于 `POSITION_TOLERANCE_COUNTS`（5），伺服会直接判为已到位、一个脉冲都不发。
+> 小于 `POSITION_TOLERANCE_COUNTS`（2），伺服会直接判为已到位、一个脉冲都不发。
+> 提高细分数（拨码）对定位精细度没有帮助，只让低速更平顺。到位判定**带回差**：
+> 进门看容差（2）、出门看 `SERVO_RESUME_COUNTS`（6），使"停得准"与"漂多少才重新动"
+> 解耦；`IsAtTarget()` 直接返回该状态。三道闸的分析见标定手册「精细度的三道闸」。
 > `StepMotor_Tick()` 由调度器每 10ms 跑位置伺服 + 抬升状态机 + 越界纠正，
 > **不调它电机不会动**。详见
 > [`docs/step-motor-calibration.md`](docs/step-motor-calibration.md) #11 与

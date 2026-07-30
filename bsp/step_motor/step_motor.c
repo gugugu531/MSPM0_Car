@@ -41,6 +41,17 @@ static int32_t  target_counts;          /* 目标位置,已过限幅。 */
 static float    speed_limit_deg_s = STEP_MOTOR_SERVO_DEFAULT_SPEED_LIMIT_DEG_S;
 static float    servo_speed_deg_s;      /* 伺服本拍下发的速度(只读诊断)。 */
 static bool     driver_enabled;         /* 驱动器 EN 当前状态。 */
+/*
+ * 伺服的到位状态,带回差。
+ *
+ * 进入靠 POSITION_TOLERANCE_COUNTS(紧),退出靠 SERVO_RESUME_COUNTS(松)。
+ * 拆成两个阈值是为了让"停得准"不再以"漂一点就补偿"为代价:摆杆带重力负载,
+ * 单阈值下把到位带收紧就会在末端形成补偿-下沉的极限环。
+ *
+ * 这也是 IsAtTarget() 的返回值——查询和伺服共用同一个状态,不会出现
+ * "报到位了但还在出脉冲"。
+ */
+static bool     servo_at_target = true;
 static uint32_t last_step_freq_hz;      /* 最近一次实际应用的步进频率(限幅后)。 */
 
 /* ===== QEI 编码器状态 ===== */
@@ -251,7 +262,8 @@ BSP_STATUS StepMotor_Init(void){
     encoder_accum    = 0;
 
     /* 目标 = 0 = 刚清零的当前位置:误差为零,伺服不会自己动起来。 */
-    target_counts = 0;
+    target_counts   = 0;
+    servo_at_target = true;
 
     guard_state = STEP_MOTOR_LIMIT_ON ? STEP_MOTOR_GUARD_OK : STEP_MOTOR_GUARD_DISABLED;
     guard_recover_start_ms = 0U;
@@ -332,6 +344,11 @@ static BSP_STATUS StepMotor_MoveToCountInternal(int32_t counts, bool from_auto){
     (void)StepMotor_SetEnabled(true);
 
     target_counts = StepMotor_ClampCount(counts);
+    /*
+     * 新目标一律清掉到位状态,回差只在"停住不动"时挡漂移,不能挡指令——
+     * 不清的话,一条小于 SERVO_RESUME_COUNTS 的点动指令会被当成漂移直接忽略。
+     */
+    servo_at_target = false;
     return BSP_STATUS_OK;
 }
 
@@ -342,6 +359,8 @@ BSP_STATUS StepMotor_MoveToCount(int32_t counts){
 BSP_STATUS StepMotor_Stop(void){
     /* 目标钉在当前实测位置:下一拍伺服算出的误差就是 0,不会又走起来。 */
     target_counts = StepMotor_GetEncoderCount();
+    /* 就地停住按定义就是"到了",顺手置位,免得下一拍前 IsAtTarget() 还报未到位。 */
+    servo_at_target = true;
     StepMotor_HaltPulse();
     return BSP_STATUS_OK;
 }
@@ -368,10 +387,8 @@ int32_t StepMotor_GetPositionErrorCount(void){
 }
 
 bool StepMotor_IsAtTarget(void){
-    int32_t error = StepMotor_GetPositionErrorCount();
-
-    return (error <= STEP_MOTOR_POSITION_TOLERANCE_COUNTS) &&
-           (error >= -STEP_MOTOR_POSITION_TOLERANCE_COUNTS);
+    /* 直接报伺服的到位状态,不另算一遍——回差带下"算一遍"必然与伺服的判断不一致。 */
+    return servo_at_target;
 }
 
 /* ===== 位置伺服 ===== */
@@ -385,14 +402,29 @@ static void StepMotor_ServoTick(void){
         return;
     }
 
-    int32_t error = StepMotor_GetPositionErrorCount();
+    int32_t error   = StepMotor_GetPositionErrorCount();
+    int32_t abs_err = (error < 0) ? -error : error;
 
-    /* 到位:停脉冲。保持通电,靠保持力矩把摆杆按在目标上。 */
-    if ((error <= STEP_MOTOR_POSITION_TOLERANCE_COUNTS) &&
-        (error >= -STEP_MOTOR_POSITION_TOLERANCE_COUNTS)){
-        if (servo_speed_deg_s != 0.0f){
-            StepMotor_HaltPulse();
+    /*
+     * 到位判定带回差:进门看紧阈值,出门看松阈值。
+     *
+     * 已到位时要漂过 SERVO_RESUME_COUNTS 才重新出脉冲——摆杆带重力负载,停脉冲后
+     * 靠保持力矩顶着会下沉一点,单阈值下这一点下沉就会触发补偿,补完又沉,末端形成
+     * 极限环。分开之后"停多准"由 POSITION_TOLERANCE_COUNTS 决定、"漂多少才动"由
+     * SERVO_RESUME_COUNTS 决定,收紧前者不再以抖动为代价。
+     */
+    if (servo_at_target){
+        if (abs_err <= STEP_MOTOR_SERVO_RESUME_COUNTS){
+            /* 到位:停脉冲。保持通电,靠保持力矩把摆杆按在目标上。 */
+            if (servo_speed_deg_s != 0.0f){
+                StepMotor_HaltPulse();
+            }
+            return;
         }
+        servo_at_target = false;
+    } else if (abs_err <= STEP_MOTOR_POSITION_TOLERANCE_COUNTS){
+        servo_at_target = true;
+        StepMotor_HaltPulse();
         return;
     }
 
