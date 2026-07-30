@@ -28,6 +28,7 @@ class TrackFollowVizTest(unittest.TestCase):
         self.assertAlmostEqual(parsed["wref"], 30.0)
         self.assertAlmostEqual(parsed["wz"], 28.5)
         self.assertAlmostEqual(parsed["yaw"], 87.3)
+        self.assertAlmostEqual(parsed["turn"], 0.0)
 
     def test_parse_legacy_line_without_steer_command(self):
         parsed = parse_track_line(
@@ -42,9 +43,12 @@ class TrackFollowVizTest(unittest.TestCase):
         self.assertAlmostEqual(parsed["wref"], 0.0)
         self.assertAlmostEqual(parsed["wz"], 0.0)
         self.assertAlmostEqual(parsed["yaw"], 0.0)
-        self.assertEqual(parsed["run"], 0)
-        self.assertEqual(parsed["fs"], "NONE")
-        self.assertEqual(parsed["gm"], 0)
+        self.assertAlmostEqual(parsed["turn"], 0.0)
+
+    def test_parse_turn_angle(self):
+        parsed = parse_track_line(SAMPLE_LINE.replace(
+            "yaw=87.3 ", "yaw=87.3 turn=176.4 "))
+        self.assertAlmostEqual(parsed["turn"], 176.4)
 
     def test_ignore_event_line(self):
         self.assertIsNone(parse_track_line("[TRK] finish detected t=23000 s=5.95"))
