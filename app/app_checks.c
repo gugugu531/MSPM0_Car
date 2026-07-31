@@ -917,6 +917,144 @@ static void ChkStepMotor_Exit(void){
     sm_running = false;
 }
 
+/* ============================ 临时水管变节奏往复 ============================ */
+
+/*
+ * 以进页时的姿态为中心，三档依次等待 3/2/1 s 后运动。
+ * 35/70/105 计数在名义水平位附近约对应水管 1/2/3°；连杆非线性
+ * 使它们只是上板观察档位，不是精密角度指令。底层软限位始终生效。
+ */
+#define PIPE_SWING_STAGE_COUNT 3U
+#define PIPE_SWING_SPEED_DEG_S 90.0f
+#define PIPE_SWING_UI_PERIOD_MS 100U
+
+static const uint32_t pipe_swing_interval_ms[PIPE_SWING_STAGE_COUNT] = {
+    3000U, 2000U, 1000U
+};
+static const int32_t pipe_swing_offset_counts[PIPE_SWING_STAGE_COUNT] = {
+    35, 70, 105
+};
+
+static int32_t pipe_swing_center;
+static int32_t pipe_swing_target;
+static uint32_t pipe_swing_last_move;
+static uint32_t pipe_swing_last_ui;
+static uint8_t pipe_swing_stage;
+static bool pipe_swing_positive;
+
+static int32_t ChkPipeSwing_ClampTarget(int32_t target){
+    if (target < STEP_MOTOR_ENC_SOFT_MIN_COUNTS){
+        return STEP_MOTOR_ENC_SOFT_MIN_COUNTS;
+    }
+    if (target > STEP_MOTOR_ENC_SOFT_MAX_COUNTS){
+        return STEP_MOTOR_ENC_SOFT_MAX_COUNTS;
+    }
+    return target;
+}
+
+static void ChkPipeSwing_Render(uint32_t now){
+    char l1[20];
+    char l2[20];
+    char l3[20];
+    char l4[20];
+    char l5[20];
+    uint8_t n;
+
+    n = PutStr(l1, "next ");
+    AppFmt_I32(&l1[n], (int32_t)pipe_swing_interval_ms[pipe_swing_stage] / 1000);
+    while (l1[n] != '\0'){ n++; }
+    n += PutStr(&l1[n], "s ");
+    n += PutStr(&l1[n], pipe_swing_positive ? "+" : "-");
+    AppFmt_I32(&l1[n], (int32_t)pipe_swing_stage + 1);
+    while (l1[n] != '\0'){ n++; }
+    n += PutStr(&l1[n], "deg");
+    l1[n] = '\0';
+
+    n = PutStr(l2, "wait ");
+    uint32_t elapsed = now - pipe_swing_last_move;
+    uint32_t interval = pipe_swing_interval_ms[pipe_swing_stage];
+    uint32_t remain_ms = (elapsed < interval) ? (interval - elapsed) : 0U;
+    AppFmt_I32(&l2[n], (int32_t)((remain_ms + 999U) / 1000U));
+    while (l2[n] != '\0'){ n++; }
+    n += PutStr(&l2[n], "s");
+    l2[n] = '\0';
+
+    n = PutStr(l3, "cnt ");
+    AppFmt_I32(&l3[n], StepMotor_GetEncoderCount());
+    while (l3[n] != '\0'){ n++; }
+    n += PutStr(&l3[n], " >");
+    AppFmt_I32(&l3[n], pipe_swing_target);
+
+    n = PutStr(l4, "base ");
+    AppFmt_I32(&l4[n], pipe_swing_center);
+
+    n = PutStr(l5, "err ");
+    AppFmt_I32(&l5[n], StepMotor_GetPositionErrorCount());
+
+    Ui_RenderLines("Pipe Swing TEMP", l1, l2, l3, l4, l5, "BACK: hold exit");
+}
+
+static void ChkPipeSwing_Enter(void){
+    (void)Chassis_Brake();
+    StepMotor_AbortStartup();
+    (void)StepMotor_Stop();
+    (void)StepMotor_SetSpeedLimit(PIPE_SWING_SPEED_DEG_S);
+
+    pipe_swing_center = StepMotor_GetEncoderCount();
+    pipe_swing_target = pipe_swing_center;
+    pipe_swing_stage = 0U;
+    pipe_swing_positive = true;
+    pipe_swing_last_move = BSP_Time_GetMs();
+    pipe_swing_last_ui = pipe_swing_last_move;
+
+    DebugUart_Printf("[PIPE] enter center=%ld, cycle=3s/1deg 2s/2deg 1s/3deg\r\n",
+                     (long)pipe_swing_center);
+    ChkPipeSwing_Render(pipe_swing_last_move);
+}
+
+static APP_TASK_STATUS ChkPipeSwing_Tick(float dt){
+    (void)dt;
+    uint32_t now = BSP_Time_GetMs();
+    uint32_t interval = pipe_swing_interval_ms[pipe_swing_stage];
+
+    if ((now - pipe_swing_last_move) >= interval){
+        int32_t offset = pipe_swing_offset_counts[pipe_swing_stage];
+        int32_t requested = pipe_swing_center + (pipe_swing_positive ? offset : -offset);
+        pipe_swing_target = ChkPipeSwing_ClampTarget(requested);
+        BSP_STATUS status = StepMotor_MoveToCount(pipe_swing_target);
+        if (status != BSP_STATUS_OK){
+            (void)StepMotor_Stop();
+            DebugUart_Printf("[PIPE] command failed status=%d\r\n", (int)status);
+            return APP_TASK_FAULT;
+        }
+
+        DebugUart_Printf("[PIPE] stage=%u wait=%lums dir=%c offset=%ld target=%ld%s\r\n",
+                         (unsigned)(pipe_swing_stage + 1U),
+                         (unsigned long)interval,
+                         pipe_swing_positive ? '+' : '-',
+                         (long)offset,
+                         (long)pipe_swing_target,
+                         (pipe_swing_target != requested) ? " CLAMPED" : "");
+
+        pipe_swing_positive = !pipe_swing_positive;
+        pipe_swing_stage = (uint8_t)((pipe_swing_stage + 1U) % PIPE_SWING_STAGE_COUNT);
+        pipe_swing_last_move = now;
+        pipe_swing_last_ui = 0U;
+    }
+
+    if (((now - pipe_swing_last_ui) >= PIPE_SWING_UI_PERIOD_MS) && !Ui_IsFlushBusy()){
+        pipe_swing_last_ui = now;
+        ChkPipeSwing_Render(now);
+    }
+    return APP_TASK_RUNNING;
+}
+
+static void ChkPipeSwing_Exit(void){
+    (void)StepMotor_Stop();
+    pipe_swing_target = StepMotor_GetEncoderCount();
+    DebugUart_Printf("[PIPE] exit hold-count=%ld\r\n", (long)pipe_swing_target);
+}
+
 /* ============================ 编码器 ============================ */
 
 static uint32_t enc_last_ui;
@@ -1216,6 +1354,9 @@ const APP_TASK_DESC APP_CHK_TB6612 = {
 };
 const APP_TASK_DESC APP_CHK_STEP_MOTOR = {
     "Step Motor", ChkStepMotor_Enter, ChkStepMotor_Tick, ChkStepMotor_Exit
+};
+const APP_TASK_DESC APP_CHK_PIPE_SWING = {
+    "Pipe Swing", ChkPipeSwing_Enter, ChkPipeSwing_Tick, ChkPipeSwing_Exit
 };
 const APP_TASK_DESC APP_CHK_ENCODER = {
     "Encoder", ChkEnc_Enter, ChkEnc_Tick, NULL

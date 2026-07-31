@@ -16,6 +16,7 @@ static const MENU_ITEM device_check_items[] = {
     { .name = "Gray I2C",     .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GRAY_I2C },
     { .name = "TB6612",       .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_TB6612 },
     { .name = "Step Motor",   .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_STEP_MOTOR },
+    { .name = "Pipe Swing",   .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_PIPE_SWING },
     { .name = "Encoder",      .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_ENCODER },
     { .name = "Speed PID",    .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_SPEED_PID },
     { .name = "Duty Sweep",   .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_DUTY_SWEEP },
