@@ -32,6 +32,7 @@
 #include "app_ball_scurve_task.h"
 
 #include "app_ball_config.h"
+#include "app_ball_tune.h"
 #include "app_fmt.h"
 #include "ball_scurve.h"
 #include "bsp_time.h"
@@ -86,7 +87,11 @@ static const char *H3S_ModeName(H3S_MODE m){
     return m == H3S_MODE_HOLD ? "hold" : "scurve";
 }
 
-static const BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
+/*
+ * 热更支持：去掉 const，允许 app_ball_tune 运行时写入。
+ * 参数表在 H3S_TUNE_TABLE 里定义，进入任务时绑定。
+ */
+static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     /*
      * K_G 名义值 (5/7)·g = 7004.75 mm/s² per rad。**这是近似值**：只用来把
      * a_ref 换成前馈倾角，偏 25% 也只是让前馈少给/多给同比例的驱动，
@@ -144,6 +149,125 @@ static const BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
 #if 0 /* 编译期无法算 2πfA，这里以注释留下判据 */
 2π × dither_frequency_hz × dither_amplitude_deg = 12.2 deg/s < angle_rate_limit_deg_s(60)
 #endif
+
+/*
+ * ============ 参数热更表 ============
+ *
+ * 绑定到 H3S_SCURVE_CONFIG 的关键字段，允许运行时通过串口调整。
+ * 进入任务时调用 AppBallTune_Init 注册，Tick 里调用 AppBallTune_Poll 收命令。
+ *
+ * 协议：
+ *   ?              列出全部参数
+ *   kp             读 Kp
+ *   kp=0.05        写 Kp
+ *
+ * 每项都有物理约束的上下界，越界拒绝（不静默钳位）。
+ * 掉电恢复编译期默认值——整定出的值必须回填源码才算数。
+ */
+static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
+    /* 反馈增益 */
+    {
+        .name = "kp",
+        .value = &H3S_SCURVE_CONFIG.kp_deg_per_mm,
+        .min_value = 0.01f,   /* 下界：静摩擦残差 θ_stick/Kp < 20mm → Kp > 0.62/20 */
+        .max_value = 0.15f,   /* 上界：环路裕度，过高震荡 */
+        .unit = "deg/mm",
+    },
+    {
+        .name = "kd",
+        .value = &H3S_SCURVE_CONFIG.kd_deg_per_mm_s,
+        .min_value = 0.005f,  /* 下界：欠阻尼会震荡 */
+        .max_value = 0.10f,   /* 上界：过阻尼响应慢 */
+        .unit = "deg/(mm/s)",
+    },
+    {
+        .name = "fblim",
+        .value = &H3S_SCURVE_CONFIG.feedback_limit_deg,
+        .min_value = 1.0f,    /* 最少留 1° 才有意义 */
+        .max_value = 5.0f,    /* 查表范围 ±5.2°，别顶到限位 */
+        .unit = "deg",
+    },
+
+    /* 抖动参数 */
+    {
+        .name = "dith_amp",
+        .value = &H3S_SCURVE_CONFIG.dither_amplitude_deg,
+        .min_value = 0.0f,    /* 0 = 关闭抖动 */
+        .max_value = 2.0f,    /* 上界：2πfA < angle_rate_limit，2π×2×2 = 25 deg/s < 240 */
+        .unit = "deg",
+    },
+    {
+        .name = "dith_freq",
+        .value = &H3S_SCURVE_CONFIG.dither_frequency_hz,
+        .min_value = 0.5f,    /* 太慢破不了静摩擦 */
+        .max_value = 5.0f,    /* 太快角速率超限 */
+        .unit = "Hz",
+    },
+    {
+        .name = "dith_minerr",
+        .value = &H3S_SCURVE_CONFIG.dither_min_error_mm,
+        .min_value = 0.0f,    /* 0 = 始终抖 */
+        .max_value = 20.0f,   /* 超过这个误差说明不在目标附近 */
+        .unit = "mm",
+    },
+    {
+        .name = "dith_maxspd",
+        .value = &H3S_SCURVE_CONFIG.dither_max_speed_mm_s,
+        .min_value = 0.0f,    /* 0 = 不管球速 */
+        .max_value = 50.0f,   /* 球在快速运动时不抖 */
+        .unit = "mm/s",
+    },
+    {
+        .name = "dith_dwell",
+        .value = &H3S_SCURVE_CONFIG.dither_dwell_s,
+        .min_value = 0.0f,    /* 0 = 立即起振 */
+        .max_value = 5.0f,    /* 等太久没意义 */
+        .unit = "s",
+    },
+
+    /* 滚阻前馈 */
+    {
+        .name = "roll_ff",
+        .value = &H3S_SCURVE_CONFIG.rolling_resistance_deg,
+        .min_value = -1.0f,   /* 反向坡度补偿 */
+        .max_value = 1.0f,    /* 正向坡度补偿 */
+        .unit = "deg",
+    },
+    {
+        .name = "roll_db",
+        .value = &H3S_SCURVE_CONFIG.rolling_ff_speed_deadband_mm_s,
+        .min_value = 0.0f,    /* 0 = 始终施加 */
+        .max_value = 10.0f,   /* 高速时不施加 */
+        .unit = "mm/s",
+    },
+
+    /* 动力学水平点偏置 */
+    {
+        .name = "lvl_bias",
+        .value = &H3S_SCURVE_CONFIG.level_bias_deg,
+        .min_value = -2.0f,   /* 标定误差范围 */
+        .max_value = 2.0f,
+        .unit = "deg",
+    },
+
+    /* 轨迹参数 */
+    {
+        .name = "amax",
+        .value = &H3S_SCURVE_CONFIG.max_acceleration_mm_s2,
+        .min_value = 50.0f,   /* 太慢影响时长 */
+        .max_value = 500.0f,  /* 太快超出倾角范围 */
+        .unit = "mm/s²",
+    },
+    {
+        .name = "vmax",
+        .value = &H3S_SCURVE_CONFIG.max_velocity_mm_s,
+        .min_value = 30.0f,
+        .max_value = 200.0f,
+        .unit = "mm/s",
+    },
+};
+
+#define H3S_TUNE_COUNT ((uint8_t)(sizeof(H3S_TUNE_TABLE) / sizeof(H3S_TUNE_TABLE[0])))
 
 typedef enum {
     H3S_STATE_WAIT_VISION = 0,
@@ -427,6 +551,10 @@ static void H3S_Enter(void){
     DebugUart_Printf("[SCVCFG] waypoints=%.0f,%.0f,%.0f dwell=%ums\r\n",
                      (double)H3S_WAYPOINT_MM[0], (double)H3S_WAYPOINT_MM[1],
                      (double)H3S_WAYPOINT_MM[2], (unsigned)H3S_WAYPOINT_DWELL_MS);
+
+    /* 启用参数热更：绑定表，打印全部参数（上位机据此建面板）。 */
+    AppBallTune_Init(H3S_TUNE_TABLE, H3S_TUNE_COUNT);
+    AppBallTune_PrintAll();
 }
 
 static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guard){
@@ -517,6 +645,9 @@ static APP_TASK_STATUS H3S_Tick(float dt){
     uint32_t now = BSP_Time_GetMs();
     STEP_MOTOR_GUARD_STATE guard = StepMotor_GetGuardState();
     bool usable = H3S_ReadPrediction();
+
+    /* 热更轮询：收串口命令并执行（非阻塞，单拍最多一行）。 */
+    AppBallTune_Poll();
 
     if (guard == STEP_MOTOR_GUARD_FAULT){
         h3s_state = H3S_STATE_ACTUATOR_FAULT;

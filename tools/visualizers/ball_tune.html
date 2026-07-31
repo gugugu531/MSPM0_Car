@@ -71,29 +71,44 @@
            box-shadow:var(--shadow); overflow:hidden; }
   .phead { display:flex; align-items:baseline; gap:10px; padding:8px 13px 6px;
            border-bottom:1px solid var(--rule-soft); }
-  .ptitle { font-size:13px; font-weight:620; }
+  .ptitle { font-size:14px; font-weight:650; }
   .punit { font-family:var(--mono); font-size:10.5px; color:var(--ink-3); }
   .phead .grow { flex:1; }
 
+  .help-note { margin:0 0 12px; padding:12px 16px; font-size:12.5px; line-height:1.6;
+               background:color-mix(in srgb, var(--s2) 8%, var(--panel));
+               border-left:3px solid var(--s2); border-radius:6px; color:var(--ink-2); }
+  .help-note b { color:var(--ink); font-weight:600; }
+  .help-note code { font-family:var(--mono); font-size:11.5px; padding:1px 4px;
+                    background:var(--panel-sunk); border-radius:3px; color:var(--s2); }
+
   .group { border-top:1px solid var(--rule-soft); }
-  .group > summary { padding:7px 13px; font-size:12px; font-weight:600;
-                     color:var(--ink-2); cursor:pointer; user-select:none;
-                     background:var(--panel-sunk); }
+  .group > summary { padding:9px 13px; font-size:12.5px; font-weight:630;
+                     color:var(--ink); cursor:pointer; user-select:none;
+                     background:var(--panel-sunk); transition:background .15s; }
+  .group > summary:hover { background:color-mix(in srgb, var(--panel-sunk) 92%, var(--ink)); }
   .group > summary::marker { color:var(--ink-3); }
 
-  .row { display:grid; grid-template-columns:74px 1fr 76px; gap:7px;
-         align-items:center; padding:4px 13px; }
-  .row .name { font-family:var(--mono); font-size:11.5px; color:var(--ink); }
+  .row { display:grid; grid-template-columns:90px 1fr 84px; gap:8px;
+         align-items:center; padding:6px 13px; }
+  .row .name { font-family:var(--mono); font-size:11.5px; color:var(--ink);
+               font-weight:550; }
   .row .name small { display:block; color:var(--ink-3); font-size:9.5px;
-                     letter-spacing:.02em; }
-  .row input[type=range] { width:100%; accent-color:var(--s2); }
-  .row input[type=number] { width:100%; font-family:var(--mono); font-size:11.5px;
-        text-align:right; padding:3px 5px; border:1px solid var(--rule);
-        border-radius:5px; background:var(--panel); color:var(--ink);
-        font-variant-numeric:tabular-nums; }
+                     letter-spacing:.02em; font-weight:normal; }
+  .row input[type=range] { width:100%; height:6px; accent-color:var(--s2); cursor:pointer; }
+  .row input[type=number] { width:100%; font-family:var(--mono); font-size:12px;
+        text-align:right; padding:5px 7px; border:1.5px solid var(--rule);
+        border-radius:6px; background:var(--panel); color:var(--ink);
+        font-variant-numeric:tabular-nums; font-weight:550; transition:all .15s; }
+  .row input[type=number]:focus { outline:none; border-color:var(--s2);
+        box-shadow:0 0 0 2.5px color-mix(in srgb, var(--s2) 20%, transparent); }
   .row.changed input[type=number] { border-color:var(--warn);
-        box-shadow:0 0 0 2px color-mix(in srgb, var(--warn) 22%, transparent); }
-  .row.rejected input[type=number] { border-color:var(--critical); }
+        box-shadow:0 0 0 2.5px color-mix(in srgb, var(--warn) 22%, transparent); }
+  .row.rejected input[type=number] { border-color:var(--critical);
+        box-shadow:0 0 0 2.5px color-mix(in srgb, var(--critical) 25%, transparent);
+        animation:shake .4s; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px)}
+                      75%{transform:translateX(4px)} }
 
   #log { font-family:var(--mono); font-size:11px; height:130px; overflow:auto;
          padding:7px 13px; border-top:1px solid var(--rule-soft);
@@ -150,6 +165,11 @@
       <span class="grow"></span>
       <span class="punit">滑块粗调 · 输入框精调</span>
     </div>
+    <div class="help-note">
+      <b>使用说明：</b>连接串口后面板自动读取参数；拖动滑块或输入数值后<b>立即生效</b>（节流 10 Hz）；
+      <b>掉电恢复默认</b>——整定完用「导出为 C」粘回源码并提交。
+      <br><b>协议：</b>手动命令 <code>?</code> 列表，<code>kp</code> 读取，<code>kp=0.05</code> 写入，<code>d</code> 恢复默认。
+    </div>
     <div id="params"></div>
     <div id="log"></div>
   </section>
@@ -170,13 +190,15 @@
     <div id="plots"></div>
     <p class="note">
       固件<b>只改内存、不写 flash</b>——掉电即恢复源码默认值。整定完请用
-      <b>导出为 C</b> 把数值回填 <span style="font-family:var(--mono)">app_ball_scurve_task.c</span> 并提交，否则不算数。
+      <b>导出为 C</b> 把数值回填
+      <span style="font-family:var(--mono)">app_ball_scurve_task.c</span> 的
+      <span style="font-family:var(--mono)">H3S_SCURVE_CONFIG</span> 并提交，否则不算数。
     </p>
   </section>
 </main>
 
 <dialog id="expdlg">
-  <div class="phead"><span class="ptitle">粘回 app_ball_scurve_task.c</span></div>
+  <div class="phead"><span class="ptitle">粘回 app_ball_scurve_task.c 的 H3S_SCURVE_CONFIG</span></div>
   <textarea id="exptext" readonly></textarea>
   <div class="dfoot">
     <button id="expcopy">复制</button>
@@ -189,22 +211,17 @@
 
 /* ===== 参数分组：名字须与固件 H3S_TUNE_TABLE 一致 ===== */
 const GROUPS = [
-  ["反馈",              ["kp","kd","holdkd","fblim"]],
-  ["积分 · PID for MOVE", ["ki","kilim","kileak","kiminv"]],
-  ["MOVE / HOLD 调度",   ["henter","hentv","hdwell","hexit","htau"]],
-  ["抖动 · 破静摩擦",     ["dith","dithhz","dithe","dithv","dithd"]],
-  ["前馈与标定",         ["bias","roll","carff"]],
-  ["剖面与执行器",       ["amax","vmax","arate","servokp"]],
+  ["反馈增益",       ["kp","kd","fblim"]],
+  ["抖动参数",       ["dith_amp","dith_freq","dith_minerr","dith_maxspd","dith_dwell"]],
+  ["前馈与补偿",     ["roll_ff","roll_db","lvl_bias"]],
+  ["轨迹限制",       ["amax","vmax"]],
 ];
 /* 参数中文提示，只为可读性，不影响协议。 */
 const LABEL = {
-  kp:"位置增益", kd:"MOVE 速度增益", holdkd:"HOLD 速度增益", fblim:"反馈限幅",
-  ki:"积分增益", kilim:"积分限幅", kileak:"积分泄漏", kiminv:"积分最小球速",
-  henter:"进 HOLD 误差", hentv:"进 HOLD 速度", hdwell:"进 HOLD 驻留",
-  hexit:"出 HOLD 滞回", htau:"增益过渡",
-  dith:"抖动幅值", dithhz:"抖动频率", dithe:"触发误差", dithv:"触发速度", dithd:"触发驻留",
-  bias:"水平角偏置", roll:"滚阻前馈", carff:"车加速度前馈",
-  amax:"剖面峰值加速度", vmax:"剖面峰值速度", arate:"输出斜率限制", servokp:"步进位置环增益",
+  kp:"位置增益", kd:"速度增益", fblim:"反馈限幅",
+  dith_amp:"抖动振幅", dith_freq:"抖动频率", dith_minerr:"触发误差", dith_maxspd:"触发速度", dith_dwell:"触发驻留",
+  roll_ff:"滚阻前馈", roll_db:"滚阻死区", lvl_bias:"水平点偏置",
+  amax:"最大加速度", vmax:"最大速度",
 };
 
 const PLOTS = [
@@ -596,13 +613,26 @@ function frame() { for (const c of charts) draw(c); tiles(); requestAnimationFra
 /* ===== 导出 ===== */
 function exportC() {
   const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
-  const out = [`    /* 由 ball_tune.html 导出 ${stamp} */`];
+  const out = [`/* 由 ball_tune.html 导出 ${stamp}，粘回 H3S_SCURVE_CONFIG */`];
   for (const [title, names] of GROUPS) {
     out.push(`    /* --- ${title} --- */`);
     for (const name of names) {
       const row = rows.get(name);
       if (!row) continue;
-      out.push(`    /* ${name.padEnd(9)} */ ${fmt(row.value)}f,   /* ${LABEL[name] || ""} ${row.unit} */`);
+      const field = name === "kp" ? "kp_deg_per_mm"
+                  : name === "kd" ? "kd_deg_per_mm_s"
+                  : name === "fblim" ? "feedback_limit_deg"
+                  : name === "dith_amp" ? "dither_amplitude_deg"
+                  : name === "dith_freq" ? "dither_frequency_hz"
+                  : name === "dith_minerr" ? "dither_min_error_mm"
+                  : name === "dith_maxspd" ? "dither_max_speed_mm_s"
+                  : name === "dith_dwell" ? "dither_dwell_s"
+                  : name === "roll_ff" ? "rolling_resistance_deg"
+                  : name === "roll_db" ? "rolling_ff_speed_deadband_mm_s"
+                  : name === "lvl_bias" ? "level_bias_deg"
+                  : name === "amax" ? "max_acceleration_mm_s2"
+                  : name === "vmax" ? "max_velocity_mm_s" : name;
+      out.push(`    .${field} = ${fmt(row.value)}f,   /* ${LABEL[name] || name} ${row.unit} */`);
     }
   }
   $("exptext").value = out.join("\n");
