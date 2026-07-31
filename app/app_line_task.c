@@ -33,12 +33,12 @@
 #define LT_CURVE_GYRO_ONLY_GRACE_MS 200U
 /** 标称环线中心线周长：2*1.5 + 2*pi*0.5。 */
 #define LT_NOMINAL_LAP_DISTANCE_M 6.1416f
-/** 终点识别只在标称触发位置前 0.4 m 内开放，避免普通宽线/干扰误触发。 */
+/** 终点识别和减速只在标称 A 点前 0.4 m 内开放，避免起点横线误触发。 */
 #define LT_FINISH_ARM_MARGIN_M 0.400f
-/** 实测平行通过 A 点横线可稳定命中 4 路：连续 3 帧确认，回到普通 1~2 路后取中心。 */
-#define LT_FINISH_ENTER_MIN_COUNT 4U
-#define LT_FINISH_ENTER_CONFIRM_FRAMES 3U
-#define LT_FINISH_EXIT_MAX_COUNT 2U
+/** 实测平行通过 A 点横线可稳定命中至少 3 路；末段首帧命中即制动。 */
+#define LT_FINISH_ENTER_MIN_COUNT 3U
+/** A 点横线漏检时允许的最大编码器超程。 */
+#define LT_FINISH_ODOM_OVERRUN_M 0.200f
 /** line_follow 默认 correction 的最终半幅（DIFFERENTIAL_LIMIT/2）。 */
 #define LT_LINE_CORRECTION_LIMIT \
     (LINE_FOLLOW_DEFAULT_DIFFERENTIAL_LIMIT * 0.5f)
@@ -68,12 +68,11 @@
 #define LT_GYRO_REF_LIMIT_EMPTY_DEGPS 75.0f
 #define LT_GYRO_REF_LIMIT_LOADED_DEGPS 50.0f
 /*
- * 编码器里程从车尾位于 A 时清零。灰度阵列比轮轴前探 12.5 cm，四段控制边界以
- * 灰度阵列到达 B/C/D/A 为准，给差速变化率限制留出预瞄建立距离。
- * S4 保持到任务结束，但其弯道前馈在灰度阵列到 A 后开始平滑归零。
+ * 编码器里程在灰度阵列位于 A 时清零，车辆相对原车尾基准向后摆放 19.5 cm。
+ * 四段控制边界直接表示灰度阵列到达 B/C/D/A；轮轴位于阵列后方 12.5 cm。
+ * S4 弯道控制保持到阵列重新识别 A 点横线并立即制动。
  */
-#define LT_SEGMENT_S1_END_M \
-    (LT_TRACK_STRAIGHT_LENGTH_M - APP_TRACK_MEASURE_TO_SENSOR_M)
+#define LT_SEGMENT_S1_END_M LT_TRACK_STRAIGHT_LENGTH_M
 #define LT_SEGMENT_S2_END_M \
     (LT_SEGMENT_S1_END_M + LT_PI * LT_TRACK_CURVE_RADIUS_M)
 #define LT_SEGMENT_S3_END_M \
@@ -83,23 +82,29 @@
 
 /*
  * ===== 手动推车编码器标定点（沿前进方向里程，单位 m）=====
- * S1->S2 已实测标定且准确，沿用上面几何推导的 LT_SEGMENT_S1_END_M。
- * 以下切换点/停车点待用手推一圈的编码器数据覆盖为实测值，默认先给标称几何值：
+ * 当前默认使用以灰度阵列为测量点的标称几何值，后续可用实测编码器数据覆盖：
  *   LT_SEGMENT_S2_END_M       : S2(第一弯)->S3(第二直道) 切换里程
  *   LT_SEGMENT_S3_END_M       : S3->S4(第二弯) 切换里程
- *   LT_SEGMENT_S4_CURVE_END_M : S4 出弯、进入末端直道的里程（回正窗口起点）
- *   LT_LAP_STOP_DISTANCE_M    : 末端直道回正完成后的停车里程
+ *   LT_SEGMENT_S4_CURVE_END_M : 灰度阵列回到 A 点的标称里程
+ *   LT_LAP_STOP_DISTANCE_M    : A 点横线的标称里程（仅用于减速参考）
  */
-#define LT_LAP_STOP_DISTANCE_M   LT_NOMINAL_LAP_DISTANCE_M
+/**
+ * 停车参考点微调偏移量（单位: m）。
+ *  > 0 (如 +0.050f)：将减速/停车参考点整体后移 5cm
+ *  < 0 (如 -0.050f)：将减速/停车参考点整体提前 5cm
+ */
+#define LT_LAP_STOP_OFFSET_M     0.100f
+
+#define LT_LAP_STOP_DISTANCE_M \
+    (LT_NOMINAL_LAP_DISTANCE_M + LT_LAP_STOP_OFFSET_M)
+#define LT_LAP_ODOM_FALLBACK_DISTANCE_M \
+    (LT_LAP_STOP_DISTANCE_M + LT_FINISH_ODOM_OVERRUN_M)
 
 /*
- * 进入直道后用陀螺仪(期望航向角速度=0)保持直行完成回正的里程窗口，单位 m。
- * 窗口内忽略灰度、只按 gz 走直线；走完即交还灰度循迹。两处入直道分别标定：
- *   LT_S3_GYRO_RECOVER_M    : 改动1，S2->S3 入第二直道的回正距离
- *   LT_FINAL_GYRO_RECOVER_M : 改动2，S4 出弯入末端直道的回正距离（回正后才减速）
+ * S2->S3 进入第二直道后，用陀螺仪(期望航向角速度=0)回正一段距离。
+ * S4 后不再设置回正窗口，因为灰度阵列到达 A 点即为任务停车位置。
  */
 #define LT_S3_GYRO_RECOVER_M     0.30f
-#define LT_FINAL_GYRO_RECOVER_M  0.25f
 
 typedef enum {
     LT_ROUTE_LAP = 0,
@@ -146,7 +151,6 @@ static const LT_PROFILE LT_PROFILE_H6 = {
 
 typedef enum {
     LT_STATE_FOLLOW = 0,
-    LT_STATE_FINISH_LINE,
     LT_STATE_FINISH_OFFSET,
     LT_STATE_STOPPED,
     LT_STATE_LINE_LOST,
@@ -171,9 +175,6 @@ static bool lt_line_acquired;
 static BSP_STATUS lt_sensor_init_status;
 static LT_STATE lt_state;
 static LT_FINISH_SOURCE lt_finish_source;
-static uint8_t lt_finish_enter_count;
-static float lt_finish_enter_candidate_m;
-static float lt_finish_enter_distance_m;
 static float lt_finish_target_distance_m;
 static float lt_speed_command_mps;
 static float lt_terminal_speed_ceiling_mps;
@@ -189,8 +190,6 @@ static LT_SEGMENT lt_segment;
 /* 入直道后的陀螺仪回正窗口：active 期间忽略灰度、按 gz 走直线，直到里程达 end。 */
 static bool lt_gyro_recover_active;
 static float lt_gyro_recover_end_m;
-/* 末端直道回正只在出 S4 弯时开一次。 */
-static bool lt_final_recover_armed;
 
 /*
  * Yahboom 循线是阻塞驱动，JY61P 是中断状态机。app 层负责共享 I2C0 的时间片：
@@ -244,8 +243,6 @@ static const char *LineFollowTest_StateName(void){
     switch (lt_state){
         case LT_STATE_FOLLOW:
             return "FOLLOW";
-        case LT_STATE_FINISH_LINE:
-            return "XLINE";
         case LT_STATE_FINISH_OFFSET:
             return "OFFSET";
         case LT_STATE_STOPPED:
@@ -285,11 +282,11 @@ static const char *LineFollowTest_SegmentName(void){
     }
 }
 
-/* 出弯进入末端直道（S4 且里程已过弯段终点）；停车/减速只发生在这一段。 */
-static bool LineFollowTest_InFinalStraight(float distance_m){
+/* 末段只按里程武装：在此之前忽略 A 起点横线和赛道中的宽线干扰。 */
+static bool LineFollowTest_InLapFinishApproach(float distance_m){
     return (lt_profile != NULL) && (lt_profile->route == LT_ROUTE_LAP) &&
         (lt_segment == LT_SEGMENT_S4) &&
-        (distance_m >= LT_SEGMENT_S4_CURVE_END_M);
+        (distance_m >= (LT_LAP_STOP_DISTANCE_M - LT_FINISH_ARM_MARGIN_M));
 }
 
 /* 开启一段陀螺仪回正窗口，直到里程达到 end_distance_m。 */
@@ -339,25 +336,27 @@ static float LineFollowTest_FinishRemaining(float distance_m){
         return (remaining_m > 0.0f) ? remaining_m : 0.0f;
     }
 
-    /* LAP：出弯进末端直道且回正完成后，向标定停车里程逼近。 */
-    if (LineFollowTest_InFinalStraight(distance_m) && !lt_gyro_recover_active){
+    /* LAP：末段编码器只负责提供到 A 横线的减速参考。 */
+    if (LineFollowTest_InLapFinishApproach(distance_m)){
         float remaining_m = LT_LAP_STOP_DISTANCE_M - distance_m;
         return (remaining_m > 0.0f) ? remaining_m : 0.0f;
     }
     return 0.0f;
 }
 
-/*
- * A 线灰度横线识别已改为“编码器里程停车”（见 LT_LAP_STOP_DISTANCE_M 与末端直道
- * 回正逻辑），此处暂时停用；保留占位便于日后需要横线校正时恢复。
- */
-static void LineFollowTest_UpdateFinishLine(uint32_t now, float distance_m,
-                                             bool sensor_ready,
-                                             uint8_t detected_mask){
-    (void)now;
-    (void)distance_m;
-    (void)sensor_ready;
-    (void)detected_mask;
+static bool LineFollowTest_IsFinishLine(float distance_m, bool sensor_ready,
+                                        uint8_t detected_mask){
+    if ((lt_state != LT_STATE_FOLLOW) || !sensor_ready ||
+        !LineFollowTest_InLapFinishApproach(distance_m)){
+        return false;
+    }
+
+    LINE_FOLLOW_OBSERVATION observation;
+    if (LineFollow_ObserveDetectedMask(detected_mask, 1.0f, &observation) !=
+        BSP_STATUS_OK){
+        return false;
+    }
+    return observation.black_count >= LT_FINISH_ENTER_MIN_COUNT;
 }
 
 static float LineFollowTest_MoveTowards(float value, float target,
@@ -375,20 +374,25 @@ static float LineFollowTest_MoveTowards(float value, float target,
 
 /*
  * 纵向 S 曲线：先限制加速度变化率，再积分得到速度。接近终点时用
- * v<=sqrt(2*a*s) 的制动包络提前降速，避免到 19.5 cm 补偿终点才硬刹。
+ * v<=sqrt(2*a*s) 的制动包络提前降速；A 横线命中后再立即电子制动。
  */
 static void LineFollowTest_UpdateLongitudinal(float distance_m, float dt_s){
     float speed_limit_mps = lt_profile->cruise_speed_mps;
     float remaining_m = LineFollowTest_FinishRemaining(distance_m);
     /*
-     * 改动2：LAP 只在出 S4 弯、进入末端直道且陀螺仪回正完成后才进入减速；
-     * 弯道内与回正窗口内保持巡航，不提前降速。直道题(H4)沿用原终点补偿。
+     * LAP 在 A 点前 0.4 m 进入减速区，编码器只提供减速参考；正常停车由横线触发。
+     * 直道题(H4)沿用原终点补偿。
      */
     bool terminal_approach = (lt_profile->route == LT_ROUTE_STRAIGHT) ||
         (lt_state == LT_STATE_FINISH_OFFSET) ||
-        (LineFollowTest_InFinalStraight(distance_m) && !lt_gyro_recover_active);
+        LineFollowTest_InLapFinishApproach(distance_m);
     if (terminal_approach){
         float terminal_limit_mps = lt_profile->cruise_speed_mps;
+        if (LineFollowTest_InLapFinishApproach(distance_m)){
+            terminal_limit_mps = (lt_profile->requirement == 2U)
+                                     ? LT_FINISH_CAPTURE_SPEED_EMPTY_MPS
+                                     : LT_FINISH_CAPTURE_SPEED_LOADED_MPS;
+        }
         if (remaining_m > 0.0f){
             float brake_envelope_mps2 = lt_profile->accel_limit_mps2 *
                                         LT_TERMINAL_BRAKE_ENVELOPE_RATIO;
@@ -398,10 +402,10 @@ static void LineFollowTest_UpdateLongitudinal(float distance_m, float dt_s){
                 terminal_limit_mps = brake_limit_mps;
             }
         } else{
-            /* A 线漏检时也在标称一圈处柔和停住，绝不重新加速冲出赛道。 */
+            /* 越过标称 A 点后继续把速度目标平滑压向零，等待横线或超程兜底。 */
             terminal_limit_mps = 0.0f;
         }
-        /* 横线中心会把目标向前修正，终点阶段速度上限只能下降，禁止再次加速。 */
+        /* 终点阶段速度上限只能下降，禁止越过标称 A 点后再次加速。 */
         if (terminal_limit_mps < lt_terminal_speed_ceiling_mps){
             lt_terminal_speed_ceiling_mps = terminal_limit_mps;
         }
@@ -451,10 +455,10 @@ static void LineFollowTest_UpdateLongitudinal(float distance_m, float dt_s){
 }
 
 static bool LineFollowTest_IsRightCurve(float distance_m){
+    (void)distance_m;
     return (lt_profile->route == LT_ROUTE_LAP) &&
         ((lt_segment == LT_SEGMENT_S2) ||
-         ((lt_segment == LT_SEGMENT_S4) &&
-          (distance_m < LT_SEGMENT_S4_CURVE_END_M)));
+         (lt_segment == LT_SEGMENT_S4));
 }
 
 static void LineFollowTest_UpdateCurveFeedforward(float distance_m, float dt_s){
@@ -570,9 +574,6 @@ static void LineFollowTask_EnterCommon(const LT_PROFILE *profile){
     lt_stop_ms = 0U;
     lt_state = LT_STATE_FOLLOW;
     lt_finish_source = LT_FINISH_SOURCE_NONE;
-    lt_finish_enter_count = 0U;
-    lt_finish_enter_candidate_m = 0.0f;
-    lt_finish_enter_distance_m = 0.0f;
     lt_finish_target_distance_m =
         (profile->route == LT_ROUTE_STRAIGHT)
             ? LT_STRAIGHT_STOP_DISTANCE_M
@@ -589,15 +590,14 @@ static void LineFollowTask_EnterCommon(const LT_PROFILE *profile){
     lt_segment = LT_SEGMENT_S1;
     lt_gyro_recover_active = false;
     lt_gyro_recover_end_m = 0.0f;
-    lt_final_recover_armed = false;
 
     DebugUart_Printf(
-        "[TRK] --- enter run=%lu req=%u rear->axle=%.3fm rear->sensor=%.3fm "
+        "[TRK] --- enter run=%lu req=%u measure=sensor rear->axle=%.3fm rear->sensor=%.3fm "
         "sensor->axle=%.3fm track=%.3fm radius=%.3fm v=%.3f a=%.3f "
         "gkp=%.2f glim=%.1f ff2=%.2f ff4=%.2f pipe=%s ---\r\n",
         (unsigned long)lt_run_id, (unsigned int)profile->requirement,
-        APP_TRACK_MEASURE_TO_AXLE_M, APP_TRACK_MEASURE_TO_SENSOR_M,
-        APP_TRACK_MEASURE_TO_SENSOR_M - APP_TRACK_MEASURE_TO_AXLE_M,
+        APP_TRACK_REAR_TO_AXLE_M, APP_TRACK_REAR_TO_SENSOR_M,
+        APP_TRACK_SENSOR_TO_AXLE_M,
         LT_EFFECTIVE_TRACK_WIDTH_M, LT_TRACK_CURVE_RADIUS_M,
         profile->cruise_speed_mps, profile->accel_limit_mps2,
         line_config.gyro_line_kp, line_config.omega_line_limit,
@@ -623,18 +623,7 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
 
     LineFollowTest_UpdateSegment(now, distance_m);
 
-    /* 改动2：出 S4 弯进入末端直道时一次性开启陀螺仪回正窗口。 */
-    if ((lt_profile->route == LT_ROUTE_LAP) &&
-        (lt_segment == LT_SEGMENT_S4) && !lt_final_recover_armed &&
-        (distance_m >= LT_SEGMENT_S4_CURVE_END_M)){
-        lt_final_recover_armed = true;
-        LineFollowTest_ArmGyroRecover(distance_m + LT_FINAL_GYRO_RECOVER_M);
-        DebugUart_Printf(
-            "[TRK] final straight gyro recover run=%lu t=%lu s=%.3f end=%.3f\r\n",
-            (unsigned long)lt_run_id, (unsigned long)(now - lt_start_ms),
-            distance_m, lt_gyro_recover_end_m);
-    }
-    /* 回正窗口走完即交还灰度循迹。 */
+    /* S2->S3 回正窗口走完即交还灰度循迹。 */
     if (lt_gyro_recover_active && (distance_m >= lt_gyro_recover_end_m)){
         lt_gyro_recover_active = false;
         DebugUart_Printf(
@@ -652,8 +641,8 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
             (unsigned long)(now - lt_start_ms), distance_m);
     }
 
-    LineFollowTest_UpdateFinishLine(
-        now, distance_m, sensor_ready, detected_mask);
+    bool finish_line_detected = LineFollowTest_IsFinishLine(
+        distance_m, sensor_ready, detected_mask);
 
     if ((lt_profile->route == LT_ROUTE_STRAIGHT) &&
         (lt_state == LT_STATE_FOLLOW) && lt_straight_b_passed &&
@@ -670,17 +659,23 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
             lt_finish_target_distance_m);
     }
 
-    /* LAP：末端直道回正完成后，到达标定停车里程即刹停（编码器停车）。 */
+    /* LAP 正常由 A 横线停车；编码器只在横线漏检并超程 0.2 m 时兜底。 */
+    bool lap_odom_fallback =
+        (lt_state == LT_STATE_FOLLOW) &&
+        (lt_profile->route == LT_ROUTE_LAP) &&
+        (lt_segment == LT_SEGMENT_S4) &&
+        (distance_m >= LT_LAP_ODOM_FALLBACK_DISTANCE_M);
     bool finish_position_reached =
-        ((lt_profile->route == LT_ROUTE_STRAIGHT) &&
-         (distance_m >= (LT_STRAIGHT_STOP_DISTANCE_M -
-                          LT_STOP_DISTANCE_TOLERANCE_M))) ||
-        ((lt_profile->route == LT_ROUTE_LAP) &&
-         LineFollowTest_InFinalStraight(distance_m) &&
-         !lt_gyro_recover_active &&
-         (distance_m >= LT_LAP_STOP_DISTANCE_M));
+        (lt_state != LT_STATE_STOPPED) &&
+        (lt_state != LT_STATE_LINE_LOST) &&
+        (((lt_profile->route == LT_ROUTE_STRAIGHT) &&
+          (distance_m >= (LT_STRAIGHT_STOP_DISTANCE_M -
+                           LT_STOP_DISTANCE_TOLERANCE_M))) ||
+         finish_line_detected || lap_odom_fallback);
     if (finish_position_reached){
-        if (lt_finish_source == LT_FINISH_SOURCE_NONE){
+        if (finish_line_detected){
+            lt_finish_source = LT_FINISH_SOURCE_LINE;
+        } else if (lt_finish_source == LT_FINISH_SOURCE_NONE){
             lt_finish_source = LT_FINISH_SOURCE_ODOM;
         }
         (void)Chassis_Brake();
@@ -814,8 +809,6 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
         status = "GYRO HOLD";
     } else if (out.line_lost){
         status = "LINE LOST";
-    } else if (lt_state == LT_STATE_FINISH_LINE){
-        status = "A LINE";
     } else if (lt_state == LT_STATE_FINISH_OFFSET){
         status = "FINAL OFFSET";
     } else if (lt_profile->requirement >= 4U){
