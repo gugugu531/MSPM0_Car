@@ -421,6 +421,11 @@
               <FilePath>..\..\app\app_ball_scurve_task.c</FilePath>
             </File>
             <File>
+              <FileName>app_ball_tune.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\app\app_ball_tune.c</FilePath>
+            </File>
+            <File>
               <FileName>app_line_task.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\app\app_line_task.c</FilePath>

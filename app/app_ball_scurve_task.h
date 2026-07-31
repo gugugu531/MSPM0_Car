@@ -19,4 +19,3 @@ extern const APP_TASK_DESC APP_H3_BALL_SCURVE;
 #endif
 
 #endif /* APP_BALL_SCURVE_TASK_H */
-

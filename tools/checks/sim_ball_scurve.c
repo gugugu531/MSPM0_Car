@@ -113,6 +113,38 @@ typedef struct {
     double gain_scale;
     /** 查表角度相对真实水管角的倍率，模拟连杆几何换算本身的系统性误差。 */
     double linkage_scale;
+    /**
+     * 曲柄销与滑槽之间的机械回差（间隙），单位：编码器计数。
+     *
+     * ⚠ **编码器装在电机轴上，看不见回差**——固件以为已经到位，水管其实还没动。
+     *   这正是它危险的地方，也是饱和型极限环最经典的成因之一：换向时执行器
+     *   有一段死区，等效于在环路里插入一个非线性。
+     *
+     * 本项此前**完全没有建模**，是仿真复现不出实机 6.4 rad/s 极限环的头号嫌疑。
+     * 3D 打印件配合，量级估计 1~4 计数（1 计数 ≈ 0.03° 水管角）。
+     */
+    double backlash_counts;
+    /**
+     * 树莓派侧测速的一阶低通系数（每帧）。此前硬编码 0.35。
+     * 它在 6.4 rad/s 上贡献的相位不可忽略，而真实滤波形式未知，
+     * 所以开成可调项而不是继续假装知道。
+     */
+    double vision_velocity_alpha;
+    /**
+     * 速度量化步长，mm/s。树莓派按 int16 mm/s 发送，所以控制器拿到的速度是
+     * **整数**。这是环路里的一个量化器，此前未建模。
+     */
+    double vision_velocity_quantum;
+    /**
+     * MSPM0 侧的位置外推：控制器实际使用 x = xr + v·age，而不是 xr 本身。
+     * 已用实机数据核对（残差 RMS 0.22 mm，即 v/age 的量化）。
+     *
+     * ⚠ 此前仿真**完全没有这条路径**——它把一个带 62 ms 滞后的速度乘上
+     *   测量龄期后加回位置，等于在环路里插入一条额外的反馈通道。
+     *   极限环段该项幅值 RMS 1.54 mm，占位置标准差的 28%。
+     * 单位 s；0 = 关闭外推。
+     */
+    double vision_extrapolate_s;
     /** true = 直接把对象真值喂给控制器，用于把控制律本身的误差单独分离出来。 */
     bool ideal_measurement;
     const char *name;
@@ -120,8 +152,31 @@ typedef struct {
 
 /* 与 ball_pipe_model/stepper_balance/model.py 同构的确定性粗糙度。 */
 static const double SIM_WAVELENGTH_MM[3] = { 40.0, 18.0, 8.0 };
-static const double SIM_PHASE[3]         = { 1.117, 4.402, 2.735 };
 static const double SIM_WEIGHT[3]        = { 0.8571, 0.4286, 0.2857 };
+/*
+ * 相位不再写死：它决定了"这一条具体的表面实现"。此前所有仿真结论都建立在
+ * 单一种子上，控制参数有可能只是恰好贴合这一条表面。开成可播种后，同一组
+ * 参数跑多个种子看的是**分布**而不是单点。
+ */
+static double sim_phase[3] = { 1.117, 4.402, 2.735 };
+static double sim_static_phase = 0.77;
+
+/* 确定性伪随机，保证结果可复现。 */
+static unsigned long long sim_rng_state = 20260731ULL;
+
+static double SimNextUniform(void){
+    sim_rng_state = sim_rng_state * 6364136223846793005ULL + 1442695040888963407ULL;
+    return (double)((sim_rng_state >> 11) & 0xFFFFFFULL) / 16777216.0;
+}
+
+/** 用给定种子重置表面相位与噪声流。种子相同 => 结果逐位可复现。 */
+static void SimSeedSurface(unsigned long seed){
+    sim_rng_state = (unsigned long long)seed * 6364136223846793005ULL + 1442695040888963407ULL;
+    for (int i = 0; i < 3; i++){
+        sim_phase[i] = 2.0 * M_PI * SimNextUniform();
+    }
+    sim_static_phase = 2.0 * M_PI * SimNextUniform();
+}
 
 static double SimSurfaceSlopeDeg(const SIM_PLANT *p, double x_mm){
     /* 弯曲：h(x) = s(1 − (2x/L)²) 的下坡驱动，slope = 8sx/L²（rad）。 */
@@ -131,13 +186,13 @@ static double SimSurfaceSlopeDeg(const SIM_PLANT *p, double x_mm){
     if (p->roughness_rms_deg <= 0.0){ return bow_deg; }
     double wave = 0.0;
     for (int i = 0; i < 3; i++){
-        wave += SIM_WEIGHT[i] * sin(2.0 * M_PI * x_mm / SIM_WAVELENGTH_MM[i] + SIM_PHASE[i]);
+        wave += SIM_WEIGHT[i] * sin(2.0 * M_PI * x_mm / SIM_WAVELENGTH_MM[i] + sim_phase[i]);
     }
     return bow_deg + p->roughness_rms_deg * wave;
 }
 
 static double SimStaticThresholdDeg(const SIM_PLANT *p, double x_mm){
-    double m = 1.0 + p->static_variation * sin(2.0 * M_PI * x_mm / 40.0 + 0.77);
+    double m = 1.0 + p->static_variation * sin(2.0 * M_PI * x_mm / 40.0 + sim_static_phase);
     if (m < 0.2){ m = 0.2; }
     return p->static_threshold_deg * m;
 }
@@ -164,18 +219,54 @@ static double SimDelayStep(SIM_DELAY *d, double value){
     return d->buffer[read];
 }
 
-/* 确定性伪随机，保证结果可复现。 */
-static unsigned long sim_rng_state = 20260731UL;
 static double SimGauss(void){
     double u1;
-    double u2;
-    do {
-        sim_rng_state = sim_rng_state * 6364136223846793005ULL + 1442695040888963407ULL;
-        u1 = (double)((sim_rng_state >> 11) & 0xFFFFFFFFUL) / 4294967296.0;
-    } while (u1 <= 1e-12);
-    sim_rng_state = sim_rng_state * 6364136223846793005ULL + 1442695040888963407ULL;
-    u2 = (double)((sim_rng_state >> 11) & 0xFFFFFFFFUL) / 4294967296.0;
+    do { u1 = SimNextUniform(); } while (u1 <= 1e-9);
+    double u2 = SimNextUniform();
     return sqrt(-2.0 * log(u1)) * cos(2.0 * M_PI * u2);
+}
+
+/* ===== 命令行参数 =====
+ *
+ * 两种调用形式并存，位置形式保留是为了不打断已有脚本（scurve_sim_plot.py）：
+ *
+ *   位置：sim_ball_scurve <场景> [servo_kp] [限速] [wn] [zeta] [抖幅] [抖频]
+ *                          [pd模式] [hold_kd] [move_ki] [积分种子]
+ *   命名：sim_ball_scurve --scenario=kick --servo-kp=10 --stick=0.62
+ *                          --backlash=2.5 --vel-alpha=0.2 --seed=7 ...
+ *
+ * 命名参数在**场景预设之后**施加，所以能覆盖预设里的任何一项——这正是
+ * 扫鲁棒边界和做对象辨识所需要的。
+ */
+static const char *ArgStr(int argc, char **argv, const char *key, const char *dflt){
+    size_t n = strlen(key);
+    for (int i = 1; i < argc; i++){
+        if ((strncmp(argv[i], "--", 2) == 0) &&
+            (strncmp(argv[i] + 2, key, n) == 0) &&
+            (argv[i][2 + n] == '=')){
+            return argv[i] + 3 + n;
+        }
+    }
+    return dflt;
+}
+
+static double ArgNum(int argc, char **argv, const char *key, double dflt){
+    const char *s = ArgStr(argc, argv, key, NULL);
+    return (s != NULL) ? atof(s) : dflt;
+}
+
+static bool ArgHasNamed(int argc, char **argv){
+    for (int i = 1; i < argc; i++){
+        if (strncmp(argv[i], "--", 2) == 0){ return true; }
+    }
+    return false;
+}
+
+/** 命名优先、否则回退到位置参数、再否则用默认值。 */
+static double PickNum(int argc, char **argv, bool named,
+                      const char *key, int pos, double dflt){
+    if (named){ return ArgNum(argc, argv, key, dflt); }
+    return (argc > pos) ? atof(argv[pos]) : dflt;
 }
 
 /* ===== 场景 ===== */
@@ -186,6 +277,10 @@ static SIM_PLANT SimMakePlant(const char *scenario){
     p.vision_latency_s = 0.0;
     p.gain_scale = 1.0;
     p.linkage_scale = 1.0;
+    p.backlash_counts = 0.0;          /* 各场景默认无回差，靠 --backlash= 显式打开 */
+    p.vision_velocity_alpha = 0.286;   /* 实测：τ=62ms @ 6.4rad/s，两法一致 */
+    p.vision_velocity_quantum = 1.0;   /* 树莓派 int16 mm/s */
+    p.vision_extrapolate_s = 0.0;      /* 由场景/命令行按测量龄期设定 */
     if (strcmp(scenario, "gain") == 0){
         /* 换算不准：真实滚球增益低 25%，连杆查表角度高 15%。对象其余理想。 */
         p.gain_scale = 0.75;
@@ -202,6 +297,7 @@ static SIM_PLANT SimMakePlant(const char *scenario){
         /* 只加测量链（40 fps + 55 ms 时延 + 噪声 + 差分测速），对象保持理想。 */
         p.vision_noise_mm = 0.3;
         p.vision_latency_s = 0.055;
+        p.vision_extrapolate_s = 0.046;   /* 实测 age 均值 */
         return p;
     }
     if (strcmp(scenario, "bow") == 0){
@@ -220,7 +316,7 @@ static SIM_PLANT SimMakePlant(const char *scenario){
         p.level_error_counts = 15.0;          /* 真实水平点比名义高 15 cnt ≈ 0.45° */
         return p;
     }
-    if (strcmp(scenario, "kick") == 0){
+    if ((strcmp(scenario, "kick") == 0) || (strcmp(scenario, "ab") == 0)){
         /*
          * 扰动恢复测试：对象按实机辨识结果配置——水平点误差取 +0.254°（≈8.5 cnt，
          * 由 (beam,a) 回归与静置驻留点两法印证），其余非理想因素按实测量级。
@@ -239,6 +335,7 @@ static SIM_PLANT SimMakePlant(const char *scenario){
         p.level_error_counts = 8.5;
         p.vision_noise_mm = 0.3;
         p.vision_latency_s = 0.045;
+        p.vision_extrapolate_s = 0.046;   /* 实测 age 均值 */
         return p;
     }
     /* real / real-noff：全部非理想因素同时打开。 */
@@ -251,12 +348,39 @@ static SIM_PLANT SimMakePlant(const char *scenario){
     p.level_error_counts = 15.0;
     p.vision_noise_mm = 0.3;
     p.vision_latency_s = 0.055;
+    p.vision_extrapolate_s = 0.046;
     return p;
 }
 
 int main(int argc, char **argv){
-    const char *scenario = (argc > 1) ? argv[1] : "real";
+    bool named = ArgHasNamed(argc, argv);
+    const char *scenario = named ? ArgStr(argc, argv, "scenario", "real")
+                                 : ((argc > 1) ? argv[1] : "real");
     SIM_PLANT plant = SimMakePlant(scenario);
+
+    /* --- 对象参数覆盖：在场景预设之后施加 --- */
+    unsigned long surface_seed = (unsigned long)ArgNum(argc, argv, "seed", 20260731.0);
+    SimSeedSurface(surface_seed);
+    if (named){
+        plant.bow_crown_mm          = ArgNum(argc,argv,"bow",        plant.bow_crown_mm);
+        plant.roughness_rms_deg     = ArgNum(argc,argv,"rough",      plant.roughness_rms_deg);
+        plant.static_threshold_deg  = ArgNum(argc,argv,"stick",      plant.static_threshold_deg);
+        plant.static_variation      = ArgNum(argc,argv,"stick-var",  plant.static_variation);
+        plant.rolling_resistance_deg= ArgNum(argc,argv,"roll",       plant.rolling_resistance_deg);
+        plant.viscous_per_s         = ArgNum(argc,argv,"viscous",    plant.viscous_per_s);
+        plant.level_error_counts    = ArgNum(argc,argv,"level-err",  plant.level_error_counts);
+        plant.vision_noise_mm       = ArgNum(argc,argv,"vis-noise",  plant.vision_noise_mm);
+        plant.vision_latency_s      = ArgNum(argc,argv,"vis-lag",    plant.vision_latency_s);
+        plant.vision_bias_mm        = ArgNum(argc,argv,"vis-bias",   plant.vision_bias_mm);
+        plant.gain_scale            = ArgNum(argc,argv,"gain-scale", plant.gain_scale);
+        plant.linkage_scale         = ArgNum(argc,argv,"linkage-scale", plant.linkage_scale);
+        plant.backlash_counts       = ArgNum(argc,argv,"backlash",   plant.backlash_counts);
+        plant.vision_velocity_alpha = ArgNum(argc,argv,"vel-alpha",  plant.vision_velocity_alpha);
+        plant.vision_velocity_quantum = ArgNum(argc,argv,"vel-quant", plant.vision_velocity_quantum);
+        plant.vision_extrapolate_s  = ArgNum(argc,argv,"extrap",     plant.vision_extrapolate_s);
+        plant.ideal_measurement     = (ArgNum(argc,argv,"ideal-meas",
+                                       plant.ideal_measurement ? 1.0 : 0.0) != 0.0);
+    }
     bool use_feedforward = (strcmp(scenario, "real-noff") != 0);
     /*
      * 步进位置环参数可从命令行覆盖：它们是 step_motor.h 里的 SERVO_KP 与
@@ -264,19 +388,41 @@ int main(int argc, char **argv){
      * 能不能跟上剖面要求的角速率。用法：
      *   sim_ball_scurve <scenario> [servo_kp] [speed_limit_deg_s]
      */
-    double servo_kp = (argc > 2) ? atof(argv[2]) : SIM_SERVO_KP;
-    double servo_limit = (argc > 3) ? atof(argv[3]) : SIM_SERVO_LIMIT_DEG_S;
+    double servo_kp = PickNum(argc,argv,named,"servo-kp",2,SIM_SERVO_KP);
+    double servo_limit = PickNum(argc,argv,named,"speed-limit",3,SIM_SERVO_LIMIT_DEG_S);
     /*
      * 外环闭环极点也可从命令行覆盖，用于扫"降带宽能否换到阻尼"：
      *   sim_ball_scurve kick <servo_kp> <speed_limit> <wn> <zeta>
      * kick 场景固定目标 0 mm，在 2/8/14 s 各施加一次速度冲击，测振铃与恢复时间。
      */
-    double wn = (argc > 4) ? atof(argv[4]) : 2.4;
-    double zeta = (argc > 5) ? atof(argv[5]) : 0.9;
+    double wn = PickNum(argc,argv,named,"wn",4,2.4);
+    double zeta = PickNum(argc,argv,named,"zeta",5,0.9);
     bool kick_mode = (strcmp(scenario, "kick") == 0);
     /* 抖动: sim_ball_scurve <sc> <kp> <lim> <wn> <zeta> <amp_deg> <hz> */
-    double dither_amp = (argc > 6) ? atof(argv[6]) : 0.0;
-    double dither_hz  = (argc > 7) ? atof(argv[7]) : 2.0;
+    double dither_amp = PickNum(argc,argv,named,"dither-amp",6,0.0);
+    double dither_hz  = PickNum(argc,argv,named,"dither-hz",7,2.0);
+    /*
+     * argv[8]=1 时退化成**纯 PD**：不生成剖面，参考量直接钉在目标点
+     * （x_ref=target, v_ref=0, a_ref=0, ff=0），控制律就只剩 Kp·e + Kd·v。
+     * 用同一份代码、同一对象、同一执行器做 A/B，避免"另写一版 PD"带来的
+     * 实现差异污染对比。
+     * argv[9]=0 时关闭 MOVE/HOLD 调度（hold_kd=0），用于逐项拆解贡献。
+     */
+    bool pd_mode = (PickNum(argc,argv,named,"pd",8,0.0) != 0.0);
+    double hold_kd = PickNum(argc,argv,named,"hold-kd",9,0.020);
+    /* 单次移动对照场景：球从 −90 mm 起，目标恒为 0，不走航点序列。 */
+    bool ab_mode = (strcmp(scenario, "ab") == 0);
+    double move_ki = PickNum(argc,argv,named,"move-ki",10,0.020);
+    bool seed_integral = (PickNum(argc,argv,named,"int-seed",11,0.0) != 0.0);
+    /*
+     * 车加速度扰动剖面：t=car-t0 起加速 car-dur 秒，巡航 car-cruise 秒，
+     * 再等时长减速。用于回答"反馈能不能替代前馈"。
+     */
+    double car_accel     = ArgNum(argc,argv,"car-accel",   0.0);   /* mm/s^2 */
+    double car_t0        = ArgNum(argc,argv,"car-t0",      6.0);
+    double car_dur       = ArgNum(argc,argv,"car-dur",     1.5);
+    double car_cruise    = ArgNum(argc,argv,"car-cruise",  2.0);
+    double car_ff_gain   = ArgNum(argc,argv,"car-ff",      0.0);   /* 0=关，1=全额 */
 
     BALL_SCURVE_CONFIG config = {
         .rolling_acceleration_gain_mm_s2 = SIM_K_G_MM_S2,
@@ -295,12 +441,23 @@ int main(int argc, char **argv){
         .angle_max_deg = 5.1f,
         .angle_rate_limit_deg_s = 60.0f,
         /*
+         * MOVE 段积分，与 app_ball_scurve_task.c 保持一致。
+         * argv[10] 可覆盖 Ki（0 = 关闭），argv[11] 可关掉种子，用于逐项 A/B。
+         */
+        .car_feedforward_gain = (float)car_ff_gain,
+        .move_ki_deg_per_mm_s = (float)move_ki,
+        .move_integral_limit_deg = 0.6f,
+        .move_integral_leak_tau_s = 0.0f,
+        .move_integral_apply_in_hold = true,
+        .move_integral_min_speed_mm_s = 8.0f,
+        .move_integral_seed_from_angle = seed_integral,
+        /*
          * MOVE/HOLD 增益调度，与 app_ball_scurve_task.c 保持一致。
          * ⚠ 本仿真**无法验证**它——它针对的 6.4 rad/s 饱和极限环在仿真里
          *   复现不出来（对树莓派侧测速滤波的建模过粗）。放在这里只是保证
          *   仿真跑的是与固件相同的配置，不让两边悄悄分叉。
          */
-        .hold_kd_deg_per_mm_s = 0.020f,
+        .hold_kd_deg_per_mm_s = (float)hold_kd,
         .hold_enter_error_mm = 15.0f,
         .hold_enter_speed_mm_s = 20.0f,
         .hold_enter_dwell_s = 0.3f,
@@ -338,6 +495,11 @@ int main(int argc, char **argv){
      * 计数/拍）被截断成 0，小误差下电机永远不动。编码器读数才是取整后的值。
      */
     double motor_position_counts = 180.0;
+    /*
+     * 回差输出：水管实际跟随的位置。与 motor_position_counts 之间隔着机械间隙。
+     * ⚠ 编码器读的是 motor_position_counts，**看不见这个间隙**。
+     */
+    double backlash_out_counts = 180.0;
     int count_actual = 180;
     int count_target = 180;
 
@@ -357,6 +519,7 @@ int main(int argc, char **argv){
     /* --- 任务序列：0 → +50 → −50，与要求 3 一致；kick 模式全程守 0 --- */
     double waypoint_mm[3] = { 0.0, 50.0, -50.0 };
     if (kick_mode){ waypoint_mm[1] = 0.0; waypoint_mm[2] = 0.0; }
+    if (ab_mode){ waypoint_mm[1] = 0.0; waypoint_mm[2] = 0.0; }
     /* kick 模式的速度冲击时刻与幅值（mm/s），模拟外部拨动小球。 */
     const double kick_time_s[3] = { 3.0, 11.0, 19.0 };
     const double kick_speed[3]  = { 90.0, -120.0, 70.0 };
@@ -382,12 +545,26 @@ int main(int argc, char **argv){
      * 二者之差就是水平点标定误差。辨识必须用 beam，否则会假装误差不存在。
      */
     printf("t,phase,target,x,v,a,x_ref,v_ref,a_ref,theta_cmd,theta_actual,beam,"
-           "cnt,cnt_tgt,ff,roll_ff,fb,err,stuck,surf,vis_x,vis_v,active,settled\n");
+           "cnt,cnt_tgt,ff,roll_ff,fb,ki,iact,dith,err,stuck,surf,vis_x,vis_v,"
+           "active,hold,settled\n");
 
     if (kick_mode){ duration_s = 26.0; }
+    if (ab_mode){ duration_s = 14.0; x_mm = -90.0; }
+    if (car_accel != 0.0){ duration_s = car_t0 + 2.0 * car_dur + car_cruise + 6.0; }
+    double a_car_now = 0.0;
 
     for (long step = 0; step * dt <= duration_s; step++){
         double t = step * dt;
+
+        /* 车加速度剖面：加速 → 巡航 → 减速。 */
+        if (car_accel != 0.0){
+            double u = t - car_t0;
+            if (u < 0.0){ a_car_now = 0.0; }
+            else if (u < car_dur){ a_car_now = car_accel; }
+            else if (u < car_dur + car_cruise){ a_car_now = 0.0; }
+            else if (u < 2.0 * car_dur + car_cruise){ a_car_now = -car_accel; }
+            else { a_car_now = 0.0; }
+        }
 
         /* ---- 速度冲击：直接改对象速度，模拟外部拨球 ---- */
         if (kick_mode && (kick_index < 3) && (t >= kick_time_s[kick_index])){
@@ -414,7 +591,12 @@ int main(int argc, char **argv){
                  * 本基线刻意保留它，好让它的噪声代价在图上可见。
                  */
                 double raw = (measured - vision_prev_x) * SIM_CAMERA_HZ;
-                vision_v += 0.35 * (raw - vision_v);
+                vision_v += plant.vision_velocity_alpha * (raw - vision_v);
+            /* 树莓派按 int16 mm/s 发送 —— 环路里的一个量化器。 */
+            if (plant.vision_velocity_quantum > 0.0){
+                vision_v = plant.vision_velocity_quantum *
+                           floor(vision_v / plant.vision_velocity_quantum + 0.5);
+            }
             } else{
                 vision_have_prev = true;
             }
@@ -429,14 +611,30 @@ int main(int argc, char **argv){
             if (!planned){
                 BallScurve_PlanTo(&controller, &config, (float)vision_x,
                                   (float)vision_v, (float)waypoint_mm[waypoint_index]);
+                if (pd_mode){
+                    /*
+                     * 纯 PD：把剖面立刻标记为已走完。BallScurve_Update 于是走
+                     * "参考量钉在目标点"那条分支，ff/rff 恒为 0，
+                     * 控制律精确退化为 Kp·e + Kd·v。
+                     */
+                    controller.active = false;
+                    controller.elapsed_s = controller.duration_s;
+                }
                 planned = true;
                 phase_timer = 0.0;
             }
 
+            /*
+             * MSPM0 侧的位置外推：控制器用的是 xr + v·age，不是 xr。
+             * v 带 62 ms 滞后，乘上龄期后加回位置 —— 一条额外的反馈通道。
+             */
+            double control_x = vision_x +
+                               vision_v * plant.vision_extrapolate_s;
             BALL_SCURVE_INPUT in = {
-                .x_mm = (float)vision_x,
+                .x_mm = (float)control_x,
                 .velocity_mm_s = (float)vision_v,
                 .actual_angle_deg = (float)SimAngleFromCount(count_actual),
+                .car_acceleration_mm_s2 = (float)a_car_now,
                 .dt_s = (float)(1.0 / SIM_CONTROL_HZ),
             };
             BallScurve_Update(&controller, &config, &in, &out);
@@ -445,7 +643,7 @@ int main(int argc, char **argv){
             /* 剖面走完后驻留 dwell_s，再进入下一个航点。 */
             if (!out.profile_active){
                 phase_timer += 1.0 / SIM_CONTROL_HZ;
-                if (!kick_mode && (phase_timer >= dwell_s) && (waypoint_index < 2)){
+                if (!kick_mode && !ab_mode && (phase_timer >= dwell_s) && (waypoint_index < 2)){
                     waypoint_index++;
                     planned = false;
                 }
@@ -480,11 +678,25 @@ int main(int argc, char **argv){
          * 真实动力学水平点与查表名义 0° 差 level_error_counts：把实际计数按该
          * 偏差平移后再查表，得到球实际感受到的倾角。
          */
-        double theta_actual = SimAngleFromCount(count_actual - plant.level_error_counts) *
-                              plant.linkage_scale;
+        /*
+         * 机械回差：电机走了不一定水管就跟着走。换向时先要走完间隙，
+         * 这段死区是饱和型极限环的经典成因。用**连续**电机位置而非取整后的
+         * 编码器读数做输入，因为回差是物理的、与编码器量化无关。
+         */
+        double play = 0.5 * plant.backlash_counts;
+        if (motor_position_counts > backlash_out_counts + play){
+            backlash_out_counts = motor_position_counts - play;
+        } else if (motor_position_counts < backlash_out_counts - play){
+            backlash_out_counts = motor_position_counts + play;
+        }
+        double theta_actual =
+            SimAngleFromCount(backlash_out_counts - plant.level_error_counts) *
+            plant.linkage_scale;
         double surface = SimSurfaceSlopeDeg(&plant, x_mm);
         double effective_rad = (theta_actual + surface) * M_PI / 180.0;
-        double drive = sin(effective_rad) * plant.gain_scale;
+        /* 车体系惯性力：ẍ = K_G(sinθ − (a_car/g)cosθ)。 */
+        double drive = (sin(effective_rad) - (a_car_now / 9806.65) * cos(effective_rad)) *
+                       plant.gain_scale;
         double static_limit = sin(SimStaticThresholdDeg(&plant, x_mm) * M_PI / 180.0);
 
         if ((fabs(v_mm_s) <= 0.5) && (fabs(drive) <= static_limit)){
@@ -517,7 +729,8 @@ int main(int argc, char **argv){
         /* ---- 记录：按 100 Hz 输出，够画图也不至于文件过大 ---- */
         if ((step % (long)(SIM_PHYSICS_HZ / 100.0)) == 0){
             printf("%.4f,%d,%.2f,%.4f,%.3f,%.2f,%.4f,%.3f,%.2f,%.4f,%.4f,%.4f,"
-                   "%d,%d,%.4f,%.4f,%.4f,%.4f,%d,%.4f,%.3f,%.3f,%d,%d\n",
+                   "%d,%d,%.4f,%.4f,%.4f,%.5f,%d,%.4f,%.4f,%d,%.4f,%.3f,%.3f,"
+                   "%d,%d,%d\n",
                    t, waypoint_index, waypoint_mm[waypoint_index],
                    x_mm, v_mm_s, a_mm_s2,
                    (double)out.x_ref_mm, (double)out.v_ref_mm_s, (double)out.a_ref_mm_s2,
@@ -526,9 +739,12 @@ int main(int argc, char **argv){
                    count_actual, count_target,
                    (double)out.feedforward_deg, (double)out.rolling_ff_deg,
                    (double)out.feedback_deg,
+                   (double)out.integral_deg, out.integral_active ? 1 : 0,
+                   (double)out.dither_deg,
                    waypoint_mm[waypoint_index] - x_mm,
                    stuck ? 1 : 0, surface, vision_x, vision_v,
-                   out.profile_active ? 1 : 0, out.settled ? 1 : 0);
+                   out.profile_active ? 1 : 0, out.hold_mode ? 1 : 0,
+                   out.settled ? 1 : 0);
         }
     }
 
@@ -536,4 +752,3 @@ int main(int argc, char **argv){
             scenario, x_mm, waypoint_mm[2], x_mm - waypoint_mm[2]);
     return 0;
 }
-

@@ -7,6 +7,8 @@
 #include <math.h>
 
 #define BALL_SCURVE_RAD_TO_DEG 57.29577951308232f
+/* 重力加速度，mm/s²。只用于车加速度前馈的 tanθ = a_car/g。 */
+#define BALL_SCURVE_GRAVITY_MM_S2 9806.65f
 
 /*
  * 静止到静止的五次剖面峰值加速度 = PEAK_ACC_FACTOR·Δx/T²。
@@ -126,6 +128,7 @@ void BallScurve_Init(BALL_SCURVE_CONTROLLER *controller){
     controller->hold_mode = false;
     controller->hold_enter_elapsed_s = 0.0f;
     controller->hold_blend = 0.0f;
+    controller->integral_mm_s = 0.0f;
 }
 
 void BallScurve_Reset(BALL_SCURVE_CONTROLLER *controller, float current_angle_deg){
@@ -199,6 +202,22 @@ bool BallScurve_PlanTo(BALL_SCURVE_CONTROLLER *controller,
         BallScurve_SolveCoefficients(controller, target_mm, duration);
     }
 
+    /*
+     * 积分种子：规划时水管正停在把球托住的保持角上，那是对"平衡倾角"的一次
+     * 直接测量。用它做初值，指令首拍就等于当前实际角度——零阶跃，掐掉起步
+     * overshoot 的因果链。**积分器跨航点不清零**，学到的偏置要一路带下去。
+     */
+    if (config->move_integral_seed_from_angle &&
+        (config->move_ki_deg_per_mm_s > 0.0f) &&
+        controller->have_last_angle){
+        float seed_deg = controller->last_angle_deg - config->level_bias_deg;
+        float limit_deg = config->move_integral_limit_deg;
+        if (limit_deg > 0.0f){
+            seed_deg = BallScurve_Clamp(seed_deg, -limit_deg, limit_deg);
+        }
+        controller->integral_mm_s = seed_deg / config->move_ki_deg_per_mm_s;
+    }
+
     controller->active = true;
     controller->settled_elapsed_s = 0.0f;
     controller->settled = false;
@@ -255,6 +274,15 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
     float ratio = BallScurve_Clamp(a_ref / config->rolling_acceleration_gain_mm_s2,
                                    -0.999f, 0.999f);
     float feedforward_deg = asinf(ratio) * BALL_SCURVE_RAD_TO_DEG;
+
+    /* --- 3b. 车加速度前馈：tanθ = a_car/g --- */
+    float car_ff_deg = 0.0f;
+    if ((config->car_feedforward_gain != 0.0f) &&
+        (input->car_acceleration_mm_s2 != 0.0f)){
+        float ratio = config->car_feedforward_gain *
+                      input->car_acceleration_mm_s2 / BALL_SCURVE_GRAVITY_MM_S2;
+        car_ff_deg = atanf(ratio) * BALL_SCURVE_RAD_TO_DEG;
+    }
 
     /* --- 4. 滚阻前馈，按参考速度方向施加 --- */
     float rolling_ff_deg = 0.0f;
@@ -323,6 +351,41 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
     }
     bool feedback_clipped = (feedback_deg != raw_feedback_deg);
 
+    /* --- 5c. MOVE 段积分：PID for MOVE, PD for HOLD --- */
+    /*
+     * 累积的三个前提，缺一不可：
+     *   ① 剖面进行中（HOLD 段冻结——对静摩擦积分会造成黏滑极限环）；
+     *   ② 反馈未被限幅（标准抗饱和：饱和时继续积分就是 windup）；
+     *   ③ 球确实在滚（起步阶段球可能仍被静摩擦钉着，那时积分同样是错的）。
+     */
+    float integral_deg = 0.0f;
+    bool integral_active = false;
+    if (config->move_ki_deg_per_mm_s > 0.0f){
+        bool moving = (config->move_integral_min_speed_mm_s <= 0.0f) ||
+                      (BallScurve_Abs(input->velocity_mm_s) >
+                       config->move_integral_min_speed_mm_s);
+        integral_active = controller->active && !feedback_clipped && moving;
+        if (integral_active){
+            controller->integral_mm_s += position_error * input->dt_s;
+        }
+        if (config->move_integral_leak_tau_s > 0.0f){
+            float decay = input->dt_s / config->move_integral_leak_tau_s;
+            if (decay > 1.0f){ decay = 1.0f; }
+            controller->integral_mm_s -= controller->integral_mm_s * decay;
+        }
+        if (config->move_integral_limit_deg > 0.0f){
+            float limit = config->move_integral_limit_deg / config->move_ki_deg_per_mm_s;
+            controller->integral_mm_s =
+                BallScurve_Clamp(controller->integral_mm_s, -limit, limit);
+        }
+        /* HOLD 段按配置决定是否继续施加已学到的偏置（冻结值，不再增长）。 */
+        if (controller->active || config->move_integral_apply_in_hold){
+            integral_deg = config->move_ki_deg_per_mm_s * controller->integral_mm_s;
+        }
+    } else{
+        controller->integral_mm_s = 0.0f;
+    }
+
     /* --- 6. 抖动：只在球确实被静摩擦钉住时注入 --- */
     /*
      * 触发条件三选三：剖面已走完（HOLD 段）、误差仍超判据、球基本不动。
@@ -366,8 +429,12 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
     }
 
     /* --- 7. 合成、限幅、斜率限制 --- */
-    float command = config->level_bias_deg + feedforward_deg + rolling_ff_deg +
-                    feedback_deg + dither_deg;
+    /*
+     * 积分项与 level_bias 并列，**在 feedback_limit_deg 之外**——它代表
+     * "学到的偏置"而非反馈修正，混进 PD 限幅里会挤占 P/D 的角度权限。
+     */
+    float command = config->level_bias_deg + integral_deg + feedforward_deg +
+                    car_ff_deg + rolling_ff_deg + feedback_deg + dither_deg;
     float limited = BallScurve_Clamp(command, config->angle_min_deg, config->angle_max_deg);
     bool saturated = (limited != command);
 
@@ -416,6 +483,9 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
     output->feedforward_deg = feedforward_deg;
     output->rolling_ff_deg = rolling_ff_deg;
     output->feedback_deg = feedback_deg;
+    output->integral_deg = integral_deg;
+    output->integral_active = integral_active;
+    output->car_feedforward_deg = car_ff_deg;
     output->dither_deg = dither_deg;
     output->position_error_mm = position_error;
     output->velocity_error_mm_s = velocity_error;
@@ -432,4 +502,3 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
     output->settled = controller->settled;
     return true;
 }
-

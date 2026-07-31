@@ -32,6 +32,7 @@
 #include "app_ball_scurve_task.h"
 
 #include "app_ball_config.h"
+#include "app_ball_tune.h"
 #include "app_fmt.h"
 #include "ball_scurve.h"
 #include "bsp_time.h"
@@ -53,6 +54,12 @@
  * 真正的瓶颈是位置环 STEP_MOTOR_SERVO_KP；这里取 120 只是为了不让限速成为第二个约束。
  */
 #define H3S_ACTUATOR_SPEED_DEG_S 120.0f
+/*
+ * 本任务使用的步进位置环增益。位置环是一阶滞后，时间常数 1/KP：
+ * KP=3 → τ=333ms，在振铃频率 3.3 rad/s 上独占 47° 相位；KP=10 → τ=100ms。
+ * 受 STEP_MOTOR_SERVO_KP_MAX 上限约束。
+ */
+#define H3S_SERVO_KP_TUNED 10.0f
 /* 进入任务后等视觉稳定、再开始第一段移动的静默时间。 */
 #define H3S_ARM_DWELL_MS         800U
 /* 每个航点到达后的驻留时间：留给观察落点，也给下一段一个静止起点。 */
@@ -69,7 +76,11 @@
 static const float H3S_WAYPOINT_MM[] = { 0.0f, 50.0f, -50.0f };
 #define H3S_WAYPOINT_COUNT ((uint8_t)(sizeof(H3S_WAYPOINT_MM) / sizeof(H3S_WAYPOINT_MM[0])))
 
-static const BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
+/*
+ * ⚠ 刻意**不是** const —— app_ball_tune 会在运行期改写这里的字段。
+ *   掉电即恢复本文件里的编译期默认值；整定出来的数必须回填源码才算数。
+ */
+static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     /*
      * K_G 名义值 (5/7)·g = 7004.75 mm/s² per rad。**这是近似值**：只用来把
      * a_ref 换成前馈倾角，偏 25% 也只是让前馈少给/多给同比例的驱动，
@@ -101,12 +112,88 @@ static const BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     .angle_max_deg = 5.1f,
     .angle_rate_limit_deg_s = 60.0f,
 
+    /*
+     * MOVE 段积分（PID for MOVE, PD for HOLD）。
+     *
+     * 为什么积分只放 MOVE：球在滚时误差来自**常值角度偏置**（水平点未标定
+     * 约 0.25°、滚阻约 0.05°），那正是积分该干的活；球静止时误差来自
+     * **静摩擦死区**（实测 θ_stick≈0.62°），对它积分会顶到脱离角然后窜出去，
+     * 是教科书级的黏滑。所以 MOVE 累积、HOLD 冻结。
+     *
+     * Ki 由相位代价定：积分在穿越频率 ω_c≈3.2 rad/s 处引入
+     * atan(Ki/Kp/ω_c) 的滞后。取 Ki/Kp = 0.42 → 约 7.5°，在 MOVE/HOLD
+     * 调度挣回的裕度之内。Ki = 0.42 × 0.04711 ≈ 0.020。
+     *
+     * ⚠ 积分收敛值**就是自动标定出的水平角**，应与离线用 (beam, aest) 回归
+     *   得到的 +0.254° 一致。遥测字段 ki 直接读它——这是本轮最该盯的数。
+     */
+    /* H3 车体静止，车加速度前馈默认关闭；H4/H5/H6 接入时置 1。 */
+    .car_feedforward_gain = 0.0f,
+
+    .move_ki_deg_per_mm_s = 0.020f,
+    .move_integral_limit_deg = 0.6f,      /* 覆盖水平点 0.25° + 滚阻 0.05° + 余量 */
+    .move_integral_leak_tau_s = 0.0f,     /* 辨识期间不泄漏，便于读收敛值 */
+    .move_integral_apply_in_hold = true,  /* HOLD 沿用学到的偏置（可 A/B 关掉） */
+    .move_integral_min_speed_mm_s = 8.0f, /* 球没滚起来就别积分 */
+    /*
+     * 种子默认**关闭**。原设想是用规划时刻的保持角做积分初值来掐掉起步
+     * overshoot，但仿真否定了它：
+     *
+     *   real 场景 wp1 误差   无种子 −0.65 mm  →  有种子 +17.04 mm
+     *   real 场景 峰值|a|    无种子 401       →  有种子 342（起步确实更平顺）
+     *
+     * 原因是**保持角不等于平衡角**——它可以偏离真实平衡角达 ±θ_stick(0.62°)。
+     * 用被静摩擦污染的值做种子，等于把那个误差直接注入成指令偏置。
+     * 起步平顺换落点精度，在 ±10 mm 判据下不划算。
+     *
+     * 而种子想要的那个效果，「积分器跨航点不清零」已经免费提供了：
+     * 第一段移动学到的偏置会一路带给后续各段，且没有 θ_stick 污染。
+     * 代价只是第一段移动仍有起步 overshoot。
+     */
+    .move_integral_seed_from_angle = false,
+
+    /*
+     * MOVE/HOLD 增益调度。2026-07-31 实测：剖面走完（ff=0，已是纯 PD 守点）后
+     * 仍有 6.42 rad/s、峰峰 17~28 mm 的持续极限环，饱和的是 Kd 项
+     * （Kd·v = 0.03533×40 = 1.41°，而 Kp·e 只有 0.57°，合计顶到 ±2° 限幅）。
+     * 那个 Kd 是为跟踪 90 mm/s 参考轨迹推的，守一个不动的点不需要。
+     *
+     * Kd_hold 由「切入瞬间不许饱和」定：最坏 v≈50 mm/s 时 Kd×50 < 1.0°。
+     * Kp 不调度——降 Kp 会让静摩擦残差 θ_stick/Kp 变大，方向相反。
+     */
+    .hold_kd_deg_per_mm_s = 0.020f,   /* ζ_eff ≈ 0.51，当前 0.03533 砍 43% */
+    .hold_enter_error_mm = 15.0f,
+    .hold_enter_speed_mm_s = 20.0f,   /* 必须同时看速度：球可能"很近"但正高速穿过 */
+    .hold_enter_dwell_s = 0.3f,
+    .hold_exit_error_mm = 30.0f,      /* 滞回，防边界抽搐 */
+    .hold_blend_tau_s = 0.25f,        /* 增益连续过渡，指令角不跳变 */
+
+    /*
+     * 抖动：破静摩擦死区。这是当前**唯一**能让落点进 ±10 mm 的机制——
+     * 2026-07-31 实测 θ_stick≈0.62°，纯 PD 残差下限 θ_stick/Kp = 13.2 mm，
+     * 与 75 s 无扰动实测的 13.1 mm 完全吻合，靠整定消不掉。
+     *
+     * 指令 ±0.97° @ 2 Hz，经步进位置环（τ=1/SERVO_KP=0.1 s）衰减 0.62 倍后
+     * 实际水管抖 ±0.6°，刚好覆盖脱离角；电机峰值 74 deg/s（限速 120 内），
+     * 球的纹波约 0.46 mm——用 0.46 mm 换掉 13.1 mm。
+     */
+    .dither_amplitude_deg = 0.97f,
+    .dither_frequency_hz = 2.0f,
+    .dither_min_error_mm = 3.0f,   /* 与 settled_position_mm 对齐：进判据即停振 */
+    .dither_max_speed_mm_s = 8.0f,
+    .dither_dwell_s = 0.5f,
+
     .settled_position_mm = 3.0f,
     .settled_speed_mm_s = 5.0f,
     .settled_time_s = 0.5f,
 
     .replan_error_mm = 0.0f,   /* 0 = 纯 S 曲线，不重规划 */
 };
+
+/* 抖动的角速率需求必须留在输出斜率限制之内，否则会被削顶成三角波。 */
+#if 0 /* 编译期无法算 2πfA，这里以注释留下判据 */
+2π × dither_frequency_hz × dither_amplitude_deg = 12.2 deg/s < angle_rate_limit_deg_s(60)
+#endif
 
 typedef enum {
     H3S_STATE_WAIT_VISION = 0,
@@ -135,6 +222,70 @@ static H3S_STATE h3s_rendered_state;
 static float h3s_prev_velocity_mm_s;
 static float h3s_acceleration_est_mm_s2;
 static bool  h3s_have_prev_velocity;
+
+/* ===== 热更参数表 =====
+ *
+ * 每一项的上下界都由物理约束推出，不是拍脑袋（推导见各行注释）。
+ * 越界一律拒绝而非钳位——静默钳位会让人以为设进去了。
+ */
+static bool H3S_SetServoGain(float kp){
+    return StepMotor_SetServoGain(kp) == BSP_STATUS_OK;
+}
+static float H3S_GetServoGain(void){
+    return StepMotor_GetServoGain();
+}
+
+static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
+    /* --- 反馈 --- */
+    /* 上界 0.15：θ_stick/Kp 残差已降到 4mm，再高环路裕度不够。 */
+    { "kp",       &H3S_SCURVE_CONFIG.kp_deg_per_mm,        0.005f, 0.150f, "deg/mm",   NULL, NULL },
+    /* MOVE 段 Kd。上界 0.08：再高 Kd·v 在巡航速度下就顶穿限幅。 */
+    { "kd",       &H3S_SCURVE_CONFIG.kd_deg_per_mm_s,      0.000f, 0.080f, "deg/mm/s", NULL, NULL },
+    /* HOLD 段 Kd。上界 0.040：切入 v=50mm/s 时 Kd·v 已达 2.0° 限幅。 */
+    { "holdkd",   &H3S_SCURVE_CONFIG.hold_kd_deg_per_mm_s, 0.000f, 0.040f, "deg/mm/s", NULL, NULL },
+    /* 上界 4.0：与前馈峰值相加须留在物理 ±5.1° 内。 */
+    { "fblim",    &H3S_SCURVE_CONFIG.feedback_limit_deg,   0.200f, 4.000f, "deg",      NULL, NULL },
+
+    /* --- 积分（PID for MOVE）--- */
+    /* 上界 0.060：Ki/Kp 超过 1.3 rad/s 时相位代价 >20°，吃光调度挣回的裕度。 */
+    { "ki",       &H3S_SCURVE_CONFIG.move_ki_deg_per_mm_s, 0.000f, 0.060f, "deg/mm/s", NULL, NULL },
+    { "kilim",    &H3S_SCURVE_CONFIG.move_integral_limit_deg, 0.000f, 2.000f, "deg",   NULL, NULL },
+    { "kileak",   &H3S_SCURVE_CONFIG.move_integral_leak_tau_s, 0.000f, 300.0f, "s",    NULL, NULL },
+    { "kiminv",   &H3S_SCURVE_CONFIG.move_integral_min_speed_mm_s, 0.0f, 60.0f, "mm/s", NULL, NULL },
+
+    /* --- MOVE/HOLD 调度 --- */
+    { "henter",   &H3S_SCURVE_CONFIG.hold_enter_error_mm,  1.000f, 60.00f, "mm",       NULL, NULL },
+    { "hentv",    &H3S_SCURVE_CONFIG.hold_enter_speed_mm_s, 1.000f, 80.00f, "mm/s",    NULL, NULL },
+    { "hdwell",   &H3S_SCURVE_CONFIG.hold_enter_dwell_s,   0.000f, 3.000f, "s",        NULL, NULL },
+    { "hexit",    &H3S_SCURVE_CONFIG.hold_exit_error_mm,   2.000f, 120.0f, "mm",       NULL, NULL },
+    { "htau",     &H3S_SCURVE_CONFIG.hold_blend_tau_s,     0.000f, 2.000f, "s",        NULL, NULL },
+
+    /* --- 抖动 --- */
+    /* 上界 2.0：2πf·A 须小于执行器角速率上限 19.8 deg/s，f=2Hz 时 A<1.58。 */
+    { "dith",     &H3S_SCURVE_CONFIG.dither_amplitude_deg, 0.000f, 2.000f, "deg",      NULL, NULL },
+    /* 上界 4.0：3Hz 已让电机峰值 146 deg/s 超过 120 限速，留一档余量。 */
+    { "dithhz",   &H3S_SCURVE_CONFIG.dither_frequency_hz,  0.500f, 4.000f, "Hz",       NULL, NULL },
+    { "dithe",    &H3S_SCURVE_CONFIG.dither_min_error_mm,  0.500f, 30.00f, "mm",       NULL, NULL },
+    { "dithv",    &H3S_SCURVE_CONFIG.dither_max_speed_mm_s, 1.000f, 40.00f, "mm/s",    NULL, NULL },
+    { "dithd",    &H3S_SCURVE_CONFIG.dither_dwell_s,       0.000f, 3.000f, "s",        NULL, NULL },
+
+    /* --- 前馈与标定 --- */
+    { "bias",     &H3S_SCURVE_CONFIG.level_bias_deg,      -2.000f, 2.000f, "deg",      NULL, NULL },
+    { "roll",     &H3S_SCURVE_CONFIG.rolling_resistance_deg, 0.000f, 0.500f, "deg",    NULL, NULL },
+    { "carff",    &H3S_SCURVE_CONFIG.car_feedforward_gain, 0.000f, 1.500f, "-",        NULL, NULL },
+
+    /* --- 剖面 --- */
+    /* 上界 350：asin(350/K_G)=2.87°，加 fblim 2.0° 仍在物理 5.1° 内。 */
+    { "amax",     &H3S_SCURVE_CONFIG.max_acceleration_mm_s2, 30.0f, 350.0f, "mm/s2",   NULL, NULL },
+    { "vmax",     &H3S_SCURVE_CONFIG.max_velocity_mm_s,    10.00f, 200.0f, "mm/s",     NULL, NULL },
+    { "arate",    &H3S_SCURVE_CONFIG.angle_rate_limit_deg_s, 5.00f, 90.00f, "deg/s",   NULL, NULL },
+
+    /* --- 步进位置环（走驱动的运行期接口，任务局部，不动全局宏）--- */
+    { "servokp",  NULL, 1.000f, STEP_MOTOR_SERVO_KP_MAX, "1/s",
+      H3S_GetServoGain, H3S_SetServoGain },
+};
+#define H3S_TUNE_COUNT \
+    ((uint8_t)(sizeof(H3S_TUNE_TABLE) / sizeof(H3S_TUNE_TABLE[0])))
 
 typedef struct {
     int16_t count;
@@ -306,6 +457,14 @@ static void H3S_Enter(void){
     StepMotor_AbortStartup();
     (void)StepMotor_Stop();
     (void)StepMotor_SetSpeedLimit(H3S_ACTUATOR_SPEED_DEG_S);
+    /*
+     * 步进位置环增益走**运行期接口**而不是改全局宏：这样只在本任务内生效，
+     * 退出时恢复，不影响 H3 Ball Static / 上电抬升 / 越界纠正。
+     * 依据：实测 |spd| = SERVO_KP × |perr|，KP=3 时转速被卡死在 58.9 deg/s，
+     * 限速 120 从未触及；提到 10 后 lag RMS 0.92° → 0.441°。
+     */
+    (void)StepMotor_SetServoGain(H3S_SERVO_KP_TUNED);
+    AppBallTune_Init(H3S_TUNE_TABLE, H3S_TUNE_COUNT);
 
     BallScurve_Init(&h3s_controller);
     h3s_output.angle_deg = 0.0f;
@@ -315,13 +474,21 @@ static void H3S_Enter(void){
     h3s_output.feedforward_deg = 0.0f;
     h3s_output.rolling_ff_deg = 0.0f;
     h3s_output.feedback_deg = 0.0f;
+    h3s_output.integral_deg = 0.0f;
+    h3s_output.integral_active = false;
+    h3s_output.dither_deg = 0.0f;
     h3s_output.position_error_mm = 0.0f;
     h3s_output.velocity_error_mm_s = 0.0f;
     h3s_output.profile_time_s = 0.0f;
     h3s_output.profile_duration_s = 0.0f;
+    h3s_output.kd_effective_deg_per_mm_s = H3S_SCURVE_CONFIG.kd_deg_per_mm_s;
+    h3s_output.hold_blend = 0.0f;
+    h3s_output.hold_mode = false;
     h3s_output.profile_active = false;
     h3s_output.saturated = false;
+    h3s_output.feedback_clipped = false;
     h3s_output.rate_limited = false;
+    h3s_output.dither_on = false;
     h3s_output.settled = false;
 
     h3s_state = H3S_STATE_WAIT_VISION;
@@ -371,6 +538,35 @@ static void H3S_Enter(void){
         (int)STEP_MOTOR_SERVO_RESUME_COUNTS,
         (double)STEP_MOTOR_SERVO_MIN_SPEED_DEG_S,
         (unsigned)STEP_MOTOR_TICK_PERIOD_MS);
+    DebugUart_Printf(
+        "[SCVCFG] move-integral ki=%.5f lim=%.2fdeg leak=%.1fs "
+        "holdapply=%u minspd=%.1f seed=%u\r\n",
+        (double)H3S_SCURVE_CONFIG.move_ki_deg_per_mm_s,
+        (double)H3S_SCURVE_CONFIG.move_integral_limit_deg,
+        (double)H3S_SCURVE_CONFIG.move_integral_leak_tau_s,
+        (unsigned)(H3S_SCURVE_CONFIG.move_integral_apply_in_hold ? 1U : 0U),
+        (double)H3S_SCURVE_CONFIG.move_integral_min_speed_mm_s,
+        (unsigned)(H3S_SCURVE_CONFIG.move_integral_seed_from_angle ? 1U : 0U));
+    DebugUart_Printf(
+        "[SCVCFG] hold kd=%.5f(move %.5f) enter=%.1fmm,%.1fmm/s,%.2fs "
+        "exit=%.1fmm tau=%.2fs\r\n",
+        (double)H3S_SCURVE_CONFIG.hold_kd_deg_per_mm_s,
+        (double)H3S_SCURVE_CONFIG.kd_deg_per_mm_s,
+        (double)H3S_SCURVE_CONFIG.hold_enter_error_mm,
+        (double)H3S_SCURVE_CONFIG.hold_enter_speed_mm_s,
+        (double)H3S_SCURVE_CONFIG.hold_enter_dwell_s,
+        (double)H3S_SCURVE_CONFIG.hold_exit_error_mm,
+        (double)H3S_SCURVE_CONFIG.hold_blend_tau_s);
+    DebugUart_Printf(
+        "[SCVCFG] dither amp=%.2fdeg f=%.1fHz minerr=%.1fmm maxspd=%.1f "
+        "dwell=%.2fs rate_need=%.1fdeg/s\r\n",
+        (double)H3S_SCURVE_CONFIG.dither_amplitude_deg,
+        (double)H3S_SCURVE_CONFIG.dither_frequency_hz,
+        (double)H3S_SCURVE_CONFIG.dither_min_error_mm,
+        (double)H3S_SCURVE_CONFIG.dither_max_speed_mm_s,
+        (double)H3S_SCURVE_CONFIG.dither_dwell_s,
+        (double)(6.2831853f * H3S_SCURVE_CONFIG.dither_frequency_hz *
+                 H3S_SCURVE_CONFIG.dither_amplitude_deg));
     DebugUart_Printf("[SCVCFG] waypoints=%.0f,%.0f,%.0f dwell=%ums\r\n",
                      (double)H3S_WAYPOINT_MM[0], (double)H3S_WAYPOINT_MM[1],
                      (double)H3S_WAYPOINT_MM[2], (unsigned)H3S_WAYPOINT_DWELL_MS);
@@ -397,14 +593,22 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         "xr=%.2f x=%.2f vr=%.2f v=%.2f aest=%.1f age=%.1f q=%u "
         /* --- 剖面层 --- */
         "tgt=%.1f xref=%.2f vref=%.2f aref=%.1f tp=%.3f tpd=%.3f act=%u "
+        /* --- MOVE/HOLD 调度：hm=已进 HOLD，hb=增益混合比，kde=生效的 Kd --- */
+        "hm=%u hb=%.2f kde=%.5f "
         /* --- 控制分量：合成前每一项 --- */
-        "bias=%.3f ff=%.3f rff=%.3f fb=%.3f u=%.3f "
+        /* ki = 积分分量；其收敛值即自动标定出的水平角偏置。iact = 本拍在累积。 */
+        "bias=%.3f ki=%.4f iact=%u ff=%.3f rff=%.3f fb=%.3f dith=%.3f u=%.3f "
         /* --- 跟踪误差 --- */
         "ex=%.2f ev=%.2f etgt=%.2f "
         /* --- 执行器层：指令角 vs 实际角是滞后的直接指标 --- */
         "beam=%.3f lag=%.3f cnt=%ld cmd=%ld perr=%ld spd=%.1f frq=%lu at=%u "
-        /* --- 标志与链路健康 --- */
-        "sat=%u rl=%u set=%u mv=%u vv=%u px=%u edge=%u deg=%u hold=%u "
+        /*
+         * --- 标志与链路健康 ---
+         * fbc = PD 分量被 feedback_limit_deg 夹住（sat 只反映物理角度范围，
+         * 早期版本缺这一位，45% 的反馈限幅在遥测里是隐形的）。
+         * dth = 抖动正在注入。
+         */
+        "sat=%u fbc=%u rl=%u dth=%u set=%u mv=%u vv=%u px=%u edge=%u deg=%u hold=%u "
         "guard=%u fps=%.1f gap=%lu inv=%lu crc=%lu drop=%lu\r\n",
         (unsigned long)(now - h3s_start_ms), (unsigned)h3s_state,
         (unsigned)h3s_waypoint, (unsigned)(usable ? 1U : 0U),
@@ -423,9 +627,16 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         (double)h3s_output.profile_time_s, (double)h3s_output.profile_duration_s,
         (unsigned)(h3s_output.profile_active ? 1U : 0U),
 
+        (unsigned)(h3s_output.hold_mode ? 1U : 0U),
+        (double)h3s_output.hold_blend,
+        (double)h3s_output.kd_effective_deg_per_mm_s,
+
         (double)H3S_SCURVE_CONFIG.level_bias_deg,
+        (double)h3s_output.integral_deg,
+        (unsigned)(h3s_output.integral_active ? 1U : 0U),
         (double)h3s_output.feedforward_deg, (double)h3s_output.rolling_ff_deg,
-        (double)h3s_output.feedback_deg, (double)h3s_output.angle_deg,
+        (double)h3s_output.feedback_deg, (double)h3s_output.dither_deg,
+        (double)h3s_output.angle_deg,
 
         (double)h3s_output.position_error_mm, (double)h3s_output.velocity_error_mm_s,
         (double)(target_mm - (h3s_have_prediction ? h3s_prediction.x_mm : 0.0f)),
@@ -438,7 +649,9 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         (unsigned)(StepMotor_IsAtTarget() ? 1U : 0U),
 
         (unsigned)(h3s_output.saturated ? 1U : 0U),
+        (unsigned)(h3s_output.feedback_clipped ? 1U : 0U),
         (unsigned)(h3s_output.rate_limited ? 1U : 0U),
+        (unsigned)(h3s_output.dither_on ? 1U : 0U),
         (unsigned)(h3s_output.settled ? 1U : 0U),
         (unsigned)(h3s_have_prediction && h3s_prediction.moving),
         (unsigned)(h3s_have_prediction && h3s_prediction.velocity_trusted),
@@ -456,6 +669,8 @@ static APP_TASK_STATUS H3S_Tick(float dt){
     uint32_t now = BSP_Time_GetMs();
     STEP_MOTOR_GUARD_STATE guard = StepMotor_GetGuardState();
     bool usable = H3S_ReadPrediction();
+    /* 热更命令轮询：非阻塞，单拍最多处理一整行。 */
+    AppBallTune_Poll();
 
     if (guard == STEP_MOTOR_GUARD_FAULT){
         h3s_state = H3S_STATE_ACTUATOR_FAULT;
@@ -568,6 +783,8 @@ static APP_TASK_STATUS H3S_Tick(float dt){
 
 static void H3S_Exit(void){
     (void)StepMotor_Stop();
+    /* 把步进位置环增益还原成全局默认，避免影响后续任务。 */
+    (void)StepMotor_SetServoGain(STEP_MOTOR_SERVO_KP);
     h3s_target_count = StepMotor_GetEncoderCount();
     DebugUart_Printf("[SCV] exit wp=%u hold-count=%ld beam=%.3f\r\n",
                      (unsigned)h3s_waypoint, (long)h3s_target_count,
@@ -577,4 +794,3 @@ static void H3S_Exit(void){
 const APP_TASK_DESC APP_H3_BALL_SCURVE = {
     "H3 Ball SCurve", H3S_Enter, H3S_Tick, H3S_Exit
 };
-
