@@ -11,12 +11,11 @@
 extern "C" {
 #endif
 
-/*
- * 赛题指定测量点与传感器的纵向安装尺寸（沿车辆前进方向）。
- * 测量点暂定车尾；轮轴中心线在其前方约 7 cm，灰度阵列在其前方约 19.5 cm。
- */
-#define APP_TRACK_MEASURE_TO_AXLE_M  0.070f
-#define APP_TRACK_MEASURE_TO_SENSOR_M 0.195f
+/* 车辆纵向安装尺寸；循迹任务的测量点现统一为前置灰度阵列。 */
+#define APP_TRACK_REAR_TO_AXLE_M      0.070f
+#define APP_TRACK_REAR_TO_SENSOR_M    0.195f
+#define APP_TRACK_SENSOR_TO_AXLE_M \
+    (APP_TRACK_REAR_TO_SENSOR_M - APP_TRACK_REAR_TO_AXLE_M)
 
 /** 赛题要求 2：空载高速整圈。 */
 extern const APP_TASK_DESC APP_H2_EMPTY_LAP;
