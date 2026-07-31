@@ -67,6 +67,17 @@
 #define LT_H4_SLIP_STEER_SPEED_RATIO 0.45f
 #define LT_H4_STOP_COMMAND_MPS 0.001f
 #define LT_H4_STOP_MEASURED_MPS 0.020f
+/** H2 startup heading lock uses wider low-speed authority to suppress wheel slip. */
+#define LT_H2_GYRO_MAX_AGE_MS 60U
+#define LT_H2_HEADING_YAW_SIGN (-1.0f)
+#define LT_H2_HEADING_KP 2.0f
+#define LT_H2_HEADING_OMEGA_LIMIT_DEGPS 15.0f
+#define LT_H2_STARTUP_SPEED_MPS 0.090f
+#define LT_H2_STARTUP_STABLE_TICKS 5U
+#define LT_H2_STARTUP_TIMEOUT_MS 1000U
+#define LT_H2_STARTUP_BLEND_MS 300U
+#define LT_H2_SLIP_STEER_MAX_MPS 0.070f
+#define LT_H2_SLIP_STEER_SPEED_RATIO 0.45f
 /** 对称限 jerk 减速所需距离：0.5*v*(v/a + a/j)。 */
 #define LT_H4_DECEL_DISTANCE_M \
     (0.5f * LT_H4_CRUISE_SPEED_MPS * \
@@ -225,6 +236,15 @@ static bool lt_curve_gyro_only;
 static const LT_PROFILE *lt_profile;
 static bool lt_straight_b_passed;
 static uint32_t lt_straight_b_ms;
+static bool lt_h2_heading_reference_valid;
+static float lt_h2_heading_start_deg;
+static float lt_h2_heading_reference_deg;
+static float lt_h2_heading_error_deg;
+static float lt_h2_heading_omega_ref_deg_s;
+static uint32_t lt_h2_motion_start_ms;
+static uint32_t lt_h2_startup_blend_ms;
+static uint8_t lt_h2_startup_stable_ticks;
+static bool lt_h2_startup_complete;
 static LT_H4_PHASE lt_h4_phase;
 static bool lt_h4_heading_reference_valid;
 static float lt_h4_heading_reference_deg;
@@ -478,6 +498,83 @@ static void LineFollowTest_ApplySpeedLimit(float speed_limit_mps, float dt_s){
     }
 }
 
+static float H2_HeadingReferenceDeg(float distance_m){
+    float reference_unwrapped_deg = lt_h2_heading_start_deg;
+    if (lt_segment == LT_SEGMENT_S2){
+        float progress = (distance_m - LT_SEGMENT_S1_END_M) /
+            (LT_SEGMENT_S2_END_M - LT_SEGMENT_S1_END_M);
+        progress = Kinematics_Clamp(progress, 0.0f, 1.0f);
+        reference_unwrapped_deg += 180.0f * progress;
+    } else if (lt_segment == LT_SEGMENT_S3){
+        reference_unwrapped_deg += 180.0f;
+    } else if (lt_segment == LT_SEGMENT_S4){
+        float progress = (distance_m - LT_SEGMENT_S3_END_M) /
+            (LT_SEGMENT_S4_CURVE_END_M - LT_SEGMENT_S3_END_M);
+        progress = Kinematics_Clamp(progress, 0.0f, 1.0f);
+        reference_unwrapped_deg += 180.0f + 180.0f * progress;
+    }
+    return Kinematics_NormalizeAngleDeg(reference_unwrapped_deg);
+}
+
+static bool H2_UpdateHeadingReference(uint32_t now, float distance_m){
+    JY61P_I2C_SAMPLE sample;
+    if (!JY61P_I2C_IsDataFresh(LT_H2_GYRO_MAX_AGE_MS) ||
+        !JY61P_I2C_GetSnapshot(&sample)){
+        return false;
+    }
+
+    float yaw_deg = Kinematics_NormalizeAngleDeg(
+        LT_H2_HEADING_YAW_SIGN * sample.data.attitude_deg.yaw);
+    if (!lt_h2_heading_reference_valid){
+        lt_h2_heading_reference_valid = true;
+        lt_h2_heading_start_deg = yaw_deg;
+        lt_h2_motion_start_ms = now;
+        DebugUart_Printf(
+            "[TRK] H2 heading lock run=%lu t=%lu href=%.1f\r\n",
+            (unsigned long)lt_run_id, (unsigned long)(now - lt_start_ms),
+            lt_h2_heading_start_deg);
+    }
+
+    lt_h2_heading_reference_deg = H2_HeadingReferenceDeg(distance_m);
+    lt_h2_heading_error_deg = Kinematics_AngleDiffDeg(
+        lt_h2_heading_reference_deg, yaw_deg);
+    lt_h2_heading_omega_ref_deg_s = Kinematics_Clamp(
+        LT_H2_HEADING_KP * lt_h2_heading_error_deg,
+        -LT_H2_HEADING_OMEGA_LIMIT_DEGPS,
+        LT_H2_HEADING_OMEGA_LIMIT_DEGPS);
+    return true;
+}
+
+static void H2_UpdateStartupState(uint32_t now){
+    if (lt_h2_startup_complete || !lt_h2_heading_reference_valid){
+        return;
+    }
+
+    float measured_speed_mps = 0.5f *
+        (fabsf(Chassis_GetWheelSpeed(HALL_ENCODER_LEFT)) +
+         fabsf(Chassis_GetWheelSpeed(HALL_ENCODER_RIGHT)));
+    if (measured_speed_mps >= LT_H2_STARTUP_SPEED_MPS){
+        if (lt_h2_startup_stable_ticks < LT_H2_STARTUP_STABLE_TICKS){
+            lt_h2_startup_stable_ticks++;
+        }
+    } else{
+        lt_h2_startup_stable_ticks = 0U;
+    }
+
+    uint32_t startup_ms = now - lt_h2_motion_start_ms;
+    if ((lt_h2_startup_stable_ticks >= LT_H2_STARTUP_STABLE_TICKS) ||
+        (startup_ms >= LT_H2_STARTUP_TIMEOUT_MS)){
+        lt_h2_startup_complete = true;
+        lt_h2_startup_blend_ms = now;
+        DebugUart_Printf(
+            "[TRK] H2 startup done run=%lu t=%lu v=%.3f reason=%s\r\n",
+            (unsigned long)lt_run_id, (unsigned long)(now - lt_start_ms),
+            measured_speed_mps,
+            (lt_h2_startup_stable_ticks >= LT_H2_STARTUP_STABLE_TICKS)
+                ? "SPEED" : "TIME");
+    }
+}
+
 static bool H4_UpdateHeadingReference(uint32_t now){
     JY61P_I2C_SAMPLE sample;
     if (!JY61P_I2C_IsDataFresh(LT_H4_GYRO_MAX_AGE_MS) ||
@@ -706,15 +803,59 @@ static void LineFollowTest_UpdateSteering(const LINE_FOLLOW_OUTPUT *out,
         lt_profile->steer_slew_mps2 * dt_s);
 }
 
+static void H2_UpdateStartupSteering(const LINE_FOLLOW_OUTPUT *out,
+                                     uint32_t now, float distance_m,
+                                     float dt_s){
+    float normal_blend = 0.0f;
+    if (lt_h2_startup_complete){
+        normal_blend = (float)(now - lt_h2_startup_blend_ms) /
+                       (float)LT_H2_STARTUP_BLEND_MS;
+        if (normal_blend >= 1.0f){
+            LineFollowTest_UpdateSteering(out, distance_m, dt_s);
+            return;
+        }
+    }
+
+    float speed_ratio = lt_speed_command_mps / lt_profile->cruise_speed_mps;
+    float normal_authority_mps = lt_profile->feedback_limit_mps * speed_ratio;
+    float slip_authority_mps =
+        LT_H2_SLIP_STEER_SPEED_RATIO * lt_speed_command_mps;
+    if (slip_authority_mps > LT_H2_SLIP_STEER_MAX_MPS){
+        slip_authority_mps = LT_H2_SLIP_STEER_MAX_MPS;
+    }
+    float authority_mps = slip_authority_mps +
+        (normal_authority_mps - slip_authority_mps) * normal_blend;
+    float steer_target_mps =
+        (out->correction / LT_LINE_CORRECTION_LIMIT) * authority_mps;
+    lt_steer_command_mps = LineFollowTest_MoveTowards(
+        lt_steer_command_mps, steer_target_mps,
+        lt_profile->steer_slew_mps2 * dt_s);
+}
+
 static void LineFollowTest_Telemetry(uint32_t now, bool sensor_ready){
     LINE_FOLLOW_OUTPUT out = LineFollow_GetOutput();
     JY61P_I2C_SAMPLE imu_sample;
     float yaw_deg = JY61P_I2C_GetSnapshot(&imu_sample)
                         ? imu_sample.data.attitude_deg.yaw
                         : 0.0f;
-    if (lt_profile->requirement == 4U){
+    if (lt_profile->requirement == 2U){
+        yaw_deg = Kinematics_NormalizeAngleDeg(
+            LT_H2_HEADING_YAW_SIGN * yaw_deg);
+    } else if (lt_profile->requirement == 4U){
         yaw_deg = Kinematics_NormalizeAngleDeg(
             LT_H4_HEADING_YAW_SIGN * yaw_deg);
+    }
+    float heading_reference_deg = 0.0f;
+    float heading_error_deg = 0.0f;
+    bool startup_complete = false;
+    if (lt_profile->requirement == 2U){
+        heading_reference_deg = lt_h2_heading_reference_deg;
+        heading_error_deg = lt_h2_heading_error_deg;
+        startup_complete = lt_h2_startup_complete;
+    } else if (lt_profile->requirement == 4U){
+        heading_reference_deg = lt_h4_heading_reference_deg;
+        heading_error_deg = lt_h4_heading_error_deg;
+        startup_complete = lt_h4_startup_complete;
     }
     LINE_FOLLOW_OBSERVATION observation;
     BSP_STATUS observation_status = LineFollow_ObserveDetectedMask(
@@ -742,8 +883,8 @@ static void LineFollowTest_Telemetry(uint32_t now, bool sensor_ready){
         lt_speed_command_mps, lt_accel_command_mps2,
         lt_steer_command_mps,
         out.omega_ref_deg_s, out.omega_measured_deg_s, yaw_deg,
-        lt_h4_heading_reference_deg, lt_h4_heading_error_deg,
-        lt_h4_startup_complete ? 1U : 0U,
+        heading_reference_deg, heading_error_deg,
+        startup_complete ? 1U : 0U,
         Chassis_GetWheelSpeed(HALL_ENCODER_LEFT),
         Chassis_GetWheelSpeed(HALL_ENCODER_RIGHT),
         duty.left_percent, duty.right_percent,
@@ -789,6 +930,15 @@ static void LineFollowTask_EnterCommon(const LT_PROFILE *profile){
     lt_curve_gyro_only = false;
     lt_straight_b_passed = false;
     lt_straight_b_ms = 0U;
+    lt_h2_heading_reference_valid = false;
+    lt_h2_heading_start_deg = 0.0f;
+    lt_h2_heading_reference_deg = 0.0f;
+    lt_h2_heading_error_deg = 0.0f;
+    lt_h2_heading_omega_ref_deg_s = 0.0f;
+    lt_h2_motion_start_ms = 0U;
+    lt_h2_startup_blend_ms = 0U;
+    lt_h2_startup_stable_ticks = 0U;
+    lt_h2_startup_complete = false;
     lt_h4_phase = LT_H4_PHASE_ACCEL;
     lt_h4_heading_reference_valid = false;
     lt_h4_heading_reference_deg = 0.0f;
@@ -852,6 +1002,13 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
     }
 
     LineFollowTest_UpdateSegment(now, distance_m);
+
+    bool h2_heading_sample_ready = false;
+    if ((lt_profile->requirement == 2U) &&
+        (lt_state != LT_STATE_STOPPED) &&
+        (lt_state != LT_STATE_LINE_LOST)){
+        h2_heading_sample_ready = H2_UpdateHeadingReference(now, distance_m);
+    }
 
     /* S2->S3 回正窗口走完即交还灰度循迹。 */
     if (lt_gyro_recover_active && (distance_m >= lt_gyro_recover_end_m)){
@@ -957,6 +1114,14 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
                     lt_speed_command_mps + lt_steer_command_mps,
                     lt_speed_command_mps - lt_steer_command_mps);
             }
+        } else if ((lt_profile->requirement == 2U) &&
+                   !lt_h2_heading_reference_valid){
+            /* Lock the stationary yaw before advancing the longitudinal profile. */
+            (void)Chassis_Brake();
+            lt_speed_command_mps = 0.0f;
+            lt_accel_command_mps2 = 0.0f;
+            lt_steer_command_mps = 0.0f;
+            lt_curve_feedforward_mps = 0.0f;
         } else if (lt_state == LT_STATE_FINISH_OFFSET){
             /* 横线中心锁存后只走几何补偿距离，直行可避免宽线退出后的错误转向。 */
             LineFollowTest_UpdateLongitudinal(distance_m, dt);
@@ -974,22 +1139,33 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
             LineFollowTest_UpdateCurveFeedforward(distance_m, dt);
             float curve_omega_ff_deg_s =
                 LineFollowTest_CurveOmegaFeedforwardDegS(distance_m);
+            bool h2_heading_control_active =
+                (lt_profile->requirement == 2U) &&
+                ((lt_segment == LT_SEGMENT_S1) ||
+                 (lt_segment == LT_SEGMENT_S3));
+            float heading_omega_ff_deg_s =
+                (h2_heading_control_active && h2_heading_sample_ready)
+                    ? lt_h2_heading_omega_ref_deg_s
+                    : 0.0f;
+            float motion_omega_ff_deg_s =
+                curve_omega_ff_deg_s + heading_omega_ff_deg_s;
             BSP_STATUS st;
             if (lt_gyro_recover_active){
                 /*
-                 * 改动1/2：入直道回正窗口内忽略灰度，仅按 gz 把航向角速度收敛到 0
-                 * 走直线；陀螺快照不可用时退回灰度循迹，避免误刹。
+                 * S3 入直道短暂忽略灰度：H2 收敛到 yaw_start+180 deg，
+                 * 载球整圈任务仍保持原来的零角速度回正。
                  */
-                st = LineFollow_EvaluateOmegaFeedforwardOnly(0.0f, &control_out);
+                st = LineFollow_EvaluateOmegaFeedforwardOnly(
+                    heading_omega_ff_deg_s, &control_out);
                 lt_curve_gyro_only = (st == BSP_STATUS_OK);
                 if ((st != BSP_STATUS_OK) && sensor_ready){
                     st = LineFollow_EvaluateDetectedMaskWithOmegaFeedforward(
-                        detected_mask, dt, curve_omega_ff_deg_s, &control_out);
+                        detected_mask, dt, motion_omega_ff_deg_s, &control_out);
                 }
             } else{
                 st = sensor_ready
                          ? LineFollow_EvaluateDetectedMaskWithOmegaFeedforward(
-                               detected_mask, dt, curve_omega_ff_deg_s,
+                               detected_mask, dt, motion_omega_ff_deg_s,
                                &control_out)
                          : BSP_STATUS_NOT_READY;
                 bool gyro_only_allowed =
@@ -1000,7 +1176,7 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
                      LT_CURVE_GYRO_ONLY_GRACE_MS);
                 if (gyro_only_allowed){
                     st = LineFollow_EvaluateOmegaFeedforwardOnly(
-                        curve_omega_ff_deg_s, &control_out);
+                        motion_omega_ff_deg_s, &control_out);
                     lt_curve_gyro_only = (st == BSP_STATUS_OK);
                 }
             }
@@ -1021,7 +1197,14 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
             } else{
                 lt_line_acquired = true;
                 LineFollowTest_UpdateLongitudinal(distance_m, dt);
-                LineFollowTest_UpdateSteering(&control_out, distance_m, dt);
+                if (lt_profile->requirement == 2U){
+                    H2_UpdateStartupState(now);
+                    H2_UpdateStartupSteering(
+                        &control_out, now, distance_m, dt);
+                } else{
+                    LineFollowTest_UpdateSteering(
+                        &control_out, distance_m, dt);
+                }
                 /* 左右差速反对称，平均轮速始终等于纵向 S 曲线速度。 */
                 Chassis_SetWheelSpeed(
                     lt_speed_command_mps + lt_steer_command_mps,
@@ -1074,8 +1257,10 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
         status = "DONE / BACK";
     } else if (lt_state == LT_STATE_LINE_LOST){
         status = "LOST / BACK";
-    } else if ((lt_profile->requirement == 4U) &&
-               !lt_h4_heading_reference_valid){
+    } else if (((lt_profile->requirement == 2U) &&
+                !lt_h2_heading_reference_valid) ||
+               ((lt_profile->requirement == 4U) &&
+                !lt_h4_heading_reference_valid)){
         status = "IMU WAIT";
     } else if (lt_profile->requirement == 4U){
         status = LineFollowTest_SegmentName();

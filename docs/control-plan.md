@@ -244,8 +244,10 @@ v_L = v + Δv(t)/2        v_R = v − Δv(t)/2
 
 ```
 omega_curve = scale(segment) * v_cmd / r   # S2=1.10, S4=1.00
+omega_heading = clamp(2.0 * angle_diff(yaw_ref, yaw), ±15 deg/s) # H2 S1/S3
 omega_line  = clamp(1.25 * line_error, ±omega_line_limit)
-omega_ref   = clamp(omega_curve_ramped + omega_line, ±omega_ref_limit)
+omega_ref(S1/S3) = clamp(omega_heading + omega_line, ±omega_ref_limit)
+omega_ref(S2/S4) = clamp(omega_curve_ramped + omega_line, ±omega_ref_limit)
 ```
 
 此前 app 叠加了轮速前馈，但陀螺内环仍把零角速度当作居中目标，会主动抵消正常转弯。现在
@@ -253,6 +255,19 @@ omega_ref   = clamp(omega_curve_ramped + omega_line, ±omega_ref_limit)
 阶跃；陀螺只修正相对该参考的残差。H2 的 `omega_line_limit=20 deg/s`、总参考限幅 `75 deg/s`；
 载球任务分别为 `15 deg/s`、`50 deg/s`。这能防止第二次 H2 实测中 `wref` 在
 `+60/-60 deg/s` 间翻转并激起 S3 横向振荡。
+
+H2 的 `yaw_ref` 不积分带补偿的 `omega_curve`，而按标称几何里程生成：S1 固定为
+`yaw_start`；S2 在 `1.5000～3.0708 m` 线性推进到 `yaw_start+180°`；S3 固定为
+`yaw_start+180°`；S4 在 `4.5708～6.1416 m` 推进到 `yaw_start+360°`。只在计算角差前归一化，
+避免跨 `±180°` 跳变，也避免 S2 的 `1.10` 曲率补偿把目标航向错误扩大为 `198°`。该动态
+参考在 S2/S4 仅用于遥测和建立下一直道目标，不进入弯道控制；弯道沿用已验证的
+`omega_curve+omega_line` 角速度闭环。S3 前 `0.30 m` 的纯陀螺窗口追踪
+`yaw_start+180°`，而不是只令 `gz→0`。
+
+H2 首个有效航向锁存前保持电子制动，纵向 S 曲线不推进。起步差速权限暂时放宽为
+`min(0.45·v_cmd, 0.07 m/s)`；平均实测轮速连续 5 拍达到 `0.09 m/s` 或锁存后达到 `1.0 s`
+时结束起步状态，再用 `300 ms` 混合回原 H2 循迹权限。该逻辑只作用于起步，终点减速权限、
+A 点横线立即制动和编码器超程兜底均保持不变。
 
 弯道不采用无限期“纯陀螺开环”：`gz` 能闭合角速度，却不能观测车身相对圆弧的横向偏移。
 当前策略以曲率前馈＋陀螺为主，灰度仅提供受限残差；若 S2/S4 中有效灰度突然全白，则最多
