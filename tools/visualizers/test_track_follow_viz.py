@@ -7,6 +7,7 @@ from track_follow_viz import TrackTelemetry, filtered_measured_accel, parse_trac
 SAMPLE = (
     "[TRK] t=1250 run=7 req=5 seg=S2 st=FOLLOW fs=LINE gm=1 sen=1 mask=18 n=2 err=0.0 cor=-1.25 "
     "vc=0.123 ac=0.120 vs=0.020 wref=30.0 wz=28.5 yaw=87.3 "
+    "href=85.0 herr=-2.3 hs=1 "
     "vl=0.110 vr=0.120 dl=31.0 dr=32.0 "
     "sl=0.150 sr=0.151 s=0.151 rem=0.000 drop=0"
 )
@@ -28,6 +29,9 @@ class TrackFollowVizTest(unittest.TestCase):
         self.assertAlmostEqual(parsed["wref"], 30.0)
         self.assertAlmostEqual(parsed["wz"], 28.5)
         self.assertAlmostEqual(parsed["yaw"], 87.3)
+        self.assertAlmostEqual(parsed["href"], 85.0)
+        self.assertAlmostEqual(parsed["herr"], -2.3)
+        self.assertEqual(parsed["hs"], 1)
         self.assertAlmostEqual(parsed["turn"], 0.0)
 
     def test_parse_legacy_line_without_steer_command(self):
@@ -46,7 +50,7 @@ class TrackFollowVizTest(unittest.TestCase):
         self.assertAlmostEqual(parsed["turn"], 0.0)
 
     def test_parse_turn_angle(self):
-        parsed = parse_track_line(SAMPLE_LINE.replace(
+        parsed = parse_track_line(SAMPLE.replace(
             "yaw=87.3 ", "yaw=87.3 turn=176.4 "))
         self.assertAlmostEqual(parsed["turn"], 176.4)
 

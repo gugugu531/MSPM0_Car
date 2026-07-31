@@ -7,7 +7,8 @@
         st=<FOLLOW|XLINE|OFFSET|STOP> fs=<NONE|LINE|ODOM|END> gm=<0|1>
         sen=<0|1> mask=<hex> n=<0..8>
         err=<...> cor=<...> vc=<m/s> ac=<m/s2> vs=<m/s>
-        wref=<deg/s> wz=<deg/s> yaw=<deg> vl=<m/s> vr=<m/s>
+        wref=<deg/s> wz=<deg/s> yaw=<deg> href=<deg> herr=<deg> hs=<0|1>
+        vl=<m/s> vr=<m/s>
         dl=<%> dr=<%> sl=<m> sr=<m> s=<m> rem=<m> drop=<bytes>
 
 窗口从上到下显示八路灰度、目标/实测轮速、航向角、指令/实测纵向加速度、
@@ -44,12 +45,12 @@ DEFAULT_ACCEL_LIMIT_MPS2 = 0.12
 REQUIREMENT_ACCEL_LIMITS = {2: 0.30, 4: 0.12, 5: 0.12, 6: 0.12}
 MAX_SAMPLES = 6000
 FLOAT_FIELDS = (
-    "err", "cor", "cff", "vc", "ac", "vs", "wref", "wz", "yaw", "turn", "vl", "vr", "dl", "dr",
+    "err", "cor", "cff", "vc", "ac", "vs", "wref", "wz", "yaw", "href", "herr", "turn", "vl", "vr", "dl", "dr",
     "sl", "sr", "s", "rem",
 )
-OPTIONAL_FLOAT_FIELDS = ("cff", "vs", "wref", "wz", "yaw", "turn")
+OPTIONAL_FLOAT_FIELDS = ("cff", "vs", "wref", "wz", "yaw", "href", "herr", "turn")
 CSV_COLUMNS = (
-    "pc_time", "t", "run", "req", "seg", "ph", "st", "fs", "gm", "sen", "mask", "n",
+    "pc_time", "t", "run", "req", "seg", "ph", "st", "fs", "gm", "hs", "sen", "mask", "n",
     *FLOAT_FIELDS, "drop",
 )
 
@@ -95,6 +96,7 @@ def parse_track_line(line: str):
             "st": fields["st"],
             "fs": fields.get("fs", "NONE"),
             "gm": int(fields.get("gm", "0")),
+            "hs": int(fields.get("hs", "0")),
             "sen": int(fields["sen"]),
             "mask": int(fields["mask"], 16),
             "n": int(fields["n"]),
@@ -112,6 +114,8 @@ def parse_track_line(line: str):
         raise ValueError(f"sen 超出范围: {parsed['sen']}")
     if parsed["gm"] not in (0, 1):
         raise ValueError(f"gm 超出范围: {parsed['gm']}")
+    if parsed["hs"] not in (0, 1):
+        raise ValueError(f"hs must be 0 or 1: {parsed['hs']}")
     if not 0 <= parsed["mask"] <= 0xFF:
         raise ValueError(f"mask 超出范围: {parsed['mask']}")
     if not 0 <= parsed["n"] <= 8:
