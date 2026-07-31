@@ -17,13 +17,13 @@ extern "C" {
 #define APP_TRACK_SENSOR_TO_AXLE_M \
     (APP_TRACK_REAR_TO_SENSOR_M - APP_TRACK_REAR_TO_AXLE_M)
 
-/** 赛题要求 2：空载高速整圈。 */
-extern const APP_TASK_DESC APP_H2_EMPTY_LAP;
+/** 赛题要求 2：同一车辆装置高速整圈。 */
+extern const APP_TASK_DESC APP_H2_LAP;
 /** 赛题要求 4：载球 A→B 直线。 */
 extern const APP_TASK_DESC APP_H4_LOADED_STRAIGHT;
-/** 赛题要求 5：载球、目标 O 点整圈；当前只运行底盘部分。 */
+/** 赛题要求 5：载球、目标 O 点整圈底盘循迹。 */
 extern const APP_TASK_DESC APP_H5_LOADED_LAP_CENTER;
-/** 赛题要求 6：载球、任意目标整圈；当前只运行底盘部分。 */
+/** 赛题要求 6：载球、任意目标整圈；底盘循迹与 H5 完全一致。 */
 extern const APP_TASK_DESC APP_H6_LOADED_LAP_TARGET;
 
 #ifdef __cplusplus

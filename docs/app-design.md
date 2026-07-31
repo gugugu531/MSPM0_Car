@@ -30,11 +30,11 @@ run-to-completion 任务。
 
 ```
 Main Menu
-├── H2 Empty Lap        (task)   要求 2：空载高速整圈
+├── H2 Lap              (task)   要求 2：同一车辆装置高速整圈
 ├── H3 Ball Static      (task)   要求 3 第一阶段：小车静止，闭环守住 0 cm
 ├── H4 Loaded A-B       (task)   要求 4：载球 A→B，记录通过 B 的时间
-├── H5 Loaded Lap O     (task)   要求 5：目标 O 点载球整圈；当前只运行底盘
-├── H6 Loaded Any       (task)   要求 6：任意目标载球整圈；当前只运行底盘
+├── H5 Loaded Lap O     (task)   要求 5：目标 O 点载球整圈循迹
+├── H6 Loaded Any       (task)   要求 6：任意目标载球整圈，底盘管线与 H5 一致
 └── Device Check        (submenu)
     ├── Gyro JY61P      (task)   JY61P 陀螺/姿态/温度 + 诊断计数
     ├── Gray I2C        (task)   Yahboom I2C 版(0x12), 8 路数字量 + 成功/失败与 I2C 诊断计数
@@ -55,8 +55,20 @@ H2 在电机启动前锁存 `yaw_start`：S1/S3 分别以 `yaw_start`/`yaw_start
 仍按编码器圆弧进度生成动态参考角供遥测和下一直道使用。H2 起步阶段暂时使用
 `min(0.45·v_cmd, 0.07 m/s)` 差速权限，实测平均轮速连续 5 拍达到 `0.09 m/s` 或满 `1.0 s`
 后，经 `300 ms` 回到原 H2 循迹权限；减速停车阶段不使用该放宽权限。
-S4 在 A 点前 `0.4 m` 开始平滑减速，首帧检测到至少 4 路黑线即制动；漏检横线则在标称
-圈长后 `0.2 m` 强制停车。`[TRK] run/fs` 分别标识试跑编号和 `LINE/ODOM/END` 停车来源。
+H5/H6 直接引用唯一的 `LT_PROFILE_LOADED_LAP`，使用相同的分段闭环和载球权限：航向角速度限幅 `±12 deg/s`，起步差速为
+`min(0.45·v_cmd, 0.04 m/s)`，轮速连续 5 拍达到 `0.06 m/s` 或满 `1.2 s` 后经 `300 ms`
+回到正常权限。H2/H5/H6 使用相同车辆与机械装置，H5/H6 的低速 S2 曲率前馈使用几何理论
+比例 `1.00`，不沿用 H2 在 `0.45 m/s` 下用于补偿侧滑的 `1.10`。H5/H6 识别 A 横线时只锁存
+整圈时间并进入 `RUNOUT`；S4 前馈平滑退出，控制切到
+`yaw_start` 对应的新 S1 直道，并按限 jerk 速度曲线停稳。横线晚于编码器到达时仍可把
+`ODOM` 计时校正为 `LINE`；缓停超过 `0.25 m/2.5 s` 才强制制动。
+H5/H6 的减速预警距离由公共参数 `LT_LOADED_LAP_DECEL_WARNING_DISTANCE_M` 配置，当前为
+A 点前 `0.25 m`；横线识别窗口仍为 `0.40 m`，调节减速距离不会改变横线检测范围。
+H5/H6 进入 `ODOM` 的编码器阈值为
+`LT_LAP_STOP_DISTANCE_M + LT_LOADED_LAP_ODOM_ARRIVAL_OFFSET_M`；偏置默认为 `0.000 m`，正值
+延后、负值提前。H2 仍使用独立的 `LT_LAP_ODOM_FALLBACK_DISTANCE_M`，不受该偏置影响。
+H2 在 A 点前 `0.4 m` 开始平滑减速，首帧检测到横线即制动；漏检横线则在标称圈长后
+`0.2 m` 强制停车。`[TRK] run/fs` 分别标识试跑编号和 `LINE/ODOM/END` 停车来源。
 H4 使用独立的 `ACCEL→CRUISE→DECEL→PASS_B→STOP` 距离状态机，灰度只做观测；
 运动前先锁存启动航向，航向角外环生成 `omega_ref`，陀螺角速度内环将残差映射为反对称
 轮速差，左右轮平均目标仍由纵向 S 曲线决定。起步阶段放宽差速权限，平均实测轮速连续
