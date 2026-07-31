@@ -134,6 +134,28 @@ typedef struct {
      */
     /** MOVE 段积分增益，deg/(mm·s)。**0 = 关闭，退化为纯 PD**。 */
     float move_ki_deg_per_mm_s;
+    /**
+     * HOLD 段积分增益，deg/(mm·s)。**0 = 冻结（默认）**。
+     *
+     * 置 >0 表示球静止时也继续累积，靠抬高平均倾角把球从静摩擦里"顶"出来——
+     * 与抖动是**两条互斥的解困路线**：
+     *
+     *   抖动 —— 平均倾角保持在 Kp·e（小），用 ±A 的峰值反复越过脱离角，
+     *           每周期蚕食一点。球从不积累大的净驱动，释放温和，
+     *           但电机持续运动。
+     *   积分 —— 平均倾角一路抬到超过 θ_stick 才挣脱。挣脱瞬间球带着
+     *           (θ_int − θ_roll) 的**满额净驱动**冲出去，靠 Kd 去吸收。
+     *           电机安静，但释放剧烈。
+     *
+     * ⚠ 这正是经典黏滑的成因。能否用取决于「挣脱后 Kd 吸不吸得住」：
+     *   θ_stick=0.62° 挣脱时净加速度约 K_G·sin(0.57°)=70 mm/s²，
+     *   走完 13 mm 到达目标时 v≈42 mm/s，而 Kd_hold×42 = 0.85° 的反向
+     *   制动大于 0.62° 的驱动——理论上刹得住，但余量不大。
+     *
+     * ⚠ HOLD 段积分**刻意不设 move_integral_min_speed_mm_s 门控**：
+     *   那条门控的用意是"球没滚起来就别积分"，而这里的用意恰恰相反。
+     */
+    float hold_ki_deg_per_mm_s;
     /** 积分项的角度限幅，deg。须覆盖预期偏置（水平点 0.25° + 滚阻 0.05°）。 */
     float move_integral_limit_deg;
     /**
@@ -389,6 +411,17 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
                        const BALL_SCURVE_CONFIG *config,
                        const BALL_SCURVE_INPUT *input,
                        BALL_SCURVE_OUTPUT *output);
+
+/**
+ * @brief 视觉短暂丢失后恢复：清动态状态但**保留积分器学到的偏置**。
+ *
+ * 与 BallScurve_Reset 的唯一差别就是这一条，而这一条很关键——积分收敛值
+ * 就是自动标定出的水平角，用 Reset 会把它抹掉、重新从 0 学。实测视觉降级
+ * 占 2~4%，一次长采集里会反复触发，用 Reset 就永远读不到稳定的收敛值。
+ *
+ * ⚠ 只在"丢帧恢复"这种**对象未变**的场合用。换任务、换机械状态必须用 Reset。
+ */
+void BallScurve_Resume(BALL_SCURVE_CONTROLLER *controller, float current_angle_deg);
 
 /** 剖面是否已走完（不代表球已停稳，稳定看 output.settled）。 */
 bool BallScurve_IsProfileFinished(const BALL_SCURVE_CONTROLLER *controller);

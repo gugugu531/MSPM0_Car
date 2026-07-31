@@ -160,6 +160,13 @@
         <span class="punit">最近 20 s</span></div>
       <div class="tiles" id="tiles"></div>
     </div>
+    <div class="panel">
+      <div class="phead"><span class="ptitle">诊断</span>
+        <span class="punit">[SCVD] · 500 ms</span>
+        <span class="grow"></span>
+        <span class="punit" id="diagage">等待…</span></div>
+      <div class="tiles" id="diagtiles"></div>
+    </div>
     <div id="plots"></div>
     <p class="note">
       固件<b>只改内存、不写 flash</b>——掉电即恢复源码默认值。整定完请用
@@ -225,6 +232,7 @@ const $ = id => document.getElementById(id);
 let port = null, writer = null, keepReading = false;
 const rows = new Map();          // name -> {el, num, rng, min, max, unit, value}
 let history = [];
+const diag = {};   /* 最近一次 [SCVD] 的诊断量 */
 let t0 = null;
 
 function log(text, cls) {
@@ -312,13 +320,31 @@ const RE_END  = /^\[TUNE\] end n=(\d+)/;
 
 function handleLine(line) {
   if (!line) return;
+  /*
+   * 固件把遥测拆成两行分频：[SCV] 60 ms 只发控制必需字段，[SCVD] 500 ms 发
+   * 诊断量。拆分是为了把 UART 占用从 115%（会溢出截断）降到 53%。
+   * 这里把最近一次 [SCVD] 的字段并进每一行 [SCV]，下游画图/瓦片不必关心
+   * 某个字段究竟来自哪一行。
+   */
+  if (line.startsWith("[SCVD]")) {
+    for (const m of line.matchAll(RE_SCV)) {
+      if (m[1] !== "t") diag[m[1]] = parseFloat(m[2]);
+    }
+    renderDiag();
+    return;
+  }
   if (line.startsWith("[SCV]") && line.includes("drop=")) {
-    const row = {};
+    const row = Object.assign({}, diag);
     for (const m of line.matchAll(RE_SCV)) row[m[1]] = parseFloat(m[2]);
     if (t0 === null) t0 = row.t ?? 0;
     row._t = ((row.t ?? 0) - t0) / 1000;
     history.push(row);
     if (history.length > 6000) history.splice(0, history.length - 6000);
+    return;
+  }
+  if (line.startsWith("[SCV] resume") || line.startsWith("[SCV] arrive") ||
+      line.startsWith("[SCV] plan")   || line.startsWith("[SCV] armed")) {
+    log(line.slice(6));
     return;
   }
   let m;
@@ -511,6 +537,37 @@ function draw(chart) {
   }
 }
 
+/* [SCVD] 诊断条。时序三项是判断"遥测有没有挤占控制节拍"的直接证据：
+   tcmax=控制计算峰值，ttmax=整拍峰值（含 printf），stkmax=步进 Tick 实际间隔。 */
+const DIAG = [
+  ["tcmax",  "控制耗时峰值", "us", v => v > 800 ? "warn" : "good"],
+  ["ttmax",  "整拍耗时峰值", "us", v => v > 5000 ? "critical" : v > 2000 ? "warn" : "good"],
+  ["stkmax", "步进Tick最大", "ms", v => v > 12 ? "critical" : v > 10.5 ? "warn" : "good"],
+  ["fps",    "相机帧率",     "",   v => v < 25 ? "warn" : "good"],
+  ["inv",    "视觉无效帧",   "",   () => null],
+  ["deg",    "视觉降级",     "",   v => v ? "warn" : "good"],
+  ["guard",  "步进守护",     "",   v => v > 1 ? "critical" : "good"],
+  ["iact",   "积分累积中",   "",   () => null],
+];
+function renderDiag() {
+  const host = document.getElementById("diagtiles");
+  if (!host) return;
+  host.innerHTML = DIAG.map(([k, label, unit, sev]) => {
+    const v = diag[k];
+    if (v === undefined) return "";
+    const s = sev(v);
+    const color = s === "critical" ? "var(--critical)"
+                : s === "warn" ? "var(--warn)"
+                : s === "good" ? "var(--good)" : "var(--ink)";
+    const shown = Number.isInteger(v) ? v : (+v).toFixed(1);
+    return `<div class="tile"><div class="k">${label}</div>` +
+           `<div class="v" style="color:${color}">${shown}` +
+           `<span style="font-size:11px;color:var(--ink-2)">${unit}</span></div></div>`;
+  }).join("");
+  document.getElementById("diagage").textContent =
+    `已收到 ${Object.keys(diag).length} 项`;
+}
+
 function tiles() {
   if (!history.length) return;
   const now = history[history.length - 1]._t;
@@ -527,6 +584,7 @@ function tiles() {
     ["执行器滞后峰值", pk(seg.map(r => r.lag ?? 0)).toFixed(2), "°"],
     ["积分 ki",       (last.ki ?? 0).toFixed(4), "°"],
     ["抖动",          last.dth ? "开" : "关", ""],
+    ["循环圈数",      String(last.cyc ?? 0), ""],
   ];
   $("tiles").innerHTML = set.map(([k, v, u]) =>
     `<div class="tile"><div class="k">${k}</div><div class="v">${v}<span style="font-size:11px;color:var(--ink-2)">${u}</span></div></div>`

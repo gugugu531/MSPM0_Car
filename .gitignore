@@ -53,6 +53,9 @@ docs/datasheets/*.pdf
 # 可视化工具生成的诊断报告与归档采集数据（本地留存，不入库）
 /reports/
 
+# 主机侧仿真器编译产物（源码入库，二进制不入库）
+/tools/checks/*.exe
+
 # CMSIS Solution / MDK 6 本地生成文件（工程输入 YAML 与工具清单保留）
 /project/keil/out/
 /project/keil/tmp/

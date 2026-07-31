@@ -140,6 +140,13 @@ void BallScurve_Reset(BALL_SCURVE_CONTROLLER *controller, float current_angle_de
     controller->have_last_angle = true;
 }
 
+void BallScurve_Resume(BALL_SCURVE_CONTROLLER *controller, float current_angle_deg){
+    if (controller == 0){ return; }
+    float learned = controller->integral_mm_s;   /* 唯一要跨丢帧保留的量 */
+    BallScurve_Reset(controller, current_angle_deg);
+    controller->integral_mm_s = learned;
+}
+
 float BallScurve_EstimateDuration(const BALL_SCURVE_CONFIG *config, float distance_mm){
     if ((config == 0) || (config->max_acceleration_mm_s2 <= 0.0f) ||
         (config->max_velocity_mm_s <= 0.0f)){
@@ -217,6 +224,14 @@ bool BallScurve_PlanTo(BALL_SCURVE_CONTROLLER *controller,
         }
         controller->integral_mm_s = seed_deg / config->move_ki_deg_per_mm_s;
     }
+
+    /*
+     * 新剖面开始就意味着"又要动了"，必须退出 HOLD 增益，否则 MOVE 段会用着
+     * HOLD 的低 Kd。当前航点间距 50/100mm 大于 hold_exit_error_mm 会自动退出，
+     * 但目标设得近时就踩得到——不能依赖那个巧合。
+     */
+    controller->hold_mode = false;
+    controller->hold_enter_elapsed_s = 0.0f;
 
     controller->active = true;
     controller->settled_elapsed_s = 0.0f;
@@ -360,11 +375,20 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
      */
     float integral_deg = 0.0f;
     bool integral_active = false;
-    if (config->move_ki_deg_per_mm_s > 0.0f){
+    /*
+     * MOVE 与 HOLD 用**不同的积分增益**，因为两段的用意完全不同：
+     *   MOVE —— 学常值角度偏置（水平点、滚阻），需要球在滚才有意义；
+     *   HOLD —— 把球从静摩擦里顶出来，恰恰要在球不动时才积。
+     * 所以 min_speed 门控只在 MOVE 段生效。
+     */
+    float active_ki = controller->active ? config->move_ki_deg_per_mm_s
+                                         : config->hold_ki_deg_per_mm_s;
+    if ((config->move_ki_deg_per_mm_s > 0.0f) || (config->hold_ki_deg_per_mm_s > 0.0f)){
         bool moving = (config->move_integral_min_speed_mm_s <= 0.0f) ||
                       (BallScurve_Abs(input->velocity_mm_s) >
                        config->move_integral_min_speed_mm_s);
-        integral_active = controller->active && !feedback_clipped && moving;
+        bool gate = controller->active ? moving : true;
+        integral_active = (active_ki > 0.0f) && !feedback_clipped && gate;
         if (integral_active){
             controller->integral_mm_s += position_error * input->dt_s;
         }
@@ -373,14 +397,15 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
             if (decay > 1.0f){ decay = 1.0f; }
             controller->integral_mm_s -= controller->integral_mm_s * decay;
         }
-        if (config->move_integral_limit_deg > 0.0f){
-            float limit = config->move_integral_limit_deg / config->move_ki_deg_per_mm_s;
+        float scale_ki = (active_ki > 0.0f) ? active_ki : config->move_ki_deg_per_mm_s;
+        if ((config->move_integral_limit_deg > 0.0f) && (scale_ki > 0.0f)){
+            float limit = config->move_integral_limit_deg / scale_ki;
             controller->integral_mm_s =
                 BallScurve_Clamp(controller->integral_mm_s, -limit, limit);
         }
         /* HOLD 段按配置决定是否继续施加已学到的偏置（冻结值，不再增长）。 */
         if (controller->active || config->move_integral_apply_in_hold){
-            integral_deg = config->move_ki_deg_per_mm_s * controller->integral_mm_s;
+            integral_deg = scale_ki * controller->integral_mm_s;
         }
     } else{
         controller->integral_mm_s = 0.0f;

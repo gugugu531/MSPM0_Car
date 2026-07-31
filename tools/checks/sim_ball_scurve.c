@@ -413,6 +413,7 @@ int main(int argc, char **argv){
     /* 单次移动对照场景：球从 −90 mm 起，目标恒为 0，不走航点序列。 */
     bool ab_mode = (strcmp(scenario, "ab") == 0);
     double move_ki = PickNum(argc,argv,named,"move-ki",10,0.020);
+    double hold_ki = ArgNum(argc,argv,"hold-ki",0.0);
     bool seed_integral = (PickNum(argc,argv,named,"int-seed",11,0.0) != 0.0);
     /*
      * 车加速度扰动剖面：t=car-t0 起加速 car-dur 秒，巡航 car-cruise 秒，
@@ -446,6 +447,7 @@ int main(int argc, char **argv){
          */
         .car_feedforward_gain = (float)car_ff_gain,
         .move_ki_deg_per_mm_s = (float)move_ki,
+        .hold_ki_deg_per_mm_s = (float)hold_ki,
         .move_integral_limit_deg = 0.6f,
         .move_integral_leak_tau_s = 0.0f,
         .move_integral_apply_in_hold = true,

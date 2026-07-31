@@ -62,8 +62,29 @@
 #define H3S_SERVO_KP_TUNED 10.0f
 /* 进入任务后等视觉稳定、再开始第一段移动的静默时间。 */
 #define H3S_ARM_DWELL_MS         800U
-/* 每个航点到达后的驻留时间：留给观察落点，也给下一段一个静止起点。 */
-#define H3S_WAYPOINT_DWELL_MS   2000U
+/*
+ * 每个航点到达后的驻留时间。
+ *
+ * ⚠ 8 s 不是随便取的：剖面时钟走完 ≠ 球停稳。实测从剖面结束到静摩擦把球
+ *   钉住约需 8 s，原值 2000 ms 会在球还在动时就切下一个航点——落点根本
+ *   没形成，遥测里表现为"未稳定"，统计落点分布时 9 段里有 7 段作废。
+ */
+#define H3S_WAYPOINT_DWELL_MS   8000U
+
+/*
+ * 序列循环。置 1 后跑完 −50 会绕回 0 重来，直到 BACK 退出。
+ *
+ * 这是为**落点分布统计**准备的：循环时三个航点的逼近方向是固定的——
+ *   wp0(0)   ← 从 −50 来，正向逼近
+ *   wp1(+50) ← 从 0 来，正向逼近
+ *   wp2(−50) ← 从 +50 来，负向逼近
+ * 于是一次循环同时给出正、负两种逼近方向的落点，正好检验
+ * 「单向逼近 ⇒ 捕获偏置可重复」这个假设。
+ *
+ * 一个循环约 30 s（剖面 4.3 s + 三次驻留 24 s），3 分钟采集约 6 个循环、
+ * 18 个落点。比赛用固件应设回 0。
+ */
+#define H3S_SEQUENCE_LOOP 1U
 
 /*
  * 动力学水平点相对查表 0° 的偏置，deg。**默认 0 = 承认未标定**。
@@ -131,6 +152,7 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     .car_feedforward_gain = 0.0f,
 
     .move_ki_deg_per_mm_s = 0.020f,
+    .hold_ki_deg_per_mm_s = 0.0f,   /* 0 = HOLD 冻结积分（默认）；>0 = 靠积分顶出静摩擦 */
     .move_integral_limit_deg = 0.6f,      /* 覆盖水平点 0.25° + 滚阻 0.05° + 余量 */
     .move_integral_leak_tau_s = 0.0f,     /* 辨识期间不泄漏，便于读收敛值 */
     .move_integral_apply_in_hold = true,  /* HOLD 沿用学到的偏置（可 A/B 关掉） */
@@ -216,7 +238,47 @@ static uint32_t h3s_start_ms;
 static uint32_t h3s_phase_ms;
 static uint32_t h3s_last_ui;
 static uint32_t h3s_last_telemetry;
+/* 诊断行周期。控制必需字段走 [SCV]，其余走 [SCVD] 并大幅降频——
+ * 遥测总带宽必须留有余量，否则 DebugUart 环形缓冲溢出、整行被截断。 */
+#define H3S_DIAG_PERIOD_MS 500U
+static uint32_t h3s_last_diag;
 static H3S_STATE h3s_rendered_state;
+static uint16_t h3s_cycle;   /* 序列循环圈数，供落点统计按圈分组 */
+
+/* ===== 控制拍耗时测量 =====
+ *
+ * Cortex-M0+ **没有 FPU**，控制律里每一次浮点都是软件例程。静态估算
+ * （反汇编数调用 × 典型周期数）给出控制律 ≈ 256~445 us，但估算对
+ * 分支覆盖和例程实现都很敏感，不如直接测。
+ *
+ * 计时源用 SysTick：它被配成 1 ms 中断，计数器以 CPU 时钟递减，因此
+ * LOAD+1 就是「每毫秒的 CPU 周期数」——**由它反推微秒，不必硬编码主频**，
+ * 改时钟配置也不会让这里悄悄失准。
+ */
+static uint32_t H3S_TickCounter(void){
+    uint32_t load = SysTick->LOAD + 1U;
+    uint32_t ms;
+    uint32_t val;
+    /* 重取直到毫秒计数在读 VAL 前后一致，避开跨中断的撕裂。 */
+    do {
+        ms = BSP_Time_GetMs();
+        val = SysTick->VAL;
+    } while (ms != BSP_Time_GetMs());
+    return (ms * load) + (load - val);
+}
+
+static uint32_t H3S_ElapsedUs(uint32_t start){
+    uint32_t load = SysTick->LOAD + 1U;
+    if (load == 0U){ return 0U; }
+    /* 无符号差天然处理回绕；32 位 @32MHz 约 134 s 才绕一圈。 */
+    uint32_t cycles = H3S_TickCounter() - start;
+    return (cycles * 1000U) / load;
+}
+
+static uint32_t h3s_control_us;
+static uint32_t h3s_control_us_max;
+static uint32_t h3s_tick_us;
+static uint32_t h3s_tick_us_max;
 
 /* 球加速度估计：只用于遥测与离线辨识，**不进入控制律**。 */
 static float h3s_prev_velocity_mm_s;
@@ -249,6 +311,8 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
     /* --- 积分（PID for MOVE）--- */
     /* 上界 0.060：Ki/Kp 超过 1.3 rad/s 时相位代价 >20°，吃光调度挣回的裕度。 */
     { "ki",       &H3S_SCURVE_CONFIG.move_ki_deg_per_mm_s, 0.000f, 0.060f, "deg/mm/s", NULL, NULL },
+    /* HOLD 段积分：与抖动互斥的解困路线。上界 0.030 —— 再大挣脱瞬间 Kd 吸不住。 */
+    { "holdki",   &H3S_SCURVE_CONFIG.hold_ki_deg_per_mm_s, 0.000f, 0.030f, "deg/mm/s", NULL, NULL },
     { "kilim",    &H3S_SCURVE_CONFIG.move_integral_limit_deg, 0.000f, 2.000f, "deg",   NULL, NULL },
     { "kileak",   &H3S_SCURVE_CONFIG.move_integral_leak_tau_s, 0.000f, 300.0f, "s",    NULL, NULL },
     { "kiminv",   &H3S_SCURVE_CONFIG.move_integral_min_speed_mm_s, 0.0f, 60.0f, "mm/s", NULL, NULL },
@@ -502,7 +566,11 @@ static void H3S_Enter(void){
     h3s_phase_ms = h3s_start_ms;
     h3s_last_ui = 0U;
     h3s_last_telemetry = 0U;
+    h3s_last_diag = 0U;
     h3s_rendered_state = (H3S_STATE)0xFF;
+    h3s_cycle = 0U;
+    h3s_control_us = 0U; h3s_control_us_max = 0U;
+    h3s_tick_us = 0U;    h3s_tick_us_max = 0U;
     RpiUart_ResetStats();
 
     /* 进入时把全部换算与整定参数打一遍，日志自带上下文，事后不必猜用的是哪版参数。 */
@@ -573,86 +641,77 @@ static void H3S_Enter(void){
 }
 
 static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guard){
-    RPI_UART_STATS stats;
-    RpiUart_GetStats(&stats);
     int32_t encoder = StepMotor_GetEncoderCount();
     float beam = H3S_LinkageAngleFromCount(encoder);
     float target_mm = H3S_WAYPOINT_MM[h3s_waypoint];
+    float x = h3s_have_prediction ? h3s_prediction.x_mm : 0.0f;
 
     /*
-     * 一行输出全部中间量，key=value 便于主机侧按名解析。分组顺序 =
-     * 数据流方向：视觉 → 剖面 → 控制分量 → 执行器 → 链路健康。
-     *
-     * 辨识用的两个关键量是 beam（实际水管角）和 aest（球加速度估计）：
-     * 对 (beam, aest) 做线性回归，斜率 = 真实 K_G，零交点 = 真实水平角。
+     * [SCV] —— 控制必需字段，50 ms 一行。
+     * 取舍原则：落点统计（t/x/v/tgt/cyc）、整定台波形（xref/u/beam/fb/ki/dith）、
+     * 执行器诊断（cnt/cmd/perr/lag）必须在这里；其余一律下放到 [SCVD]。
      */
     DebugUart_Printf(
-        /* --- 时基与状态 --- */
-        "[SCV] t=%lu st=%u wp=%u ok=%u "
-        /* --- 视觉层：原始 / 使用值 / 龄期 / 质量 --- */
-        "xr=%.2f x=%.2f vr=%.2f v=%.2f aest=%.1f age=%.1f q=%u "
-        /* --- 剖面层 --- */
-        "tgt=%.1f xref=%.2f vref=%.2f aref=%.1f tp=%.3f tpd=%.3f act=%u "
-        /* --- MOVE/HOLD 调度：hm=已进 HOLD，hb=增益混合比，kde=生效的 Kd --- */
-        "hm=%u hb=%.2f kde=%.5f "
-        /* --- 控制分量：合成前每一项 --- */
-        /* ki = 积分分量；其收敛值即自动标定出的水平角偏置。iact = 本拍在累积。 */
-        "bias=%.3f ki=%.4f iact=%u ff=%.3f rff=%.3f fb=%.3f dith=%.3f u=%.3f "
-        /* --- 跟踪误差 --- */
-        "ex=%.2f ev=%.2f etgt=%.2f "
-        /* --- 执行器层：指令角 vs 实际角是滞后的直接指标 --- */
-        "beam=%.3f lag=%.3f cnt=%ld cmd=%ld perr=%ld spd=%.1f frq=%lu at=%u "
-        /*
-         * --- 标志与链路健康 ---
-         * fbc = PD 分量被 feedback_limit_deg 夹住（sat 只反映物理角度范围，
-         * 早期版本缺这一位，45% 的反馈限幅在遥测里是隐形的）。
-         * dth = 抖动正在注入。
-         */
-        "sat=%u fbc=%u rl=%u dth=%u set=%u mv=%u vv=%u px=%u edge=%u deg=%u hold=%u "
-        "guard=%u fps=%.1f gap=%lu inv=%lu crc=%lu drop=%lu\r\n",
+        "[SCV] t=%lu st=%u wp=%u cyc=%u ok=%u "
+        "xr=%.2f x=%.2f v=%.2f age=%.0f tgt=%.1f "
+        "xref=%.2f vref=%.1f aref=%.0f act=%u hm=%u kde=%.4f "
+        "bias=%.3f ki=%.4f ff=%.3f fb=%.3f dith=%.3f u=%.3f "
+        "etgt=%.2f beam=%.3f lag=%.3f cnt=%ld cmd=%ld perr=%ld "
+        "sat=%u fbc=%u dth=%u set=%u drop=%lu\r\n",
         (unsigned long)(now - h3s_start_ms), (unsigned)h3s_state,
-        (unsigned)h3s_waypoint, (unsigned)(usable ? 1U : 0U),
-
+        (unsigned)h3s_waypoint, (unsigned)h3s_cycle,
+        (unsigned)(usable ? 1U : 0U),
         (double)(h3s_have_prediction ? h3s_prediction.measured_x_mm : 0.0f),
-        (double)(h3s_have_prediction ? h3s_prediction.x_mm : 0.0f),
-        (double)(h3s_have_prediction ? h3s_prediction.measured_velocity_mm_s : 0.0f),
+        (double)x,
         (double)(h3s_have_prediction ? h3s_prediction.velocity_mm_s : 0.0f),
-        (double)h3s_acceleration_est_mm_s2,
         (double)(h3s_have_prediction ? h3s_prediction.age_ms : 0.0f),
-        (unsigned)(h3s_have_prediction ? h3s_prediction.quality : 0U),
-
         (double)target_mm,
         (double)h3s_output.x_ref_mm, (double)h3s_output.v_ref_mm_s,
         (double)h3s_output.a_ref_mm_s2,
-        (double)h3s_output.profile_time_s, (double)h3s_output.profile_duration_s,
         (unsigned)(h3s_output.profile_active ? 1U : 0U),
-
         (unsigned)(h3s_output.hold_mode ? 1U : 0U),
-        (double)h3s_output.hold_blend,
         (double)h3s_output.kd_effective_deg_per_mm_s,
-
         (double)H3S_SCURVE_CONFIG.level_bias_deg,
-        (double)h3s_output.integral_deg,
-        (unsigned)(h3s_output.integral_active ? 1U : 0U),
-        (double)h3s_output.feedforward_deg, (double)h3s_output.rolling_ff_deg,
+        (double)h3s_output.integral_deg, (double)h3s_output.feedforward_deg,
         (double)h3s_output.feedback_deg, (double)h3s_output.dither_deg,
         (double)h3s_output.angle_deg,
-
-        (double)h3s_output.position_error_mm, (double)h3s_output.velocity_error_mm_s,
-        (double)(target_mm - (h3s_have_prediction ? h3s_prediction.x_mm : 0.0f)),
-
-        (double)beam, (double)(h3s_output.angle_deg - beam),
+        (double)(target_mm - x), (double)beam,
+        (double)(h3s_output.angle_deg - beam),
         (long)encoder, (long)h3s_target_count,
         (long)StepMotor_GetPositionErrorCount(),
+        (unsigned)(h3s_output.saturated ? 1U : 0U),
+        (unsigned)(h3s_output.feedback_clipped ? 1U : 0U),
+        (unsigned)(h3s_output.dither_on ? 1U : 0U),
+        (unsigned)(h3s_output.settled ? 1U : 0U),
+        (unsigned long)DebugUart_GetDroppedBytes());
+
+    /* [SCVD] —— 诊断，500 ms 一行。时序、链路健康、慢变量。 */
+    if ((now - h3s_last_diag) < H3S_DIAG_PERIOD_MS){ return; }
+    h3s_last_diag = now;
+    RPI_UART_STATS stats;
+    RpiUart_GetStats(&stats);
+    DebugUart_Printf(
+        "[SCVD] t=%lu vr=%.2f aest=%.1f q=%u tp=%.2f tpd=%.2f hb=%.2f "
+        "rff=%.3f ex=%.2f ev=%.2f iact=%u spd=%.1f frq=%lu at=%u rl=%u "
+        "tc=%lu tcmax=%lu tt=%lu ttmax=%lu stk=%lu stkmax=%lu "
+        "mv=%u vv=%u px=%u edge=%u deg=%u hold=%u guard=%u "
+        "fps=%.1f gap=%lu inv=%lu crc=%lu\r\n",
+        (unsigned long)(now - h3s_start_ms),
+        (double)(h3s_have_prediction ? h3s_prediction.measured_velocity_mm_s : 0.0f),
+        (double)h3s_acceleration_est_mm_s2,
+        (unsigned)(h3s_have_prediction ? h3s_prediction.quality : 0U),
+        (double)h3s_output.profile_time_s, (double)h3s_output.profile_duration_s,
+        (double)h3s_output.hold_blend, (double)h3s_output.rolling_ff_deg,
+        (double)h3s_output.position_error_mm, (double)h3s_output.velocity_error_mm_s,
+        (unsigned)(h3s_output.integral_active ? 1U : 0U),
         (double)StepMotor_GetSpeed(),
         (unsigned long)StepMotor_GetStepFrequencyHz(),
         (unsigned)(StepMotor_IsAtTarget() ? 1U : 0U),
-
-        (unsigned)(h3s_output.saturated ? 1U : 0U),
-        (unsigned)(h3s_output.feedback_clipped ? 1U : 0U),
         (unsigned)(h3s_output.rate_limited ? 1U : 0U),
-        (unsigned)(h3s_output.dither_on ? 1U : 0U),
-        (unsigned)(h3s_output.settled ? 1U : 0U),
+        (unsigned long)h3s_control_us, (unsigned long)h3s_control_us_max,
+        (unsigned long)h3s_tick_us,    (unsigned long)h3s_tick_us_max,
+        (unsigned long)StepMotor_GetTickIntervalMs(),
+        (unsigned long)StepMotor_GetMaxTickIntervalMs(),
         (unsigned)(h3s_have_prediction && h3s_prediction.moving),
         (unsigned)(h3s_have_prediction && h3s_prediction.velocity_trusted),
         (unsigned)(h3s_have_prediction && h3s_prediction.position_extrapolated),
@@ -661,11 +720,10 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         (unsigned)(h3s_have_prediction && h3s_prediction.hold_output),
         (unsigned)guard, (double)stats.frame_rate_x10 * 0.1,
         (unsigned long)stats.seq_gap, (unsigned long)stats.invalid,
-        (unsigned long)stats.crc_fail,
-        (unsigned long)DebugUart_GetDroppedBytes());
+        (unsigned long)stats.crc_fail);
 }
-
 static APP_TASK_STATUS H3S_Tick(float dt){
+    uint32_t tick_start = H3S_TickCounter();
     uint32_t now = BSP_Time_GetMs();
     STEP_MOTOR_GUARD_STATE guard = StepMotor_GetGuardState();
     bool usable = H3S_ReadPrediction();
@@ -721,9 +779,16 @@ static APP_TASK_STATUS H3S_Tick(float dt){
                 .actual_angle_deg = H3S_ActualBeamAngleDeg(),
                 .dt_s = dt,
             };
-            if (!BallScurve_Update(&h3s_controller, &H3S_SCURVE_CONFIG, &input,
-                                   &h3s_output) ||
-                (H3S_CommandAngle(h3s_output.angle_deg) != BSP_STATUS_OK)){
+            /* 只包控制计算本身：剖面推进 + 前馈/反馈合成 + 几何逆解 + 下发。 */
+            uint32_t control_start = H3S_TickCounter();
+            bool control_ok = BallScurve_Update(&h3s_controller, &H3S_SCURVE_CONFIG,
+                                                &input, &h3s_output) &&
+                              (H3S_CommandAngle(h3s_output.angle_deg) == BSP_STATUS_OK);
+            h3s_control_us = H3S_ElapsedUs(control_start);
+            if (h3s_control_us > h3s_control_us_max){
+                h3s_control_us_max = h3s_control_us;
+            }
+            if (!control_ok){
                 h3s_state = H3S_STATE_ACTUATOR_FAULT;
                 return APP_TASK_FAULT;
             }
@@ -743,6 +808,11 @@ static APP_TASK_STATUS H3S_Tick(float dt){
                 if ((h3s_waypoint + 1U) < H3S_WAYPOINT_COUNT){
                     h3s_waypoint++;
                     H3S_PlanCurrentWaypoint();
+                } else if (H3S_SEQUENCE_LOOP != 0U){
+                    /* 绕回 wp0 重来。积分器**不清零**——学到的偏置要跨圈保留。 */
+                    h3s_waypoint = 0U;
+                    h3s_cycle++;
+                    H3S_PlanCurrentWaypoint();
                 } else{
                     /*
                      * 序列跑完后**保持**在最后一个航点，不返回 DONE：纯 S 曲线的
@@ -756,8 +826,23 @@ static APP_TASK_STATUS H3S_Tick(float dt){
 
         case H3S_STATE_DEGRADED:
             if (usable && (fabsf(h3s_prediction.x_mm) <= H3S_ARM_POSITION_MM)){
-                BallScurve_Reset(&h3s_controller, H3S_ActualBeamAngleDeg());
-                h3s_state = H3S_STATE_DONE;
+                /*
+                 * ⚠ 恢复必须回到序列里，**不能掉进 DONE**——DONE 既不推进航点
+                 *   也不重规划，一旦进去序列就永久停住。实测视觉降级占 2~4%，
+                 *   长采集里必然触发，旧写法会让循环悄无声息地卡死。
+                 *
+                 * 用 Resume 而非 Reset：保留积分器学到的水平角偏置。丢帧期间
+                 * 对象没变，把学到的东西抹掉纯属浪费，而且会让收敛值永远读不到。
+                 *
+                 * 丢帧期间球可能已经漂走，所以对当前航点**重新规划**一条剖面，
+                 * 而不是直接接着守——那正是 S 曲线该干的活。
+                 */
+                BallScurve_Resume(&h3s_controller, H3S_ActualBeamAngleDeg());
+                H3S_PlanCurrentWaypoint();
+                DebugUart_Printf("[SCV] resume wp=%u cyc=%u x=%.2f ki=%.4f\r\n",
+                                 (unsigned)h3s_waypoint, (unsigned)h3s_cycle,
+                                 (double)h3s_prediction.x_mm,
+                                 (double)h3s_output.integral_deg);
             }
             break;
 
@@ -778,6 +863,13 @@ static APP_TASK_STATUS H3S_Tick(float dt){
         H3S_Render();
         h3s_rendered_state = h3s_state;
     }
+    /*
+     * 整拍耗时含遥测 printf 的格式化开销。调度器是协作式轮询，这段时间会
+     * 直接推迟同一轮里的 StepMotor_Tick（10 ms 周期），所以它比控制律本身
+     * 更值得盯——遥测字段 smax 就是用来看有没有真的推迟到步进的。
+     */
+    h3s_tick_us = H3S_ElapsedUs(tick_start);
+    if (h3s_tick_us > h3s_tick_us_max){ h3s_tick_us_max = h3s_tick_us; }
     return APP_TASK_RUNNING;
 }
 
