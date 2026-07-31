@@ -31,8 +31,6 @@
 #define LT_TELEMETRY_PERIOD_MS 50U
 /** 灰度最近一次成功读数的最大允许年龄。 */
 #define LT_LINE_SENSOR_MAX_AGE_MS 60U
-/** 弯道灰度瞬时全白时，允许纯曲率/陀螺保持的最长时间。 */
-#define LT_CURVE_GYRO_ONLY_GRACE_MS 200U
 /** 标称环线中心线周长：2*1.5 + 2*pi*0.5。 */
 #define LT_NOMINAL_LAP_DISTANCE_M 6.1416f
 /** A 横线识别只在标称终点前 0.4 m 内开放，避免起点横线误触发。 */
@@ -222,7 +220,6 @@ typedef enum {
     LT_STATE_FINISH_OFFSET,
     LT_STATE_FINISH_RUNOUT,
     LT_STATE_STOPPED,
-    LT_STATE_LINE_LOST,
 } LT_STATE;
 
 typedef enum {
@@ -248,7 +245,6 @@ static uint32_t lt_run_id;
 static uint8_t lt_detected_mask;
 static uint32_t lt_detected_mask_ms;
 static bool lt_sensor_ready;
-static bool lt_line_acquired;
 static BSP_STATUS lt_sensor_init_status;
 static LT_STATE lt_state;
 static LT_FINISH_SOURCE lt_finish_source;
@@ -258,7 +254,6 @@ static float lt_terminal_speed_ceiling_mps;
 static float lt_accel_command_mps2;
 static float lt_steer_command_mps;
 static float lt_curve_feedforward_mps;
-static uint32_t lt_last_line_seen_ms;
 static bool lt_curve_gyro_only;
 static const LT_PROFILE *lt_profile;
 static uint8_t lt_requirement;
@@ -313,7 +308,6 @@ static void LineSensor_Enter(void){
     lt_detected_mask = 0U;
     lt_detected_mask_ms = 0U;
     lt_sensor_ready = false;
-    lt_line_acquired = false;
 }
 
 static bool LineSensor_Tick(uint8_t *detected_mask){
@@ -359,8 +353,6 @@ static const char *LineFollowTest_StateName(void){
             return "RUNOUT";
         case LT_STATE_STOPPED:
             return "STOP";
-        case LT_STATE_LINE_LOST:
-            return "LOST";
         default:
             return "?";
     }
@@ -1112,7 +1104,6 @@ static void LineFollowTask_EnterCommon(const LT_PROFILE *profile,
     lt_accel_command_mps2 = 0.0f;
     lt_steer_command_mps = 0.0f;
     lt_curve_feedforward_mps = 0.0f;
-    lt_last_line_seen_ms = lt_start_ms;
     lt_curve_gyro_only = false;
     lt_straight_b_passed = false;
     lt_straight_b_ms = 0U;
@@ -1253,22 +1244,17 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
     float distance_m = Chassis_GetDistance();
 
     lt_curve_gyro_only = false;
-    if (sensor_ready && (detected_mask != 0U)){
-        lt_last_line_seen_ms = now;
-    }
 
     LineFollowTest_UpdateSegment(now, distance_m);
 
     bool h2_heading_sample_ready = false;
     if ((lt_requirement == 2U) &&
-        (lt_state != LT_STATE_STOPPED) &&
-        (lt_state != LT_STATE_LINE_LOST)){
+        (lt_state != LT_STATE_STOPPED)){
         h2_heading_sample_ready = H2_UpdateHeadingReference(now, distance_m);
     }
     bool loaded_lap_heading_sample_ready = false;
     if (LineFollowTest_UsesLoadedLapPipeline(lt_profile) &&
-        (lt_state != LT_STATE_STOPPED) &&
-        (lt_state != LT_STATE_LINE_LOST)){
+        (lt_state != LT_STATE_STOPPED)){
         loaded_lap_heading_sample_ready =
             H5_UpdateHeadingReference(now, distance_m);
     }
@@ -1349,7 +1335,6 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
         (distance_m >= LT_LAP_ODOM_FALLBACK_DISTANCE_M);
     bool finish_position_reached =
         (lt_state != LT_STATE_STOPPED) &&
-        (lt_state != LT_STATE_LINE_LOST) &&
         (lt_state != LT_STATE_FINISH_RUNOUT) &&
         (((lt_profile->route == LT_ROUTE_STRAIGHT) &&
           (distance_m >= (LT_STRAIGHT_STOP_DISTANCE_M -
@@ -1364,8 +1349,7 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
         LineFollowTest_Stop(now, distance_m);
     }
 
-    if ((lt_state != LT_STATE_STOPPED) &&
-        (lt_state != LT_STATE_LINE_LOST)){
+    if (lt_state != LT_STATE_STOPPED){
         if (lt_requirement == 4U){
             /* H4：启动航向外环给出 omega_ref，gz 内环生成反对称轮速差。 */
             LINE_FOLLOW_OUTPUT gyro_out;
@@ -1434,7 +1418,7 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
                 lt_speed_command_mps + lt_steer_command_mps,
                 lt_speed_command_mps - lt_steer_command_mps);
         } else{
-            LINE_FOLLOW_OUTPUT control_out;
+            LINE_FOLLOW_OUTPUT control_out = {0};
             LineFollowTest_UpdateCurveFeedforward(distance_m, dt);
             float curve_omega_ff_deg_s =
                 LineFollowTest_CurveOmegaFeedforwardDegS(distance_m);
@@ -1461,79 +1445,52 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
                 st = LineFollow_EvaluateOmegaFeedforwardOnly(
                     heading_omega_ff_deg_s, &control_out);
                 lt_curve_gyro_only = (st == BSP_STATUS_OK);
-                if ((st != BSP_STATUS_OK) && sensor_ready){
+                if ((st != BSP_STATUS_OK) && sensor_ready &&
+                    (detected_mask != 0U)){
                     st = LineFollow_EvaluateDetectedMaskWithOmegaFeedforward(
                         detected_mask, dt, motion_omega_ff_deg_s, &control_out);
                 }
+            } else if (sensor_ready && (detected_mask != 0U)){
+                st = LineFollow_EvaluateDetectedMaskWithOmegaFeedforward(
+                    detected_mask, dt, motion_omega_ff_deg_s, &control_out);
             } else{
-                st = sensor_ready
-                         ? LineFollow_EvaluateDetectedMaskWithOmegaFeedforward(
-                               detected_mask, dt, motion_omega_ff_deg_s,
-                               &control_out)
-                         : BSP_STATUS_NOT_READY;
-                bool gyro_only_allowed =
-                    (st != BSP_STATUS_OK) && sensor_ready &&
-                    (detected_mask == 0U) && lt_line_acquired &&
-                    LineFollowTest_IsRightCurve(distance_m) &&
-                    ((uint32_t)(now - lt_last_line_seen_ms) <=
-                     LT_CURVE_GYRO_ONLY_GRACE_MS);
-                if (gyro_only_allowed){
-                    st = LineFollow_EvaluateOmegaFeedforwardOnly(
-                        motion_omega_ff_deg_s, &control_out);
-                    lt_curve_gyro_only = (st == BSP_STATUS_OK);
-                }
+                /*
+                 * 灰度全白或数据暂时不可用不再中止任务。灰度角速度残差自然
+                 * 退为 0，车辆继续使用分段几何/航向参考和陀螺角速度内环；
+                 * 后续任一有效灰度样本会自动重新接入受限残差。
+                 */
+                st = LineFollow_EvaluateOmegaFeedforwardOnly(
+                    motion_omega_ff_deg_s, &control_out);
+                lt_curve_gyro_only = (st == BSP_STATUS_OK);
             }
             if (st != BSP_STATUS_OK){
-                if (LineFollowTest_UsesLoadedLapPipeline(lt_profile) &&
-                    (lt_state == LT_STATE_FINISH_RUNOUT)){
-                    LineFollowTest_ApplySpeedLimit(0.0f, dt);
-                    lt_steer_command_mps = LineFollowTest_MoveTowards(
-                        lt_steer_command_mps, 0.0f,
-                        lt_profile->steer_slew_mps2 * dt);
-                    Chassis_SetWheelSpeed(
-                        lt_speed_command_mps + lt_steer_command_mps,
-                        lt_speed_command_mps - lt_steer_command_mps);
-                } else{
-                    (void)Chassis_Brake();
-                    lt_speed_command_mps = 0.0f;
-                    lt_accel_command_mps2 = 0.0f;
-                    lt_steer_command_mps = 0.0f;
-                    lt_curve_feedforward_mps = 0.0f;
-                    if (lt_line_acquired){
-                        lt_state = LT_STATE_LINE_LOST;
-                        DebugUart_Printf(
-                            "[TRK] line lost latched run=%lu t=%lu s=%.3f sensor=%u mask=%02X ---\r\n",
-                            (unsigned long)lt_run_id,
-                            (unsigned long)(now - lt_start_ms), distance_m,
-                            sensor_ready ? 1U : 0U,
-                            (unsigned int)detected_mask);
-                    }
-                }
-            } else{
-                lt_line_acquired = true;
-                if (LineFollowTest_UsesLoadedLapPipeline(lt_profile) &&
-                    (lt_state == LT_STATE_FINISH_RUNOUT)){
-                    LineFollowTest_ApplySpeedLimit(0.0f, dt);
-                } else{
-                    LineFollowTest_UpdateLongitudinal(distance_m, dt);
-                }
-                if (lt_requirement == 2U){
-                    H2_UpdateStartupState(now);
-                    H2_UpdateStartupSteering(
-                        &control_out, now, distance_m, dt);
-                } else if (LineFollowTest_UsesLoadedLapPipeline(lt_profile)){
-                    H5_UpdateStartupState(now);
-                    H5_UpdateStartupSteering(
-                        &control_out, now, distance_m, dt);
-                } else{
-                    LineFollowTest_UpdateSteering(
-                        &control_out, distance_m, dt);
-                }
-                /* 左右差速反对称，平均轮速始终等于纵向 S 曲线速度。 */
-                Chassis_SetWheelSpeed(
-                    lt_speed_command_mps + lt_steer_command_mps,
-                    lt_speed_command_mps - lt_steer_command_mps);
+                /* IMU 快照也暂时不可用时仍不退出：本拍退化为零反馈，
+                 * 弯道保留几何半差速，直道保持等速，等待下一拍恢复。 */
+                control_out.correction = 0.0f;
+                control_out.line_lost = true;
             }
+            if (LineFollowTest_UsesLoadedLapPipeline(lt_profile) &&
+                (lt_state == LT_STATE_FINISH_RUNOUT)){
+                LineFollowTest_ApplySpeedLimit(0.0f, dt);
+            } else{
+                LineFollowTest_UpdateLongitudinal(distance_m, dt);
+            }
+            if (lt_requirement == 2U){
+                H2_UpdateStartupState(now);
+                H2_UpdateStartupSteering(
+                    &control_out, now, distance_m, dt);
+            } else if (LineFollowTest_UsesLoadedLapPipeline(lt_profile)){
+                H5_UpdateStartupState(now);
+                H5_UpdateStartupSteering(
+                    &control_out, now, distance_m, dt);
+            } else{
+                LineFollowTest_UpdateSteering(
+                    &control_out, distance_m, dt);
+            }
+            /* 左右差速反对称，平均轮速始终等于纵向 S 曲线速度。 */
+            Chassis_SetWheelSpeed(
+                lt_speed_command_mps + lt_steer_command_mps,
+                lt_speed_command_mps - lt_steer_command_mps);
         }
     }
 
@@ -1585,8 +1542,6 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
     const char *status;
     if (lt_state == LT_STATE_STOPPED){
         status = "DONE / BACK";
-    } else if (lt_state == LT_STATE_LINE_LOST){
-        status = "LOST / BACK";
     } else if (((lt_requirement == 2U) &&
                 !lt_h2_heading_reference_valid) ||
                ((lt_requirement == 4U) &&
@@ -1601,7 +1556,7 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
     } else if (lt_curve_gyro_only){
         status = "GYRO HOLD";
     } else if (out.line_lost){
-        status = "LINE LOST";
+        status = "MODEL HOLD";
     } else if (lt_state == LT_STATE_FINISH_OFFSET){
         status = "FINAL OFFSET";
     } else if (lt_state == LT_STATE_FINISH_RUNOUT){
