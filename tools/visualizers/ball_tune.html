@@ -205,12 +205,22 @@
 
 <dialog id="recdlg">
   <div class="phead"><span class="ptitle">录制结束</span>
-    <span class="grow"></span><span class="punit" id="recstat">—</span></div>
-  <p class="note" id="recnote"></p>
+    <span class="punit">选择导出格式</span></div>
+  <div class="tiles" id="recstats"></div>
+  <p class="note" id="recwarn" style="display:none">
+    <b>没有采到遥测行。</b>可能是任务没进（菜单里选 H3 Ball SCurve 或 H3 Hold 0mm），
+    或者串口选错了设备。原始 txt 仍可下载，用来看究竟收到了什么。
+  </p>
+  <p class="note">
+    <b>CSV</b> 给 Excel/pandas 用，表头是字段名，缺字段留空。<br>
+    <b>原始 txt</b> 是逐行原样，喂
+    <span style="font-family:var(--mono)">tools/analysis/</span> 下的
+    landing_stats.py / vel_lag.py / extrap.py 要用这个。
+  </p>
   <div class="dfoot">
-    <button id="reccsv" class="primary">下载 CSV</button>
     <button id="recraw">下载原始 txt</button>
-    <button id="recdrop">丢弃</button>
+    <button id="reccsv" class="primary">下载 CSV</button>
+    <button id="recdlg-close">关闭</button>
   </div>
 </dialog>
 
