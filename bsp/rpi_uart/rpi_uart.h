@@ -1,6 +1,6 @@
 /**
  * @file  rpi_uart.h
- * @brief 树莓派滚球视觉链路，使用 Rpi_UART/UART2（115200 8N1）。
+ * @brief 树莓派视觉与赛道调参链路，使用 Rpi_UART/UART2（115200 8N1）。
  *
  * UART 中断只把字节和到达时刻写入 RX 环形缓冲；11 字节协议解析、CRC 校验和状态更新
  * 均在 RpiUart_Poll() 的主循环上下文执行，不在 ISR 内做控制逻辑。
@@ -16,6 +16,8 @@ extern "C" {
 #endif
 
 #define RPI_UART_PROTOCOL_VERSION 1U
+#define RPI_UART_CONFIG_REQUEST   0x81U
+#define RPI_UART_CONFIG_RESPONSE  0x82U
 #define RPI_UART_FRAME_SIZE       11U
 #define RPI_UART_DEGRADED_AGE_MS  60U
 #define RPI_UART_TIMEOUT_MS       200U
@@ -65,7 +67,14 @@ typedef struct {
     uint8_t quality;
 } RPI_UART_PREDICTION;
 
-/** 初始化 UART2 RX 中断，并复位解析器和诊断状态。 */
+typedef struct {
+    uint8_t  seq;
+    uint8_t  op;
+    uint16_t param_id;
+    uint16_t value;
+} RPI_UART_CONFIG_REQUEST_FRAME;
+
+/** 初始化 UART2 RX/TX 中断，并复位解析器、队列和诊断状态。 */
 void RpiUart_Init(void);
 
 /** 取出并解析当前排队的全部字节；须由主循环周期调用。 */
@@ -76,6 +85,14 @@ void RpiUart_ResetStats(void);
 
 /** 读取上一次 VALID 测量；无效帧绝不会覆盖它。 */
 bool RpiUart_GetLatest(RPI_UART_MEASUREMENT *measurement);
+
+/** 取出一条已通过同步字和 CRC 校验的赛道调参请求。 */
+bool RpiUart_GetConfigRequest(RPI_UART_CONFIG_REQUEST_FRAME *request);
+
+/** 非阻塞发送一条赛道调参响应；完整帧放不下时返回 false。 */
+bool RpiUart_SendConfigResponse(uint8_t seq, uint8_t status,
+                                uint16_t param_id, uint16_t value,
+                                uint8_t priority);
 
 /** 读取协议层与 UART 硬件层诊断统计。 */
 void RpiUart_GetStats(RPI_UART_STATS *stats);

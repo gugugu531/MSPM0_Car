@@ -7,6 +7,7 @@
  */
 #include "app_line_task.h"
 #include "app_ball_scurve_task.h"
+#include "app_track_tune.h"
 
 #include "line_follow.h"
 #include "chassis.h"
@@ -31,21 +32,8 @@
 #define LT_TELEMETRY_PERIOD_MS 50U
 /** 灰度最近一次成功读数的最大允许年龄。 */
 #define LT_LINE_SENSOR_MAX_AGE_MS 60U
-/** 标称环线中心线周长：2*1.5 + 2*pi*0.5。 */
-#define LT_NOMINAL_LAP_DISTANCE_M 6.1416f
-/** A 横线识别只在标称终点前 0.4 m 内开放，避免起点横线误触发。 */
-#define LT_FINISH_LINE_ARM_MARGIN_M 0.400f
-/** H5/H6 用户可调减速预警距离：减小该值会推迟开始减速。 */
-#define LT_LOADED_LAP_DECEL_WARNING_DISTANCE_M 0.250f
-/**
- * H5/H6 进入 ODOM 状态的编码器里程偏置。
- * 正值延后、负值提前；0 保持当前 LT_LAP_STOP_DISTANCE_M 基准不变。
- */
-#define LT_LOADED_LAP_ODOM_ARRIVAL_OFFSET_M 0.100f
 /** 实测平行通过 A 点横线可稳定命中至少 3 路；末段首帧命中即制动。 */
 #define LT_FINISH_ENTER_MIN_COUNT 3U
-/** A 点横线漏检时允许的最大编码器超程。 */
-#define LT_FINISH_ODOM_OVERRUN_M 0.200f
 /** line_follow 默认 correction 的最终半幅（DIFFERENTIAL_LIMIT/2）。 */
 #define LT_LINE_CORRECTION_LIMIT \
     (LINE_FOLLOW_DEFAULT_DIFFERENTIAL_LIMIT * 0.5f)
@@ -112,13 +100,8 @@
 /** 制动包络只使用纵向加速度权限的一半，为 jerk 建立和执行延迟留距离。 */
 #define LT_TERMINAL_BRAKE_ENVELOPE_RATIO 0.50f
 /** 四段状态机的赛道标称几何，以及两轮接地点中心的实测轮距。 */
-#define LT_TRACK_STRAIGHT_LENGTH_M 1.500f
 #define LT_TRACK_CURVE_RADIUS_M 0.500f
 #define LT_EFFECTIVE_TRACK_WIDTH_M 0.206f
-/** H2 高速实测需要温和补偿滚阻/侧滑；H5/H6 低速使用几何理论值。 */
-#define LT_CURVE_FEEDFORWARD_SCALE_S2 1.10f
-#define LT_H5_CURVE_FEEDFORWARD_SCALE_S2 1.00f
-#define LT_CURVE_FEEDFORWARD_SCALE_S4 1.00f
 #define LT_PI 3.1415926f
 #define LT_RAD_TO_DEG (180.0f / LT_PI)
 /** H 题实测专用灰度角速度外环：降低增益并限制其残差权限。 */
@@ -132,47 +115,6 @@
  * 四段控制边界直接表示灰度阵列到达 B/C/D/A；轮轴位于阵列后方 12.5 cm。
  * S4 弯道控制保持到阵列重新识别 A 点横线并立即制动。
  */
-#define LT_S1_OFFSET_M             0.000f   /* S1 入弯位置偏置 */
-#define LT_S2_OFFSET_M             0.000f   /* S2 出弯位置偏置 */
-#define LT_S3_OFFSET_M             0.070f   /* S3 入弯位置偏置 */
-
-#define LT_SEGMENT_S1_END_M \
-    (LT_TRACK_STRAIGHT_LENGTH_M + LT_S1_OFFSET_M)
-#define LT_SEGMENT_S2_END_M \
-    (LT_SEGMENT_S1_END_M + LT_PI * LT_TRACK_CURVE_RADIUS_M + LT_S2_OFFSET_M)
-#define LT_SEGMENT_S3_END_M \
-    (LT_SEGMENT_S2_END_M + LT_TRACK_STRAIGHT_LENGTH_M + LT_S3_OFFSET_M)
-#define LT_SEGMENT_S4_CURVE_END_M \
-    (LT_SEGMENT_S3_END_M + LT_PI * LT_TRACK_CURVE_RADIUS_M)
-
-/*
- * ===== 手动推车编码器标定点（沿前进方向里程，单位 m）=====
- * 当前默认使用以灰度阵列为测量点的标称几何值，后续可用实测编码器数据覆盖：
- *   LT_SEGMENT_S2_END_M       : S2(第一弯)->S3(第二直道) 切换里程
- *   LT_SEGMENT_S3_END_M       : S3->S4(第二弯) 切换里程
- *   LT_SEGMENT_S4_CURVE_END_M : 灰度阵列回到 A 点的标称里程
- *   LT_LAP_STOP_DISTANCE_M    : A 点横线的标称里程（仅用于减速参考）
- */
-/**
- * 停车参考点微调偏移量（单位: m）。
- *  > 0 (如 +0.050f)：将减速/停车参考点整体后移 5cm
- *  < 0 (如 -0.050f)：将减速/停车参考点整体提前 5cm
- */
-#define LT_LAP_STOP_OFFSET_M     0.100f  /* 终点位置偏置 */
-
-#define LT_LAP_STOP_DISTANCE_M \
-    (LT_NOMINAL_LAP_DISTANCE_M + LT_LAP_STOP_OFFSET_M)
-#define LT_LOADED_LAP_ODOM_ARRIVAL_DISTANCE_M \
-    (LT_LAP_STOP_DISTANCE_M + LT_LOADED_LAP_ODOM_ARRIVAL_OFFSET_M)
-#define LT_LAP_ODOM_FALLBACK_DISTANCE_M \
-    (LT_LAP_STOP_DISTANCE_M + LT_FINISH_ODOM_OVERRUN_M)
-
-/*
- * S2->S3 进入第二直道后，用陀螺仪(期望航向角速度=0)回正一段距离。
- * S4 后不再设置回正窗口，因为灰度阵列到达 A 点即为任务停车位置。
- */
-#define LT_S3_GYRO_RECOVER_M     0.30f
-
 typedef enum {
     LT_ROUTE_LAP = 0,
     LT_ROUTE_STRAIGHT,
@@ -256,6 +198,8 @@ static float lt_steer_command_mps;
 static float lt_curve_feedforward_mps;
 static bool lt_curve_gyro_only;
 static const LT_PROFILE *lt_profile;
+/* H2/H5/H6 进入任务时冻结；H4 直线任务不读取该配置。 */
+static APP_TRACK_TUNE_CONFIG lt_track_tune;
 static uint8_t lt_requirement;
 static const char *lt_title;
 static bool lt_straight_b_passed;
@@ -295,6 +239,10 @@ static LT_SEGMENT lt_segment;
 /* 入直道后的陀螺仪回正窗口：active 期间忽略灰度、按 gz 走直线，直到里程达 end。 */
 static bool lt_gyro_recover_active;
 static float lt_gyro_recover_end_m;
+
+static float LineFollowTest_MmToM(uint16_t value_mm){
+    return (float)value_mm * 0.001f;
+}
 
 /*
  * Yahboom 循线是阻塞驱动，JY61P 是中断状态机。app 层负责共享 I2C0 的时间片：
@@ -408,21 +356,21 @@ static bool LineFollowTest_InLapFinishApproach(float distance_m){
     return (lt_profile != NULL) && (lt_profile->route == LT_ROUTE_LAP) &&
         (lt_segment == LT_SEGMENT_S4) &&
         (distance_m >=
-         (LT_LAP_STOP_DISTANCE_M - LT_FINISH_LINE_ARM_MARGIN_M));
+         (LineFollowTest_MmToM(lt_track_tune.lap_stop_mm) -
+          LineFollowTest_MmToM(lt_track_tune.finish_arm_margin_mm)));
 }
 
 static float LineFollowTest_LapDecelWarningDistanceM(void){
     return LineFollowTest_UsesLoadedLapPipeline(lt_profile)
-               ? LT_LOADED_LAP_DECEL_WARNING_DISTANCE_M
-               : LT_FINISH_LINE_ARM_MARGIN_M;
+               ? LineFollowTest_MmToM(lt_track_tune.loaded_decel_warning_mm)
+               : LineFollowTest_MmToM(lt_track_tune.finish_arm_margin_mm);
 }
 
 static bool LineFollowTest_InLapDecelApproach(float distance_m){
     return (lt_profile != NULL) && (lt_profile->route == LT_ROUTE_LAP) &&
         (lt_segment == LT_SEGMENT_S4) &&
-        (distance_m >=
-         (LT_LAP_STOP_DISTANCE_M -
-          LineFollowTest_LapDecelWarningDistanceM()));
+        (distance_m >= (LineFollowTest_MmToM(lt_track_tune.lap_stop_mm) -
+                        LineFollowTest_LapDecelWarningDistanceM()));
 }
 
 /* 开启一段陀螺仪回正窗口，直到里程达到 end_distance_m。 */
@@ -441,17 +389,19 @@ static void LineFollowTest_UpdateSegment(uint32_t now, float distance_m){
 
     LT_SEGMENT previous = lt_segment;
     if ((lt_segment == LT_SEGMENT_S1) &&
-        (distance_m >= LT_SEGMENT_S1_END_M)){
+        (distance_m >= LineFollowTest_MmToM(lt_track_tune.s1_end_mm))){
         lt_segment = LT_SEGMENT_S2;
     }
     if ((lt_segment == LT_SEGMENT_S2) &&
-        (distance_m >= LT_SEGMENT_S2_END_M)){
+        (distance_m >= LineFollowTest_MmToM(lt_track_tune.s2_end_mm))){
         lt_segment = LT_SEGMENT_S3;
         /* 改动1：S2 出弯进 S3 用陀螺仪回正一段，再交还灰度循迹。 */
-        LineFollowTest_ArmGyroRecover(LT_SEGMENT_S2_END_M + LT_S3_GYRO_RECOVER_M);
+        LineFollowTest_ArmGyroRecover(
+            LineFollowTest_MmToM(lt_track_tune.s2_end_mm) +
+            LineFollowTest_MmToM(lt_track_tune.s3_gyro_recover_mm));
     }
     if ((lt_segment == LT_SEGMENT_S3) &&
-        (distance_m >= LT_SEGMENT_S3_END_M)){
+        (distance_m >= LineFollowTest_MmToM(lt_track_tune.s3_end_mm))){
         lt_segment = LT_SEGMENT_S4;
     }
 
@@ -477,7 +427,8 @@ static float LineFollowTest_FinishRemaining(float distance_m){
 
     /* LAP：末段编码器只负责提供到 A 横线的减速参考。 */
     if (LineFollowTest_InLapDecelApproach(distance_m)){
-        float remaining_m = LT_LAP_STOP_DISTANCE_M - distance_m;
+        float remaining_m =
+            LineFollowTest_MmToM(lt_track_tune.lap_stop_mm) - distance_m;
         return (remaining_m > 0.0f) ? remaining_m : 0.0f;
     }
     return 0.0f;
@@ -561,15 +512,17 @@ static float LapHeadingReferenceDeg(float heading_start_deg,
                                     float distance_m){
     float reference_unwrapped_deg = heading_start_deg;
     if (lt_segment == LT_SEGMENT_S2){
-        float progress = (distance_m - LT_SEGMENT_S1_END_M) /
-            (LT_SEGMENT_S2_END_M - LT_SEGMENT_S1_END_M);
+        float s1_end_m = LineFollowTest_MmToM(lt_track_tune.s1_end_mm);
+        float progress = (distance_m - s1_end_m) /
+            (LineFollowTest_MmToM(lt_track_tune.s2_end_mm) - s1_end_m);
         progress = Kinematics_Clamp(progress, 0.0f, 1.0f);
         reference_unwrapped_deg += 180.0f * progress;
     } else if (lt_segment == LT_SEGMENT_S3){
         reference_unwrapped_deg += 180.0f;
     } else if (lt_segment == LT_SEGMENT_S4){
-        float progress = (distance_m - LT_SEGMENT_S3_END_M) /
-            (LT_SEGMENT_S4_CURVE_END_M - LT_SEGMENT_S3_END_M);
+        float s3_end_m = LineFollowTest_MmToM(lt_track_tune.s3_end_mm);
+        float progress = (distance_m - s3_end_m) /
+            (LineFollowTest_MmToM(lt_track_tune.s4_heading_end_mm) - s3_end_m);
         progress = Kinematics_Clamp(progress, 0.0f, 1.0f);
         reference_unwrapped_deg += 180.0f + 180.0f * progress;
     }
@@ -884,13 +837,16 @@ static bool LineFollowTest_IsRightCurve(float distance_m){
 
 static float LineFollowTest_CurveFeedforwardScale(
     const LT_PROFILE *profile, LT_SEGMENT segment){
+    if (profile->route != LT_ROUTE_LAP){
+        return 1.0f;
+    }
     if (segment == LT_SEGMENT_S4){
-        return LT_CURVE_FEEDFORWARD_SCALE_S4;
+        return (float)lt_track_tune.s4_ff_x1000 * 0.001f;
     }
     if (LineFollowTest_UsesLoadedLapPipeline(profile)){
-        return LT_H5_CURVE_FEEDFORWARD_SCALE_S2;
+        return (float)lt_track_tune.loaded_s2_ff_x1000 * 0.001f;
     }
-    return LT_CURVE_FEEDFORWARD_SCALE_S2;
+    return (float)lt_track_tune.h2_s2_ff_x1000 * 0.001f;
 }
 
 static void LineFollowTest_UpdateCurveFeedforward(float distance_m, float dt_s){
@@ -1072,6 +1028,9 @@ static void LineFollowTask_EnterCommon(const LT_PROFILE *profile,
                                        uint8_t requirement,
                                        const char *title){
     lt_profile = profile;
+    if (profile->route == LT_ROUTE_LAP){
+        AppTrackTune_GetSnapshot(&lt_track_tune);
+    }
     lt_requirement = requirement;
     lt_title = title;
     lt_start_ms = BSP_Time_GetMs();
@@ -1080,7 +1039,8 @@ static void LineFollowTask_EnterCommon(const LT_PROFILE *profile,
         lt_run_id = 1U;
     }
     LINE_FOLLOW_CONFIG line_config = LineFollow_GetDefaultConfig();
-    line_config.gyro_line_kp = LT_GYRO_LINE_KP;
+    /* 当前灰度仅用于 A 点停车识别；需要恢复循迹转向时改回 LT_GYRO_LINE_KP。 */
+    line_config.gyro_line_kp = 0.00f;
     if (requirement == 2U){
         line_config.omega_line_limit = LT_GYRO_LINE_LIMIT_EMPTY_DEGPS;
         line_config.omega_ref_limit = LT_GYRO_REF_LIMIT_EMPTY_DEGPS;
@@ -1098,7 +1058,7 @@ static void LineFollowTask_EnterCommon(const LT_PROFILE *profile,
     lt_finish_target_distance_m =
         (profile->route == LT_ROUTE_STRAIGHT)
             ? LT_STRAIGHT_STOP_DISTANCE_M
-            : LT_NOMINAL_LAP_DISTANCE_M;
+            : LineFollowTest_MmToM(lt_track_tune.lap_stop_mm);
     lt_speed_command_mps = 0.0f;
     lt_terminal_speed_ceiling_mps = profile->cruise_speed_mps;
     lt_accel_command_mps2 = 0.0f;
@@ -1157,6 +1117,24 @@ static void LineFollowTask_EnterCommon(const LT_PROFILE *profile,
         LineFollowTest_UsesLoadedLapPipeline(profile)
             ? "on"
             : ((requirement >= 4U) ? "off" : "n/a"));
+    if (profile->route == LT_ROUTE_LAP){
+        DebugUart_Printf(
+            "[TRK] cfg mm=%u,%u,%u,%u recover=%u stop=%u arm=%u "
+            "decel=%u loaded_odom=%u h2_fallback=%u ff=%u,%u,%u\r\n",
+            (unsigned int)lt_track_tune.s1_end_mm,
+            (unsigned int)lt_track_tune.s2_end_mm,
+            (unsigned int)lt_track_tune.s3_end_mm,
+            (unsigned int)lt_track_tune.s4_heading_end_mm,
+            (unsigned int)lt_track_tune.s3_gyro_recover_mm,
+            (unsigned int)lt_track_tune.lap_stop_mm,
+            (unsigned int)lt_track_tune.finish_arm_margin_mm,
+            (unsigned int)lt_track_tune.loaded_decel_warning_mm,
+            (unsigned int)lt_track_tune.loaded_odom_arrival_mm,
+            (unsigned int)lt_track_tune.h2_odom_fallback_mm,
+            (unsigned int)lt_track_tune.h2_s2_ff_x1000,
+            (unsigned int)lt_track_tune.loaded_s2_ff_x1000,
+            (unsigned int)lt_track_tune.s4_ff_x1000);
+    }
 }
 
 static void H2_Enter(void){
@@ -1300,7 +1278,8 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
         LineFollowTest_UsesLoadedLapPipeline(lt_profile) &&
         (lt_state == LT_STATE_FOLLOW) &&
         (lt_segment == LT_SEGMENT_S4) &&
-        (distance_m >= LT_LOADED_LAP_ODOM_ARRIVAL_DISTANCE_M);
+        (distance_m >=
+         LineFollowTest_MmToM(lt_track_tune.loaded_odom_arrival_mm));
     if (LineFollowTest_UsesLoadedLapPipeline(lt_profile) &&
         (lt_state == LT_STATE_FOLLOW) &&
         (finish_line_detected || loaded_lap_odom_arrival)){
@@ -1332,7 +1311,8 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
         (lt_state == LT_STATE_FOLLOW) &&
         (lt_profile->route == LT_ROUTE_LAP) &&
         (lt_segment == LT_SEGMENT_S4) &&
-        (distance_m >= LT_LAP_ODOM_FALLBACK_DISTANCE_M);
+        (distance_m >=
+         LineFollowTest_MmToM(lt_track_tune.h2_odom_fallback_mm));
     bool finish_position_reached =
         (lt_state != LT_STATE_STOPPED) &&
         (lt_state != LT_STATE_FINISH_RUNOUT) &&

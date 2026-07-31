@@ -262,6 +262,7 @@ python tools/checks/check_docs.py
 - 模块接口：[`docs/interfaces/`](docs/interfaces/)
   - Yahboom I2C 循线：[`bsp_yahboom_track.md`](docs/interfaces/bsp_yahboom_track.md)
   - JY61P：[`bsp_wit_sdk.md`](docs/interfaces/bsp_wit_sdk.md)
+  - 树莓派赛道调参：[`rpi_track_tuning.md`](docs/interfaces/rpi_track_tuning.md)
 - H 题控制方案（循迹 + 摆杆滚球的控制律与参数）：[`docs/control-plan.md`](docs/control-plan.md)
 - 静止稳球上板与机械标定：[`docs/ball-balance-bringup.md`](docs/ball-balance-bringup.md)
 - S 曲线滚球控制、参数与仿真：[`docs/ball-scurve.md`](docs/ball-scurve.md)

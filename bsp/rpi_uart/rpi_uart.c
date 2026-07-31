@@ -1,6 +1,6 @@
 /**
  * @file  rpi_uart.c
- * @brief Rpi_UART/UART2 接收、协议解析与测量前推实现。
+ * @brief Rpi_UART/UART2 收发、协议解析、测量前推与调参帧队列。
  */
 #include "rpi_uart.h"
 
@@ -12,6 +12,10 @@
 
 #define RPI_RX_BUFFER_SIZE 128U
 #define RPI_RX_BUFFER_MASK (RPI_RX_BUFFER_SIZE - 1U)
+#define RPI_TX_BUFFER_SIZE 256U
+#define RPI_TX_BUFFER_MASK (RPI_TX_BUFFER_SIZE - 1U)
+#define RPI_CONFIG_QUEUE_SIZE 8U
+#define RPI_CONFIG_QUEUE_MASK (RPI_CONFIG_QUEUE_SIZE - 1U)
 #define RPI_SYNC0          0xA5U
 #define RPI_SYNC1          0x5AU
 #define RPI_V_RECOVERY_FRAMES 3U
@@ -31,12 +35,25 @@ typedef struct {
     uint32_t arrival_ms;
 } RPI_RX_ITEM;
 
+#if ((RPI_TX_BUFFER_SIZE & (RPI_TX_BUFFER_SIZE - 1U)) != 0U)
+#error "RPI_TX_BUFFER_SIZE must be a power of two"
+#endif
+#if ((RPI_CONFIG_QUEUE_SIZE & (RPI_CONFIG_QUEUE_SIZE - 1U)) != 0U)
+#error "RPI_CONFIG_QUEUE_SIZE must be a power of two"
+#endif
+
 static RPI_RX_ITEM rx_buffer[RPI_RX_BUFFER_SIZE];
 static volatile uint16_t rx_head;
 static volatile uint16_t rx_tail;
 static volatile uint32_t uart_rx_bytes;
 static volatile uint32_t uart_rx_dropped;
 static volatile uint32_t uart_errors;
+static uint8_t tx_buffer[RPI_TX_BUFFER_SIZE];
+static volatile uint16_t tx_head;
+static volatile uint16_t tx_tail;
+static RPI_UART_CONFIG_REQUEST_FRAME config_queue[RPI_CONFIG_QUEUE_SIZE];
+static uint8_t config_head;
+static uint8_t config_tail;
 
 static uint8_t parse_buffer[RPI_UART_FRAME_SIZE];
 static uint32_t parse_time[RPI_UART_FRAME_SIZE];
@@ -91,6 +108,10 @@ void RpiUart_ResetStats(void){
 void RpiUart_Init(void){
     rx_head = 0U;
     rx_tail = 0U;
+    tx_head = 0U;
+    tx_tail = 0U;
+    config_head = 0U;
+    config_tail = 0U;
     parse_len = 0U;
     have_latest = false;
     last_frame_valid = false;
@@ -98,6 +119,8 @@ void RpiUart_Init(void){
     velocity_block_frames = 0U;
     RpiUart_ResetStats();
 
+    DL_UART_Main_setTXFIFOThreshold(Rpi_UART_INST, DL_UART_TX_FIFO_LEVEL_ONE_ENTRY);
+    DL_UART_Main_disableInterrupt(Rpi_UART_INST, DL_UART_MAIN_INTERRUPT_TX);
     DL_UART_Main_setRXFIFOThreshold(Rpi_UART_INST, DL_UART_RX_FIFO_LEVEL_ONE_ENTRY);
     RpiUart_FlushHardwareRx();
     DL_UART_Main_clearInterruptStatus(Rpi_UART_INST,
@@ -185,6 +208,20 @@ static void AcceptFrame(uint32_t rx_end_ms){
     }
 }
 
+static void AcceptConfigRequest(void){
+    uint8_t next = (uint8_t)((config_head + 1U) & RPI_CONFIG_QUEUE_MASK);
+    if (next == config_tail){
+        return;
+    }
+    config_queue[config_head].seq = parse_buffer[3];
+    config_queue[config_head].op = parse_buffer[4];
+    config_queue[config_head].param_id =
+        (uint16_t)parse_buffer[5] | ((uint16_t)parse_buffer[6] << 8U);
+    config_queue[config_head].value =
+        (uint16_t)parse_buffer[7] | ((uint16_t)parse_buffer[8] << 8U);
+    config_head = next;
+}
+
 static void ParserPush(uint8_t byte, uint32_t arrival_ms){
     if (parse_len < RPI_UART_FRAME_SIZE){
         parse_buffer[parse_len] = byte;
@@ -197,12 +234,6 @@ static void ParserPush(uint8_t byte, uint32_t arrival_ms){
         return;
     }
 
-    if (parse_buffer[2] != RPI_UART_PROTOCOL_VERSION){
-        diag.ver_fail++;
-        ParserShiftOne();
-        ParserSeekSync();
-        return;
-    }
     if (RpiUart_Crc8(&parse_buffer[2], 8U) != parse_buffer[10]){
         diag.crc_fail++;
         ParserShiftOne();
@@ -210,7 +241,13 @@ static void ParserPush(uint8_t byte, uint32_t arrival_ms){
         return;
     }
 
-    AcceptFrame(parse_time[10]);
+    if (parse_buffer[2] == RPI_UART_PROTOCOL_VERSION){
+        AcceptFrame(parse_time[10]);
+    } else if (parse_buffer[2] == RPI_UART_CONFIG_REQUEST){
+        AcceptConfigRequest();
+    } else{
+        diag.ver_fail++;
+    }
     parse_len = 0U;
 }
 
@@ -237,6 +274,55 @@ bool RpiUart_GetLatest(RPI_UART_MEASUREMENT *measurement){
     }
     *measurement = latest;
     return true;
+}
+
+bool RpiUart_GetConfigRequest(RPI_UART_CONFIG_REQUEST_FRAME *request){
+    if ((request == NULL) || (config_tail == config_head)){
+        return false;
+    }
+    *request = config_queue[config_tail];
+    config_tail = (uint8_t)((config_tail + 1U) & RPI_CONFIG_QUEUE_MASK);
+    return true;
+}
+
+bool RpiUart_SendConfigResponse(uint8_t seq, uint8_t status,
+                                uint16_t param_id, uint16_t value,
+                                uint8_t priority){
+    uint8_t frame[RPI_UART_FRAME_SIZE];
+    uint16_t used = (uint16_t)((tx_head - tx_tail) & RPI_TX_BUFFER_MASK);
+    uint16_t free_bytes = (uint16_t)(RPI_TX_BUFFER_SIZE - 1U - used);
+    if (free_bytes < RPI_UART_FRAME_SIZE){
+        return false;
+    }
+
+    frame[0] = RPI_SYNC0;
+    frame[1] = RPI_SYNC1;
+    frame[2] = RPI_UART_CONFIG_RESPONSE;
+    frame[3] = seq;
+    frame[4] = status;
+    frame[5] = (uint8_t)param_id;
+    frame[6] = (uint8_t)(param_id >> 8U);
+    frame[7] = (uint8_t)value;
+    frame[8] = (uint8_t)(value >> 8U);
+    frame[9] = priority;
+    frame[10] = RpiUart_Crc8(&frame[2], 8U);
+
+    for (uint8_t i = 0U; i < RPI_UART_FRAME_SIZE; i++){
+        tx_buffer[tx_head] = frame[i];
+        tx_head = (uint16_t)((tx_head + 1U) & RPI_TX_BUFFER_MASK);
+    }
+    DL_UART_Main_enableInterrupt(Rpi_UART_INST, DL_UART_MAIN_INTERRUPT_TX);
+    return true;
+}
+
+static void RpiUart_TxIsr(void){
+    while ((tx_tail != tx_head) && !DL_UART_Main_isTXFIFOFull(Rpi_UART_INST)){
+        DL_UART_Main_transmitData(Rpi_UART_INST, tx_buffer[tx_tail]);
+        tx_tail = (uint16_t)((tx_tail + 1U) & RPI_TX_BUFFER_MASK);
+    }
+    if (tx_tail == tx_head){
+        DL_UART_Main_disableInterrupt(Rpi_UART_INST, DL_UART_MAIN_INTERRUPT_TX);
+    }
 }
 
 void RpiUart_GetStats(RPI_UART_STATS *stats){
@@ -318,6 +404,9 @@ bool RpiUart_Observe(RPI_UART_PREDICTION *observation){
 
 void Rpi_UART_INST_IRQHandler(void){
     switch (DL_UART_Main_getPendingInterrupt(Rpi_UART_INST)){
+        case DL_UART_MAIN_IIDX_TX:
+            RpiUart_TxIsr();
+            break;
         case DL_UART_MAIN_IIDX_RX:
             while (!DL_UART_Main_isRXFIFOEmpty(Rpi_UART_INST)){
                 RPI_RX_ITEM item;

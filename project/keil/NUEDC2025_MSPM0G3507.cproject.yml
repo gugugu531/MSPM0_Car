@@ -92,6 +92,7 @@ project:
         - file: ../../app/app_ball_task.c
         - file: ../../app/app_ball_scurve_task.c
         - file: ../../app/app_ball_tune.c
+        - file: ../../app/app_track_tune.c
         - file: ../../app/app_line_task.c
         - file: ../../app/app_menu.c
         - file: ../../app/app_menu_def.c

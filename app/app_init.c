@@ -5,6 +5,7 @@
 #include "app_init.h"
 #include "app_mode.h"
 #include "app_scheduler.h"
+#include "app_track_tune.h"
 
 #include "ti_msp_dl_config.h"
 #include "bsp_time.h"
@@ -37,9 +38,10 @@ static void App_StepMotorTick(void){
     StepMotor_Tick(BSP_Time_GetMs());
 }
 
-/* UART2 ISR 只收字节；CRC、重同步和状态更新留在主循环上下文。 */
+/* UART2 ISR 只搬运 RX/TX 字节；协议解析和调参逻辑留在主循环上下文。 */
 static void App_RpiUartTick(void){
     RpiUart_Poll();
+    AppTrackTune_Poll(App_Mode_Get() == APP_MODE_MENU);
 }
 
 void App_Init(void){
@@ -47,6 +49,7 @@ void App_Init(void){
     BSP_Time_Init();
     DebugUart_Init();   /* 非阻塞 debug 串口(Debug_Ex/UART1): Speed PID 等遥测输出用。 */
     RpiUart_Init();     /* 树莓派视觉专线 Rpi_UART/UART2：PA24 RX，115200 8N1。 */
+    AppTrackTune_Init(); /* H2/H5/H6 现场参数仅驻留 RAM，上电恢复编译期默认值。 */
 
     /*
      * Ui/Chassis 先于任何可能触发 SystemFault 的步骤初始化，
