@@ -112,6 +112,8 @@ extern "C" {
  * 取 3.0 = 误差 15deg 给 45deg/s。调大则接近目标易过冲,表现为末端来回抖。
  */
 #define STEP_MOTOR_SERVO_KP 3.0f
+/* 运行期可调位置增益的上限；H3 可临时提高，退出任务后恢复默认值。 */
+#define STEP_MOTOR_SERVO_KP_MAX 12.0f
 
 /*
  * 到位容差,单位:编码器计数。**伺服停脉冲与 IsAtTarget() 共用本值**,
@@ -201,7 +203,7 @@ extern "C" {
  *
  * 坐标轴(当前实测值):
  *
- *         0        20              154              430      450
+ *         0        20              220              430      450
  *         │         │               │                │        │
  *     HARD_MIN  SOFT_MIN          水平位          SOFT_MAX  HARD_MAX
  *    上电参考位   ├──── 合法工作区间 ────────────────┤   另一端机械端
@@ -240,10 +242,11 @@ extern "C" {
     (STEP_MOTOR_ENC_HARD_MAX_COUNTS - STEP_MOTOR_ENC_LIMIT_MARGIN_COUNTS)
 
 /*
- * 水管水平位的计数,即「从上电参考位到水平位」的距离。不是限位,
- * 是上电抬升的默认目标,也是上层摆杆角闭环该用的零点。
+ * 水管名义水平位的计数,即「从上电参考位到水平位」的估计距离。不是限位。
+ * 目前水平观测范围为 200~240 cnt，220 只作上电抬升名义目标；H3 不把它当作
+ * safe return，也不假设它就是动力学真零点。
  */
-#define STEP_MOTOR_ENC_LEVEL_COUNTS 206
+#define STEP_MOTOR_ENC_LEVEL_COUNTS 220
 
 /* ===== 上电自动抬升 ===== */
 /*
@@ -416,6 +419,14 @@ BSP_STATUS StepMotor_Stop(void);
  */
 BSP_STATUS StepMotor_SetSpeedLimit(float max_speed_deg_per_s);
 
+/**
+ * @brief 设置位置伺服比例增益，单位 1/s；不会改变位置与物理限位。
+ */
+BSP_STATUS StepMotor_SetServoGain(float kp_s_inv);
+
+/** @brief 获取当前运行期位置伺服比例增益，单位 1/s。 */
+float StepMotor_GetServoGain(void);
+
 /* ===== 状态查询 ===== */
 
 /**
@@ -498,6 +509,15 @@ float StepMotor_GetSpeed(void);
  *       诊断转速不对时应先看它。
  */
 uint32_t StepMotor_GetStepFrequencyHz(void);
+
+/** @brief TIMG6 当前 LOAD/CC/CTR 寄存器，只用于诊断 PWM 装填时序。 */
+uint32_t StepMotor_GetPwmLoadValue(void);
+uint32_t StepMotor_GetPwmCompareValue(void);
+uint32_t StepMotor_GetPwmCounterValue(void);
+
+/** @brief 最近/启动以来最大 StepMotor_Tick 间隔，单位 ms。 */
+uint32_t StepMotor_GetTickIntervalMs(void);
+uint32_t StepMotor_GetMaxTickIntervalMs(void);
 
 #ifdef __cplusplus
 }

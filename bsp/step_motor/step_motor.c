@@ -39,6 +39,7 @@ static const DL_TIMER_CC_INDEX motor_pwm_channel = STEP_MOTOR_BEAM_PWM_CHANNEL;
 
 static int32_t  target_counts;          /* 目标位置,已过限幅。 */
 static float    speed_limit_deg_s = STEP_MOTOR_SERVO_DEFAULT_SPEED_LIMIT_DEG_S;
+static float    servo_kp_s_inv = STEP_MOTOR_SERVO_KP;
 static float    servo_speed_deg_s;      /* 伺服本拍下发的速度(只读诊断)。 */
 static bool     driver_enabled;         /* 驱动器 EN 当前状态。 */
 /*
@@ -53,6 +54,10 @@ static bool     driver_enabled;         /* 驱动器 EN 当前状态。 */
  */
 static bool     servo_at_target = true;
 static uint32_t last_step_freq_hz;      /* 最近一次实际应用的步进频率(限幅后)。 */
+static uint32_t step_tick_last_ms;
+static uint32_t step_tick_interval_ms;
+static uint32_t step_tick_max_interval_ms;
+static bool     step_tick_have_last;
 
 /* ===== QEI 编码器状态 ===== */
 
@@ -248,7 +253,12 @@ static int32_t StepMotor_ClampCount(int32_t counts){
 BSP_STATUS StepMotor_Init(void){
     servo_speed_deg_s = 0.0f;
     speed_limit_deg_s = STEP_MOTOR_SERVO_DEFAULT_SPEED_LIMIT_DEG_S;
+    servo_kp_s_inv = STEP_MOTOR_SERVO_KP;
     last_step_freq_hz = 0U;
+    step_tick_last_ms = 0U;
+    step_tick_interval_ms = 0U;
+    step_tick_max_interval_ms = 0U;
+    step_tick_have_last = false;
 
     DL_GPIO_clearPins(motor_dir_port, motor_dir_pin);
     /*
@@ -385,6 +395,18 @@ BSP_STATUS StepMotor_SetSpeedLimit(float max_speed_deg_per_s){
     return BSP_STATUS_OK;
 }
 
+BSP_STATUS StepMotor_SetServoGain(float kp_s_inv){
+    if ((kp_s_inv <= 0.0f) || (kp_s_inv > STEP_MOTOR_SERVO_KP_MAX)){
+        return BSP_STATUS_INVALID_ARG;
+    }
+    servo_kp_s_inv = kp_s_inv;
+    return BSP_STATUS_OK;
+}
+
+float StepMotor_GetServoGain(void){
+    return servo_kp_s_inv;
+}
+
 int32_t StepMotor_GetTargetCount(void){
     return target_counts;
 }
@@ -436,7 +458,7 @@ static void StepMotor_ServoTick(void){
     }
 
     /* 比例律:误差大时饱和到速度上限,接近目标自然减速。 */
-    float speed = STEP_MOTOR_SERVO_KP * StepMotor_CountsToDeg(error);
+    float speed = servo_kp_s_inv * StepMotor_CountsToDeg(error);
 
     if (speed > speed_limit_deg_s){
         speed = speed_limit_deg_s;
@@ -609,6 +631,16 @@ STEP_MOTOR_GUARD_STATE StepMotor_GetGuardState(void){
 /* ===== 周期入口 ===== */
 
 void StepMotor_Tick(uint32_t now_ms){
+    if (step_tick_have_last){
+        step_tick_interval_ms = now_ms - step_tick_last_ms;
+        if (step_tick_interval_ms > step_tick_max_interval_ms){
+            step_tick_max_interval_ms = step_tick_interval_ms;
+        }
+    } else{
+        step_tick_have_last = true;
+    }
+    step_tick_last_ms = now_ms;
+
     /* 采样必须最先且无条件做:后续判断都基于最新计数,也是 QEI 防环绕的硬要求。 */
     StepMotor_UpdateEncoder();
 
@@ -626,4 +658,24 @@ float StepMotor_GetSpeed(void){
 
 uint32_t StepMotor_GetStepFrequencyHz(void){
     return last_step_freq_hz;
+}
+
+uint32_t StepMotor_GetPwmLoadValue(void){
+    return DL_TimerG_getLoadValue(motor_pwm_timer);
+}
+
+uint32_t StepMotor_GetPwmCompareValue(void){
+    return DL_TimerG_getCaptureCompareValue(motor_pwm_timer, motor_pwm_channel);
+}
+
+uint32_t StepMotor_GetPwmCounterValue(void){
+    return DL_TimerG_getTimerCount(motor_pwm_timer);
+}
+
+uint32_t StepMotor_GetTickIntervalMs(void){
+    return step_tick_interval_ms;
+}
+
+uint32_t StepMotor_GetMaxTickIntervalMs(void){
+    return step_tick_max_interval_ms;
 }

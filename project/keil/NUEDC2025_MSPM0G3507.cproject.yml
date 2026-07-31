@@ -11,6 +11,8 @@ project:
         - ../../core/filter
         - ../../core/kinematics
         - ../../core/pid
+        - ../../middleware/ball_balance
+        - ../../middleware/ball_scurve
         - ../../middleware/chassis
         - ../../middleware/fault
         - ../../middleware/line_follow
@@ -87,6 +89,8 @@ project:
         - file: ../../app/app_scheduler.c
         - file: ../../app/app_mode.c
         - file: ../../app/app_checks.c
+        - file: ../../app/app_ball_task.c
+        - file: ../../app/app_ball_scurve_task.c
         - file: ../../app/app_line_task.c
         - file: ../../app/app_menu.c
         - file: ../../app/app_menu_def.c
@@ -101,6 +105,8 @@ project:
         - file: ../../core/filter/filter.c
     - group: MiddleWare
       files:
+        - file: ../../middleware/ball_balance/ball_balance.c
+        - file: ../../middleware/ball_scurve/ball_scurve.c
         - file: ../../middleware/chassis/chassis.c
         - file: ../../middleware/fault/system_fault.c
         - file: ../../middleware/line_follow/line_follow.c

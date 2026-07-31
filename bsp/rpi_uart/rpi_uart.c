@@ -264,6 +264,8 @@ bool RpiUart_Predict(float theta_rad, RPI_UART_PREDICTION *prediction){
     float measured_v = latest.velocity_trusted ? (float)latest.velocity_mm_s : 0.0f;
     float accel = BALL_ACCEL_MM_S2 * sinf(theta_rad);
 
+    prediction->measured_x_mm = (float)latest.x_01mm * 0.1f;
+    prediction->measured_velocity_mm_s = (float)latest.velocity_mm_s;
     prediction->x_mm = ((float)latest.x_01mm * 0.1f) + measured_v * dt_s +
                        0.5f * accel * dt_s * dt_s;
     prediction->velocity_mm_s = measured_v + accel * dt_s;
@@ -273,7 +275,44 @@ bool RpiUart_Predict(float theta_rad, RPI_UART_PREDICTION *prediction){
     prediction->moving = (latest.flags & RPI_UART_FLAG_MOVING) != 0U;
     prediction->edge = (latest.flags & RPI_UART_FLAG_EDGE) != 0U;
     prediction->velocity_trusted = latest.velocity_trusted;
+    prediction->position_extrapolated = true;
     prediction->quality = (uint8_t)((latest.flags & RPI_UART_FLAG_QUALITY_MASK) >> 4U);
+    return true;
+}
+
+bool RpiUart_Observe(RPI_UART_PREDICTION *observation){
+    if ((observation == NULL) || !have_latest){
+        return false;
+    }
+
+    uint32_t now = BSP_Time_GetMs();
+    float age_ms = (float)latest.age_ms + RPI_UART_XFER_MS +
+                   (float)(now - latest.rx_end_ms);
+    if (age_ms > (float)RPI_UART_TIMEOUT_MS){
+        return false;
+    }
+
+    float measured_x = (float)latest.x_01mm * 0.1f;
+    float measured_v = (float)latest.velocity_mm_s;
+    bool moving = (latest.flags & RPI_UART_FLAG_MOVING) != 0U;
+    bool extrapolate = moving && (measured_v != 0.0f);
+
+    observation->measured_x_mm = measured_x;
+    observation->measured_velocity_mm_s = measured_v;
+    observation->x_mm = measured_x;
+    if (extrapolate){
+        observation->x_mm += measured_v * age_ms * 0.001f;
+    }
+    observation->velocity_mm_s = measured_v;
+    observation->age_ms = age_ms;
+    observation->degraded = age_ms > (float)RPI_UART_DEGRADED_AGE_MS;
+    observation->hold_output = !last_frame_valid;
+    observation->moving = moving;
+    observation->edge = (latest.flags & RPI_UART_FLAG_EDGE) != 0U;
+    observation->velocity_trusted = latest.velocity_trusted;
+    observation->position_extrapolated = extrapolate;
+    observation->quality =
+        (uint8_t)((latest.flags & RPI_UART_FLAG_QUALITY_MASK) >> 4U);
     return true;
 }
 

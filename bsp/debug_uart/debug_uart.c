@@ -13,7 +13,7 @@
 #define DEBUG_UART_INST Debug_Ex_INST
 
 /* TX 环形缓冲长度, 必须是 2 的幂 (用掩码回绕)。1KB @115200 约 90ms 缓冲。 */
-#define DEBUG_UART_TX_BUF_LEN 1024U
+#define DEBUG_UART_TX_BUF_LEN 2048U
 #define DEBUG_UART_TX_MASK (DEBUG_UART_TX_BUF_LEN - 1U)
 #define DEBUG_UART_RX_BUF_LEN 256U
 #define DEBUG_UART_RX_MASK (DEBUG_UART_RX_BUF_LEN - 1U)
@@ -23,10 +23,9 @@
      DL_UART_MAIN_INTERRUPT_FRAMING_ERROR |            \
      DL_UART_MAIN_INTERRUPT_PARITY_ERROR)
 
-/* 单条 Printf 格式化上限。当前 [STR] 直行遥测行约 140 字符，256 留有余量；
- * 115200 baud 下每拍 20ms 发一行仍低于线路持续吞吐上限。 */
-/* [TRK] 含 run/fs/gm 后约 260 字节；预留格式化余量，避免行尾被截断。 */
-#define DEBUG_UART_PRINTF_MAX 288U
+/* 单条 Printf 格式化上限。H3 加入 PWM 寄存器诊断后约 560 字节；
+ * 按 60 ms 输出仍低于 115200 baud 的持续吞吐能力。 */
+#define DEBUG_UART_PRINTF_MAX 640U
 
 static uint8_t tx_buf[DEBUG_UART_TX_BUF_LEN];
 static volatile uint16_t tx_head;   /* 生产者(线程) 写入位置 */
