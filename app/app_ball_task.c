@@ -22,7 +22,7 @@
 #define H3_TELEMETRY_PERIOD_MS      60U
 #define H3_GOOD_SAMPLE_TICKS        1U
 #define H3_ARM_POSITION_MM          120.0f
-#define H3_MOTOR_SHAFT_SPEED_DEG_S  120.0f
+#define H3_MOTOR_SHAFT_SPEED_DEG_S  960.0f
 #define H3_MOTOR_SERVO_KP_S_INV     6.0f
 
 static const BALL_BALANCE_CONFIG H3_BALANCE_CONFIG = {
@@ -46,9 +46,9 @@ static const BALL_BALANCE_CONFIG H3_BALANCE_CONFIG = {
     .angle_max_deg = 5.1f * APP_BALL_LINKAGE_ANGLE_SCALE +
                      APP_BALL_LINKAGE_ANGLE_OFFSET_DEG,
     .control_angle_limit_deg = 4.0f,
-    .angle_rate_near_deg_s = 70.0f,
-    .angle_rate_far_deg_s = 40.0f,
-    .angle_rate_brake_deg_s = 100.0f,
+    .angle_rate_near_deg_s = 320.0f,
+    .angle_rate_far_deg_s = 180.0f,
+    .angle_rate_brake_deg_s = 480.0f,
     .angle_rate_transition_mm = 30.0f,
     .stuck_min_error_mm = 20.0f,
     .stuck_max_position_change_mm = 0.5f,

@@ -180,7 +180,7 @@ PWM2.peripheral.ccp0Pin.$assign         = "PB10";
 
 PWM3.$name                              = "SMotor";
 PWM3.clockDivider                       = 8;
-PWM3.clockPrescale                      = 64;
+PWM3.clockPrescale                      = 8;
 PWM3.timerStartTimer                    = true;
 PWM3.pwmMode                            = "EDGE_ALIGN_UP";
 PWM3.ccIndex                            = [0];

@@ -37,8 +37,8 @@ MoveToCount(target) ──► 限幅 ──► target_counts
 ## 时钟约束（改配置前必读）
 
 驱动把速度换算成定时器重载值，公式假定定时器时钟为 `STEP_MOTOR_STEP_TIMER_CLK_HZ`
-= 62500 Hz，即 SysConfig 中 `SMotor` 须配 `clockDivider = 8`、`clockPrescale = 64`
-（32MHz / 512），生成的 `SMotor_INST_CLK_FREQ` 应为 `62500`。
+= 500000 Hz，即 SysConfig 中 `SMotor` 须配 `clockDivider = 8`、`clockPrescale = 8`
+（32MHz / 64），生成的 `SMotor_INST_CLK_FREQ` 应为 `500000`。
 
 > 二者不一致时不会有编译错误，只会让转速整体偏离固定倍数。改动任一侧后务必核对
 > `ti_msp_dl_config.h` 中的 `SMotor_INST_CLK_FREQ`。
@@ -52,7 +52,7 @@ MoveToCount(target) ──► 限幅 ──► target_counts
 | `STEP_MOTOR_STEP_ANGLE_DEG` | 1.8 | 电机固有步距角 |
 | `STEP_MOTOR_MICROSTEP` | 32.0 | 细分数 = **步进精细度**，**须与驱动器拨码一致** |
 | `STEP_MOTOR_ENCODER_COUNTS_PER_REV` | 2000 | QEI 每转计数（2 倍频，已实测） |
-| `STEP_MOTOR_MAX_SPEED_DEG_S` | 240 | 速度硬上限 |
+| `STEP_MOTOR_MAX_SPEED_DEG_S` | 960 | 速度硬上限 |
 | `STEP_MOTOR_SERVO_KP` | 3.0 | 伺服比例增益，1/s |
 | `STEP_MOTOR_SERVO_KP_MAX` | 12.0 | 运行期增益上限；H3 可临时提高，退出恢复默认值 |
 | `STEP_MOTOR_POSITION_TOLERANCE_COUNTS` | 0 | 到位容差，**已压到 0**（只接受精确相等） |

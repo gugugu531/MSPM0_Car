@@ -47,13 +47,20 @@
 #include <stdint.h>
 
 #define H3S_UI_PERIOD_MS         100U
-#define H3S_TELEMETRY_PERIOD_MS   50U
+/*
+ * 遥测周期。50 → 60 ms 是为单向脱困的 4 个诊断字段腾带宽：
+ * 54 字段 × 50 ms 已占 UART 93%，DebugUart 环形缓冲会溢出、整行被截断。
+ * 控制拍是 20 ms，60 ms 仍是每 3 拍一采；球的固有周期 2.6 s（wn=2.4 rad/s），
+ * 一个振荡里有 43 个采样点，观测动力学完全够。
+ */
+#define H3S_TELEMETRY_PERIOD_MS   60U
 #define H3S_ARM_POSITION_MM      120.0f
 /*
- * 步进转速上限。仿真表明限速不是巡航段的瓶颈（60 与 120 deg/s 结果几乎相同），
- * 真正的瓶颈是位置环 STEP_MOTOR_SERVO_KP；这里取 120 只是为了不让限速成为第二个约束。
+ * 步进转速上限。底层 STEP 时钟已提高到 500 kHz，×32 细分下 960 deg/s 需要约 17067 Hz。
+ * 进入任务时同时临时提高位置环增益，避免执行器速度上限提高后仍被慢位置环拖住。
  */
-#define H3S_ACTUATOR_SPEED_DEG_S 120.0f
+#define H3S_ACTUATOR_SPEED_DEG_S 960.0f
+#define H3S_ACTUATOR_SERVO_KP_S_INV 6.0f
 /* 进入任务后等视觉稳定、再开始第一段移动的静默时间。 */
 #define H3S_ARM_DWELL_MS         800U
 /* 每个航点到达后的驻留时间：留给观察落点，也给下一段一个静止起点。 */
@@ -122,22 +129,52 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     /* 查表在软限位 20..430 cnt 上的角度范围是 −5.345°..+5.236°，两端各留 0.1°。 */
     .angle_min_deg = -5.2f,
     .angle_max_deg = 5.1f,
-    .angle_rate_limit_deg_s = 240.0f,
+    .angle_rate_limit_deg_s = 960.0f,
 
     /*
-     * 抖动：破静摩擦死区。这是当前**唯一**能让落点进 ±10 mm 的机制——
-     * 2026-07-31 实测 θ_stick≈0.62°，纯 PD 残差下限 θ_stick/Kp = 13.2 mm，
-     * 与 75 s 无扰动实测的 13.1 mm 完全吻合，靠整定消不掉。
+     * 抖动：**默认关闭**，让位给单向脱困（见下方 breakout_*）。
      *
-     * 指令 ±0.97° @ 2 Hz，经步进位置环（τ=1/SERVO_KP=0.1 s）衰减 0.62 倍后
-     * 实际水管抖 ±0.6°，刚好覆盖脱离角；电机峰值 74 deg/s（限速 120 内），
-     * 球的纹波约 0.46 mm——用 0.46 mm 换掉 13.1 mm。
+     * 关闭的理由不是"不需要破静摩擦"，而是**这版基线上它破不了**：
+     * 抖动是 2 Hz 交流量，经步进位置环（一阶滞后，τ=1/SERVO_KP）衰减。
+     * 源码原注释按 τ=0.1 s（SERVO_KP=10）算出"衰减 0.62 倍、管身抖 ±0.6°"，
+     * 但那个运行期增益覆盖已在回退到本基线时移除，现在 SERVO_KP=3 → τ=0.333 s：
+     *
+     *     |H(2Hz)| = 1/sqrt(1+(2π·2·0.333)²) = 0.232
+     *     0.97° 指令 → 管身只有 0.225°，而破静摩擦需要 0.62°，**缺口 64%**
+     *
+     * 要在 2 Hz 下达到 0.62° 需指令 2.67°，超出 dith_amp 上界 2.0°。
+     * 降频可行（1 Hz 需 1.44°），但纹波按 A/f² 涨到 1.92 mm。
+     * 单向脱困没有这个衰减问题——它是准直流量，1.0° 指令就是 1.0°。
+     *
+     * 想 A/B 对照时：设 dith_amp>0 且 breakout_max=0，两者互斥。
      */
-    .dither_amplitude_deg = 0.97f,
+    .dither_amplitude_deg = 0.0f,
     .dither_frequency_hz = 2.0f,
     .dither_min_error_mm = 3.0f,   /* 与 settled_position_mm 对齐：进判据即停振 */
     .dither_max_speed_mm_s = 8.0f,
     .dither_dwell_s = 0.5f,
+
+    /*
+     * 单向脱困：只朝目标方向渐增倾角，球一动就撤。
+     *
+     * 相对抖动的两点结构性优势：
+     *   ① 不注入往复能量——抖动每周期都把球往两边推一次，末端必然带纹波；
+     *   ② 不受位置环低通衰减——抖动是 2 Hz 交流量，经 τ=1/SERVO_KP=0.333 s
+     *      的位置环只剩 23%（实测 SERVO_KP=3），0.97° 指令到管身只有 0.225°，
+     *      而破静摩擦需要 0.62°，缺口 64%。**默认抖动参数在这版基线上根本破不了**。
+     *      单向脱困是准直流量，位置环几乎不衰减，1.0° 指令就是 1.0°。
+     *
+     * 上限 1.0°：实测 θ_stick ≈ 0.62°，留 60% 余量。别一开始就超 1.2°——
+     * 突破瞬间净倾角越大，冲出去越远。
+     */
+    .breakout_max_angle_deg = 1.0f,
+    .breakout_ramp_rate_deg_s = 0.8f,    /* 0.62° 阈值约 0.8 s 爬到 */
+    .breakout_release_rate_deg_s = 8.0f, /* 撤销比建立快 10 倍：动了就立刻松手 */
+    .breakout_min_error_mm = 5.0f,
+    .breakout_max_speed_mm_s = 5.0f,
+    .breakout_dwell_s = 0.4f,
+    .breakout_release_speed_mm_s = 6.0f, /* 须高于视觉速度量化噪声 */
+    .breakout_release_dwell_s = 0.10f,
 
     .settled_position_mm = 3.0f,
     .settled_speed_mm_s = 5.0f,
@@ -194,7 +231,7 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
         .name = "dith_amp",
         .value = &H3S_SCURVE_CONFIG.dither_amplitude_deg,
         .min_value = 0.0f,    /* 0 = 关闭抖动 */
-        .max_value = 2.0f,    /* 上界：2πfA < angle_rate_limit，2π×2×2 = 25 deg/s < 240 */
+        .max_value = 2.0f,    /* 上界：2πfA < angle_rate_limit，2π×2×2 = 25 deg/s < 960 */
         .unit = "deg",
     },
     {
@@ -223,6 +260,67 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
         .value = &H3S_SCURVE_CONFIG.dither_dwell_s,
         .min_value = 0.0f,    /* 0 = 立即起振 */
         .max_value = 5.0f,    /* 等太久没意义 */
+        .unit = "s",
+    },
+
+    /*
+     * 单向脱困。与抖动互斥：brk_amp > 0 时抖动被强制归零。
+     * 想 A/B 对比就改这一项——brk_amp=0 回到抖动，>0 切到单向脱困。
+     */
+    {
+        .name = "brk_amp",
+        .value = &H3S_SCURVE_CONFIG.breakout_max_angle_deg,
+        .min_value = 0.0f,    /* 0 = 关闭单向脱困，回退到抖动 */
+        .max_value = 2.0f,    /* 上界：θ_stick≈0.62°，2.0 已是 3 倍余量，再大突破即飞 */
+        .unit = "deg",
+    },
+    {
+        .name = "brk_ramp",
+        .value = &H3S_SCURVE_CONFIG.breakout_ramp_rate_deg_s,
+        .min_value = 0.05f,   /* 下界：太慢等不到突破 */
+        .max_value = 5.0f,    /* 上界：太快等于阶跃，失去"渐增"意义 */
+        .unit = "deg/s",
+    },
+    {
+        .name = "brk_rel",
+        .value = &H3S_SCURVE_CONFIG.breakout_release_rate_deg_s,
+        .min_value = 0.5f,    /* 下界：撤太慢会把球推过头 */
+        .max_value = 60.0f,   /* 上界受 angle_rate_limit_deg_s(960) 约束 */
+        .unit = "deg/s",
+    },
+    {
+        .name = "brk_minerr",
+        .value = &H3S_SCURVE_CONFIG.breakout_min_error_mm,
+        .min_value = 0.0f,    /* 0 = 不看误差（不推荐，会在判据内推球） */
+        .max_value = 30.0f,
+        .unit = "mm",
+    },
+    {
+        .name = "brk_maxspd",
+        .value = &H3S_SCURVE_CONFIG.breakout_max_speed_mm_s,
+        .min_value = 0.0f,    /* 触发所需的"静止"判据 */
+        .max_value = 30.0f,   /* 太大会在球还在滚时误触发 */
+        .unit = "mm/s",
+    },
+    {
+        .name = "brk_dwell",
+        .value = &H3S_SCURVE_CONFIG.breakout_dwell_s,
+        .min_value = 0.0f,    /* 0 = 立即起爬 */
+        .max_value = 3.0f,    /* 等太久浪费时间 */
+        .unit = "s",
+    },
+    {
+        .name = "brk_relspd",
+        .value = &H3S_SCURVE_CONFIG.breakout_release_speed_mm_s,
+        .min_value = 1.0f,    /* 下界：必须高于视觉速度量化噪声，否则误判已脱困 */
+        .max_value = 30.0f,   /* 上界：太高等不到释放，脱困角会顶到上限 */
+        .unit = "mm/s",
+    },
+    {
+        .name = "brk_reldw",
+        .value = &H3S_SCURVE_CONFIG.breakout_release_dwell_s,
+        .min_value = 0.0f,    /* 0 = 一满足就撤 */
+        .max_value = 1.0f,    /* 太长会推过头 */
         .unit = "s",
     },
 
@@ -473,6 +571,7 @@ static void H3S_Enter(bool standalone){
     StepMotor_AbortStartup();
     (void)StepMotor_Stop();
     (void)StepMotor_SetSpeedLimit(H3S_ACTUATOR_SPEED_DEG_S);
+    (void)StepMotor_SetServoGain(H3S_ACTUATOR_SERVO_KP_S_INV);
 
     BallScurve_Init(&h3s_controller);
     h3s_output.angle_deg = 0.0f;
@@ -483,6 +582,9 @@ static void H3S_Enter(bool standalone){
     h3s_output.rolling_ff_deg = 0.0f;
     h3s_output.feedback_deg = 0.0f;
     h3s_output.dither_deg = 0.0f;
+    h3s_output.breakout_deg = 0.0f;
+    h3s_output.breakout_stuck_s = 0.0f;
+    h3s_output.breakout_release_s = 0.0f;
     h3s_output.position_error_mm = 0.0f;
     h3s_output.velocity_error_mm_s = 0.0f;
     h3s_output.profile_time_s = 0.0f;
@@ -492,6 +594,7 @@ static void H3S_Enter(bool standalone){
     h3s_output.feedback_clipped = false;
     h3s_output.rate_limited = false;
     h3s_output.dither_on = false;
+    h3s_output.breakout_on = false;
     h3s_output.settled = false;
 
     h3s_state = H3S_STATE_WAIT_VISION;
@@ -537,7 +640,7 @@ static void H3S_Enter(bool standalone){
         (double)H3S_SCURVE_CONFIG.angle_max_deg,
         (double)H3S_SCURVE_CONFIG.angle_rate_limit_deg_s,
         (double)H3S_ACTUATOR_SPEED_DEG_S,
-        (double)STEP_MOTOR_SERVO_KP,
+        (double)H3S_ACTUATOR_SERVO_KP_S_INV,
         (int)STEP_MOTOR_POSITION_TOLERANCE_COUNTS,
         (int)STEP_MOTOR_SERVO_RESUME_COUNTS,
         (double)STEP_MOTOR_SERVO_MIN_SPEED_DEG_S,
@@ -552,6 +655,19 @@ static void H3S_Enter(bool standalone){
         (double)H3S_SCURVE_CONFIG.dither_dwell_s,
         (double)(6.2831853f * H3S_SCURVE_CONFIG.dither_frequency_hz *
                  H3S_SCURVE_CONFIG.dither_amplitude_deg));
+    DebugUart_Printf(
+        "[SCVCFG] breakout max=%.2fdeg ramp=%.2fdeg/s rel=%.1fdeg/s "
+        "minerr=%.1fmm maxspd=%.1f dwell=%.2fs relspd=%.1f reldwell=%.2fs %s\r\n",
+        (double)H3S_SCURVE_CONFIG.breakout_max_angle_deg,
+        (double)H3S_SCURVE_CONFIG.breakout_ramp_rate_deg_s,
+        (double)H3S_SCURVE_CONFIG.breakout_release_rate_deg_s,
+        (double)H3S_SCURVE_CONFIG.breakout_min_error_mm,
+        (double)H3S_SCURVE_CONFIG.breakout_max_speed_mm_s,
+        (double)H3S_SCURVE_CONFIG.breakout_dwell_s,
+        (double)H3S_SCURVE_CONFIG.breakout_release_speed_mm_s,
+        (double)H3S_SCURVE_CONFIG.breakout_release_dwell_s,
+        (H3S_SCURVE_CONFIG.breakout_max_angle_deg > 0.0f)
+            ? "ACTIVE(dither forced off)" : "off(dither active)");
     DebugUart_Printf("[SCVCFG] waypoints=%.0f,%.0f,%.0f dwell=%ums\r\n",
                      (double)H3S_WAYPOINT_MM[0], (double)H3S_WAYPOINT_MM[1],
                      (double)H3S_WAYPOINT_MM[2], (unsigned)H3S_WAYPOINT_DWELL_MS);
@@ -583,18 +699,18 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         /* --- 剖面层 --- */
         "tgt=%.1f xref=%.2f vref=%.2f aref=%.1f tp=%.3f tpd=%.3f act=%u "
         /* --- 控制分量：合成前每一项 --- */
-        "bias=%.3f ff=%.3f rff=%.3f fb=%.3f dith=%.3f u=%.3f "
-        /* --- 跟踪误差 --- */
-        "ex=%.2f ev=%.2f etgt=%.2f "
+        "bias=%.3f ff=%.3f rff=%.3f fb=%.3f dith=%.3f brka=%.3f u=%.3f "
+        /* --- 跟踪误差 + 单向脱困计时（判误触发 / 判释放是否太晚）--- */
+        "ex=%.2f ev=%.2f etgt=%.2f brkst=%.2f brkrel=%.2f "
         /* --- 执行器层：指令角 vs 实际角是滞后的直接指标 --- */
         "beam=%.3f lag=%.3f cnt=%ld cmd=%ld perr=%ld spd=%.1f frq=%lu at=%u "
         /*
          * --- 标志与链路健康 ---
          * fbc = PD 分量被 feedback_limit_deg 夹住（sat 只反映物理角度范围，
          * 早期版本缺这一位，45% 的反馈限幅在遥测里是隐形的）。
-         * dth = 抖动正在注入。
+         * dth = 抖动正在注入；brk = 单向脱困正在介入（两者互斥）。
          */
-        "sat=%u fbc=%u rl=%u dth=%u set=%u mv=%u vv=%u px=%u edge=%u deg=%u hold=%u "
+        "sat=%u fbc=%u rl=%u dth=%u brk=%u set=%u mv=%u vv=%u px=%u edge=%u deg=%u hold=%u "
         "guard=%u fps=%.1f gap=%lu inv=%lu crc=%lu drop=%lu\r\n",
         (unsigned long)(now - h3s_start_ms), (unsigned)h3s_state,
         (unsigned)h3s_waypoint, (unsigned)(usable ? 1U : 0U),
@@ -616,10 +732,12 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         (double)H3S_SCURVE_CONFIG.level_bias_deg,
         (double)h3s_output.feedforward_deg, (double)h3s_output.rolling_ff_deg,
         (double)h3s_output.feedback_deg, (double)h3s_output.dither_deg,
+        (double)h3s_output.breakout_deg,
         (double)h3s_output.angle_deg,
 
         (double)h3s_output.position_error_mm, (double)h3s_output.velocity_error_mm_s,
         (double)(target_mm - (h3s_have_prediction ? h3s_prediction.x_mm : 0.0f)),
+        (double)h3s_output.breakout_stuck_s, (double)h3s_output.breakout_release_s,
 
         (double)beam, (double)(h3s_output.angle_deg - beam),
         (long)encoder, (long)h3s_target_count,
@@ -632,6 +750,7 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         (unsigned)(h3s_output.feedback_clipped ? 1U : 0U),
         (unsigned)(h3s_output.rate_limited ? 1U : 0U),
         (unsigned)(h3s_output.dither_on ? 1U : 0U),
+        (unsigned)(h3s_output.breakout_on ? 1U : 0U),
         (unsigned)(h3s_output.settled ? 1U : 0U),
         (unsigned)(h3s_have_prediction && h3s_prediction.moving),
         (unsigned)(h3s_have_prediction && h3s_prediction.velocity_trusted),
@@ -782,6 +901,7 @@ static APP_TASK_STATUS H3S_Tick(float dt){
 
 static void H3S_Exit(void){
     (void)StepMotor_Stop();
+    (void)StepMotor_SetServoGain(STEP_MOTOR_SERVO_KP);
     h3s_target_count = StepMotor_GetEncoderCount();
     DebugUart_Printf("[SCV] exit wp=%u hold-count=%ld beam=%.3f\r\n",
                      (unsigned)h3s_waypoint, (long)h3s_target_count,
