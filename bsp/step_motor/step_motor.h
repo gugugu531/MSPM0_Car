@@ -75,30 +75,30 @@ extern "C" {
  * ⚠ 一个微步已远细于一个编码器计数(0.3125 < 1),编码器分辨不出单个微步——
  *   靠计数验细分的 TURN 模式(标定手册 #2)从此失效,细分只能以拨码为准。
  *
- * ⚠ 细分越高同转速下脉冲率越高:×32 时 480 deg/s 需 8533 Hz,已接近
- *   MAX_STEP_FREQ_HZ(10000,该值需上板复核)。该上限对应的顶速是 562 deg/s,
- *   所以当前 MAX_SPEED_DEG_S(480)不会被静默钳位。
+ * ⚠ 细分越高同转速下脉冲率越高:×32 时 960 deg/s 需 17067 Hz,已接近
+ *   MAX_STEP_FREQ_HZ(18000,该值需上板复核)。该上限对应的顶速是 1012 deg/s,
+ *   所以当前 MAX_SPEED_DEG_S(960)不会被静默钳位。
  */
 #define STEP_MOTOR_MICROSTEP 32.0f
 /* 转速硬上限,单位 deg/s。SetSpeedLimit() 不会超过它。 */
-#define STEP_MOTOR_MAX_SPEED_DEG_S 480.0f
+#define STEP_MOTOR_MAX_SPEED_DEG_S 960.0f
 
 /* ===== STEP 定时器 ===== */
 /*
- * STEP 定时器输入时钟 = SysConfig 中 SMotor 的 clockDivider(8) × clockPrescale(16)
- * 从 32MHz 分出 = 250000 Hz。
+ * STEP 定时器输入时钟 = SysConfig 中 SMotor 的 clockDivider(8) × clockPrescale(8)
+ * 从 32MHz 分出 = 500000 Hz。
  *
  * ⚠ 改动 SysConfig 分频后必须同步本值,并核对生成的 SMotor_INST_CLK_FREQ。
  *   二者不一致不会报编译错,只会让转速整体偏离。
  */
-#define STEP_MOTOR_STEP_TIMER_CLK_HZ 250000U
+#define STEP_MOTOR_STEP_TIMER_CLK_HZ 500000U
 /*
- * 步进频率下限,由 16 位装载值上限决定(250000/65536 ≈ 3.8 Hz)。低于此频率不出脉冲,
+ * 步进频率下限,由 16 位装载值上限决定(500000/65536 ≈ 7.6 Hz)。低于此频率不出脉冲,
  * 即速度存在死区——伺服的 SERVO_MIN_SPEED_DEG_S 就是为躲开它设的。
  */
 #define STEP_MOTOR_MIN_STEP_FREQ_HZ 1U
 /* 步进频率上限;再高易失步。由 SWEEP 模式实测确定。 */
-#define STEP_MOTOR_MAX_STEP_FREQ_HZ 10000U
+#define STEP_MOTOR_MAX_STEP_FREQ_HZ 18000U
 /*
  * 编码器每转的 QEI 计数。MSPM0 的 QEI 2-input 模式对 A/B 各取上升沿(2 倍频),
  * 故本值 = 编码器线数 × 2。实测 2000,即 1000 线。
@@ -345,9 +345,9 @@ extern "C" {
 
 /*
  * StepMotor_Tick() 的调用周期,单位 ms。上限受两处约束,取更严的一个:
- *   1) QEI 16 位环绕:相邻采样计数变化须 < 32767。满速 480deg/s ≈ 2667 counts/s,
- *      10ms 才 27 计数,余量三个数量级——不是瓶颈;
- *   2) 越界响应距离:判越界前摆杆最多多走「周期 × 转速」≈ 27 计数,已大于
+ *   1) QEI 16 位环绕:相邻采样计数变化须 < 32767。满速 960deg/s ≈ 5333 counts/s,
+ *      10ms 才 53 计数,余量三个数量级——不是瓶颈;
+ *   2) 越界响应距离:判越界前摆杆最多多走「周期 × 转速」≈ 53 计数,已大于
  *      ENC_LIMIT_MARGIN_COUNTS(当前 20),高速验证时必须留意软限位余量或降低行程内实测速度。
  * ⚠ 第 2 条是真约束。改大本值必须同步加大 MARGIN。
  */

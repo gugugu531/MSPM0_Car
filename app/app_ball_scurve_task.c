@@ -56,10 +56,10 @@
 #define H3S_TELEMETRY_PERIOD_MS   60U
 #define H3S_ARM_POSITION_MM      120.0f
 /*
- * 步进转速上限。底层 STEP 时钟已提高到 250 kHz，×32 细分下 480 deg/s 需要约 8533 Hz。
+ * 步进转速上限。底层 STEP 时钟已提高到 500 kHz，×32 细分下 960 deg/s 需要约 17067 Hz。
  * 进入任务时同时临时提高位置环增益，避免执行器速度上限提高后仍被慢位置环拖住。
  */
-#define H3S_ACTUATOR_SPEED_DEG_S 480.0f
+#define H3S_ACTUATOR_SPEED_DEG_S 960.0f
 #define H3S_ACTUATOR_SERVO_KP_S_INV 6.0f
 /* 进入任务后等视觉稳定、再开始第一段移动的静默时间。 */
 #define H3S_ARM_DWELL_MS         800U
@@ -129,7 +129,7 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     /* 查表在软限位 20..430 cnt 上的角度范围是 −5.345°..+5.236°，两端各留 0.1°。 */
     .angle_min_deg = -5.2f,
     .angle_max_deg = 5.1f,
-    .angle_rate_limit_deg_s = 480.0f,
+    .angle_rate_limit_deg_s = 960.0f,
 
     /*
      * 抖动：**默认关闭**，让位给单向脱困（见下方 breakout_*）。
@@ -231,7 +231,7 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
         .name = "dith_amp",
         .value = &H3S_SCURVE_CONFIG.dither_amplitude_deg,
         .min_value = 0.0f,    /* 0 = 关闭抖动 */
-        .max_value = 2.0f,    /* 上界：2πfA < angle_rate_limit，2π×2×2 = 25 deg/s < 480 */
+        .max_value = 2.0f,    /* 上界：2πfA < angle_rate_limit，2π×2×2 = 25 deg/s < 960 */
         .unit = "deg",
     },
     {
@@ -285,7 +285,7 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
         .name = "brk_rel",
         .value = &H3S_SCURVE_CONFIG.breakout_release_rate_deg_s,
         .min_value = 0.5f,    /* 下界：撤太慢会把球推过头 */
-        .max_value = 60.0f,   /* 上界受 angle_rate_limit_deg_s(480) 约束 */
+        .max_value = 60.0f,   /* 上界受 angle_rate_limit_deg_s(960) 约束 */
         .unit = "deg/s",
     },
     {

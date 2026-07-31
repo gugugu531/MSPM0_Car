@@ -373,12 +373,12 @@ SYSCONFIG_WEAK void SYSCFG_DL_Motor_Right_init(void) {
 /*
  * Timer clock configuration to be sourced by  / 8 (4000000 Hz)
  * timerClkFreq = (timerClkSrc / (timerClkDivRatio * (timerClkPrescale + 1)))
- *   250000 Hz = 4000000 Hz / (8 * (15 + 1))
+ *   500000 Hz = 4000000 Hz / (8 * (7 + 1))
  */
 static const DL_TimerG_ClockConfig gSMotorClockConfig = {
     .clockSel = DL_TIMER_CLOCK_BUSCLK,
     .divideRatio = DL_TIMER_CLOCK_DIVIDE_8,
-    .prescale = 15U
+    .prescale = 7U
 };
 
 static const DL_TimerG_PWMConfig gSMotorConfig = {

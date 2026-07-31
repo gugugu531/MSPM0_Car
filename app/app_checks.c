@@ -266,7 +266,8 @@ static void ChkTb_Exit(void){
 /* SWEEP 的转速档，单位 deg/s。从远低于额定处起步，逐档确认再往上。 */
 static const float sm_sweep_speed[] = {
     15.0f, 30.0f, 60.0f, 90.0f, 120.0f, 150.0f, 180.0f, 210.0f, 240.0f,
-    270.0f, 300.0f, 330.0f, 360.0f, 390.0f, 420.0f, 450.0f, 480.0f
+    270.0f, 300.0f, 330.0f, 360.0f, 390.0f, 420.0f, 450.0f, 480.0f,
+    540.0f, 600.0f, 660.0f, 720.0f, 840.0f, 960.0f
 };
 #define SM_SWEEP_STEP_COUNT ((uint8_t)(sizeof(sm_sweep_speed) / sizeof(sm_sweep_speed[0])))
 
