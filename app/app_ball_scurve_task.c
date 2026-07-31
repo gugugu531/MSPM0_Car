@@ -69,6 +69,23 @@
 static const float H3S_WAYPOINT_MM[] = { 0.0f, 50.0f, -50.0f };
 #define H3S_WAYPOINT_COUNT ((uint8_t)(sizeof(H3S_WAYPOINT_MM) / sizeof(H3S_WAYPOINT_MM[0])))
 
+/* ===== 任务模式 =====
+ *
+ *   SCURVE —— 完整航点序列（0→+50→−50 mm），S 曲线前馈 + 剖面跟踪。
+ *             这是比赛用的完整链路，也是 HOLD 模式的对照基线。
+ *
+ *   HOLD   —— **无剖面**，直接把目标钉在 0 mm 让控制律持续运行。
+ *             进入后跳过航点规划，control_law 始终以 x_ref=0、v_ref=0 为目标，
+ *             抖动在球被静摩擦钉住时自动激活，是最简单的单一状态验证入口。
+ *             适合单独验证：静摩擦能否被突破、抖动触发时机、扰动恢复能力。
+ */
+typedef enum { H3S_MODE_SCURVE = 0, H3S_MODE_HOLD } H3S_MODE;
+static H3S_MODE h3s_mode;
+
+static const char *H3S_ModeName(H3S_MODE m){
+    return m == H3S_MODE_HOLD ? "hold" : "scurve";
+}
+
 static const BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     /*
      * K_G 名义值 (5/7)·g = 7004.75 mm/s² per rad。**这是近似值**：只用来把
@@ -99,7 +116,7 @@ static const BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     /* 查表在软限位 20..430 cnt 上的角度范围是 −5.345°..+5.236°，两端各留 0.1°。 */
     .angle_min_deg = -5.2f,
     .angle_max_deg = 5.1f,
-    .angle_rate_limit_deg_s = 60.0f,
+    .angle_rate_limit_deg_s = 240.0f,
 
     /*
      * 抖动：破静摩擦死区。这是当前**唯一**能让落点进 ±10 mm 的机制——
@@ -244,7 +261,9 @@ static const char *H3S_StateName(void){
         case H3S_STATE_ARMING:         return "ARMING";
         case H3S_STATE_MOVING:         return "S-CURVE MOVE";
         case H3S_STATE_DWELL:          return "DWELL";
-        case H3S_STATE_DONE:           return "SEQUENCE DONE";
+        case H3S_STATE_DONE:
+            /* Hold 模式下在 DONE 状态持续保持，显示更准确的名字避免误解。 */
+            return (h3s_mode == H3S_MODE_HOLD) ? "HOLD 0mm" : "SEQUENCE DONE";
         case H3S_STATE_DEGRADED:       return "HOLD ANGLE";
         case H3S_STATE_ACTUATOR_FAULT: return "ACTUATOR ERR";
         default:                       return "UNKNOWN";
@@ -363,8 +382,9 @@ static void H3S_Enter(void){
 
     /* 进入时把全部换算与整定参数打一遍，日志自带上下文，事后不必猜用的是哪版参数。 */
     DebugUart_Printf(
-        "[SCVCFG] mode=pure-scurve linkage=pygame-lut lut_level=180 "
+        "[SCVCFG] mode=%s linkage=pygame-lut lut_level=180 "
         "lut_zero_is_nominal=1 level_bias=%.3fdeg interp_err=%.4fdeg\r\n",
+        H3S_ModeName(h3s_mode),
         (double)H3S_SCURVE_CONFIG.level_bias_deg,
         (double)APP_BALL_LINKAGE_MODEL_MAX_INTERP_ERROR_DEG);
     DebugUart_Printf(
@@ -527,7 +547,21 @@ static APP_TASK_STATUS H3S_Tick(float dt){
                 break;
             }
             if ((now - h3s_phase_ms) >= H3S_ARM_DWELL_MS){
-                H3S_PlanCurrentWaypoint();
+                if (h3s_mode == H3S_MODE_SCURVE){
+                    H3S_PlanCurrentWaypoint();
+                } else{
+                    /*
+                     * HOLD 模式：跳过剖面规划，直接进 DONE。
+                     * profile_active = false → BallScurve_Update 把 x_ref/v_ref 钉在
+                     * target_mm（=0）、a_ref=0，控制律退化为绕 0mm 的纯 PD + 抖动。
+                     * 不需要 DWELL 状态——用 DONE 是因为 DWELL 有 WAYPOINT_DWELL_MS
+                     * 超时会自动推进航点，而 DONE 保持不动。
+                     */
+                    h3s_state = H3S_STATE_DONE;
+                    DebugUart_Printf("[SCV] hold0 armed x=%.2f beam=%.3f\r\n",
+                                     (double)h3s_prediction.x_mm,
+                                     (double)H3S_ActualBeamAngleDeg());
+                }
             }
             break;
 
@@ -615,6 +649,27 @@ static void H3S_Exit(void){
                      (double)H3S_ActualBeamAngleDeg());
 }
 
+/*
+ * 两个入口共用 Tick / Exit，只有 Enter 的**模式赋值**不同。
+ * 拆成两个 Enter 包装而不是两份任务文件：控制律只有一处，任何修改
+ * 自动对两个入口一致生效，A/B 对比的差异才只可能来自行为，不可能
+ * 来自代码漂移。
+ */
+static void H3S_EnterSCurve(void){ h3s_mode = H3S_MODE_SCURVE; H3S_Enter(); }
+static void H3S_EnterHold(void)  { h3s_mode = H3S_MODE_HOLD;   H3S_Enter(); }
+
+/** 完整 S 曲线序列：0 → +50 → −50 mm，前馈 + 剖面跟踪 PD + 抖动。比赛用链路。 */
 const APP_TASK_DESC APP_H3_BALL_SCURVE = {
-    "H3 Ball SCurve", H3S_Enter, H3S_Tick, H3S_Exit
+    "H3 Ball SCurve", H3S_EnterSCurve, H3S_Tick, H3S_Exit
+};
+
+/**
+ * 单点保持 0mm。无剖面，控制律以 x_ref=0 / v_ref=0 持续运行。
+ *
+ * 目的：单独验证「静摩擦能否被突破」「抖动触发时机是否正确」
+ * 以及「扰动后恢复能力」，不受 S 曲线运动本身的影响。
+ * 遥测格式与 H3 Ball SCurve 完全相同，配套 ball_hold_monitor.html 观测。
+ */
+const APP_TASK_DESC APP_H3_BALL_HOLD = {
+    "H3 Hold 0mm", H3S_EnterHold, H3S_Tick, H3S_Exit
 };
