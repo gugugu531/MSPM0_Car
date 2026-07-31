@@ -56,6 +56,11 @@
   button:disabled { opacity:.45; cursor:not-allowed; }
   button:focus-visible { outline:2px solid var(--s2); outline-offset:2px; }
   button.primary { background:var(--ink); color:var(--surface); border-color:var(--ink); }
+  /* 录制中：红底 + 呼吸，让人一眼看出串口正在被写进缓冲。 */
+  button.rec { background:var(--critical); color:#fff; border-color:var(--critical);
+               animation:recpulse 1.6s ease-in-out infinite; }
+  @keyframes recpulse { 0%,100% { opacity:1 } 50% { opacity:.72 } }
+  @media (prefers-reduced-motion:reduce) { button.rec { animation:none } }
 
   .dot { width:8px; height:8px; border-radius:50%; background:var(--ink-3);
          display:inline-block; margin-right:6px; }
@@ -154,6 +159,7 @@
   <button id="connect" class="primary">连接串口</button>
   <button id="reload" disabled>重新读取</button>
   <button id="defaults" disabled>恢复默认</button>
+  <button id="record" disabled>● 录制</button>
   <button id="export" disabled>导出为 C</button>
 </header>
 
@@ -196,6 +202,17 @@
     </p>
   </section>
 </main>
+
+<dialog id="recdlg">
+  <div class="phead"><span class="ptitle">录制结束</span>
+    <span class="grow"></span><span class="punit" id="recstat">—</span></div>
+  <p class="note" id="recnote"></p>
+  <div class="dfoot">
+    <button id="reccsv" class="primary">下载 CSV</button>
+    <button id="recraw">下载原始 txt</button>
+    <button id="recdrop">丢弃</button>
+  </div>
+</dialog>
 
 <dialog id="expdlg">
   <div class="phead"><span class="ptitle">粘回 app_ball_scurve_task.c 的 H3S_SCURVE_CONFIG</span></div>
@@ -252,6 +269,22 @@ let history = [];
 const diag = {};   /* 最近一次 [SCVD] 的诊断量 */
 let t0 = null;
 
+/* ===== 录制 =====
+ *
+ * 缓冲的是**原始行**而不是解析结果，理由有两条：
+ *   1. 原始行是唯一的真相。解析器有 bug 时，原始文件还能重新分析；
+ *      只存解析结果的话，bug 会被永久烙进数据。
+ *   2. tools/analysis/ 下的脚本（landing_stats / vel_lag / extrap）读的就是
+ *      原始格式，导出 txt 可以直接喂给它们，不必再写一个 CSV 读入分支。
+ * CSV 是从缓冲派生出来的，所以两种格式都能给。
+ */
+let recording = false;
+let recordLines = [];
+let recordStartMs = 0;
+/* 20 Hz × 512 B ≈ 10 KB/s。20 万行约 100 MB，到这里必须停手，
+ * 否则浏览器标签页会因为字符串堆积而被系统杀掉，连已录的都拿不回来。 */
+const RECORD_MAX_LINES = 200000;
+
 function log(text, cls) {
   const el = $("log");
   const span = document.createElement("span");
@@ -283,19 +316,21 @@ async function connect() {
   writer = port.writable.getWriter();
   keepReading = true;
   setStatus("已连接 115200 8N1", "on");
-  for (const id of ["reload","defaults","export"]) $(id).disabled = false;
+  for (const id of ["reload","defaults","export","record"]) $(id).disabled = false;
   $("connect").textContent = "断开";
   readLoop();
   setTimeout(() => send("?"), 250);      // 让固件把参数表打一遍
 }
 
 async function disconnect() {
+  /* 断开前若还在录，先停下来并把数据交出去——不能让已抓到的样本白丢。 */
+  if (recording) { stopRecord(); }
   keepReading = false;
   try { if (writer) { writer.releaseLock(); writer = null; } } catch {}
   try { if (port) await port.close(); } catch {}
   port = null;
   setStatus("未连接");
-  for (const id of ["reload","defaults","export"]) $(id).disabled = true;
+  for (const id of ["reload","defaults","export","record"]) $(id).disabled = true;
   $("connect").textContent = "连接串口";
 }
 
@@ -337,6 +372,15 @@ const RE_END  = /^\[TUNE\] end n=(\d+)/;
 
 function handleLine(line) {
   if (!line) return;
+  /* 录制放在最前面：后面的分支会 return，挂在下面会漏掉整类行。
+   * [TUNE] 回显也一并录进去——事后能看出这段数据是在哪组参数下采的。 */
+  if (recording) {
+    recordLines.push(line);
+    if (recordLines.length >= RECORD_MAX_LINES) {
+      log(`⚠ 已达 ${RECORD_MAX_LINES} 行上限，自动停止录制`, "bad");
+      stopRecord();
+    }
+  }
   /*
    * 固件把遥测拆成两行分频：[SCV] 60 ms 只发控制必需字段，[SCVD] 500 ms 发
    * 诊断量。拆分是为了把 UART 占用从 115%（会溢出截断）降到 53%。
@@ -610,6 +654,122 @@ function tiles() {
 
 function frame() { for (const c of charts) draw(c); tiles(); requestAnimationFrame(frame); }
 
+/* ===== 录制到 CSV =====
+ *
+ * 缓冲的是**原始行**而不是解析后的对象，理由有两条：
+ *   1. 原始行是唯一的真相。解析规则以后要是改了，重新解析一遍就行，
+ *      而丢掉的原始信息永远找不回来。
+ *   2. tools/analysis 下的 landing_stats.py / vel_lag.py / extrap.py 全都
+ *      直接吃 `[SCV] key=value` 原始格式。只导 CSV 会让那三个脚本失效。
+ * 所以停止时同时提供 CSV（给 Excel/pandas）和原始 txt（给现有脚本）。
+ */
+function startRecord() {
+  recording = true;
+  recordLines = [];
+  recordStartMs = Date.now();
+  paintRecordButton();
+  log("● 开始录制", "ok");
+}
+
+function stopRecord() {
+  if (!recording) return;
+  recording = false;
+  const seconds = (Date.now() - recordStartMs) / 1000;
+  paintRecordButton();
+  log(`■ 录制结束：${recordLines.length} 行 / ${seconds.toFixed(1)} s`, "ok");
+  showRecordDialog(seconds);
+}
+
+function paintRecordButton() {
+  const btn = $("record");
+  btn.classList.toggle("recording", recording);
+  btn.textContent = recording ? `■ 停止 (${recordLines.length})` : "● 录制";
+}
+
+/* 录制中按钮上的行数计数，1 Hz 刷新就够——放进 frame() 会每帧改 DOM。 */
+setInterval(() => { if (recording) paintRecordButton(); }, 1000);
+
+/** 把原始行转成 CSV。字段顺序取首次出现顺序，即固件 printf 的顺序。 */
+function toCSV(lines) {
+  const FIELD = /(\w+)=(-?[\d.]+)/g;
+  const order = [];
+  const seen = new Set();
+  const out = [];
+  let diagNow = {};        /* 最近一次 [SCVD]，并进后续每一行 */
+  let malformed = 0;
+
+  const register = key => { if (!seen.has(key)) { seen.add(key); order.push(key); } };
+
+  for (const line of lines) {
+    if (line.startsWith("[SCVD]")) {
+      const d = {};
+      for (const m of line.matchAll(FIELD)) if (m[1] !== "t") d[m[1]] = m[2];
+      diagNow = d;
+      continue;
+    }
+    /* drop= 是遥测行的末字段，用它排除 plan/arrive/armed 这些事件行；
+     * 顺带也排除了被串口截断的半行。 */
+    if (!line.startsWith("[SCV]") || !line.includes("drop=")) continue;
+
+    const row = {};
+    for (const m of line.matchAll(FIELD)) { row[m[1]] = m[2]; register(m[1]); }
+    if (row.t === undefined || row.x === undefined) { malformed++; continue; }
+    for (const key in diagNow) {
+      if (!(key in row)) { row[key] = diagNow[key]; register(key); }
+    }
+    out.push(row);
+  }
+
+  if (!out.length) return { csv: "", rows: 0, fields: 0, malformed };
+  const body = out.map(r => order.map(k => r[k] ?? "").join(","));
+  return {
+    csv: order.join(",") + "\n" + body.join("\n") + "\n",
+    rows: out.length, fields: order.length, malformed,
+  };
+}
+
+function stamp() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}` +
+         `_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+function download(name, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+  log(`已下载 ${name}`, "ok");
+}
+
+let recordResult = null;
+function showRecordDialog(seconds) {
+  recordResult = toCSV(recordLines);
+  const events = recordLines.filter(l =>
+    /^\[SCV\] (plan|arrive|armed|resume)/.test(l)).length;
+  const tune = recordLines.filter(l => l.startsWith("[TUNE]")).length;
+  const rate = seconds > 0 ? (recordResult.rows / seconds).toFixed(1) : "—";
+
+  $("recstats").innerHTML = [
+    ["时长", seconds.toFixed(1), "s"],
+    ["遥测行", recordResult.rows, ""],
+    ["采样率", rate, "Hz"],
+    ["字段", recordResult.fields, ""],
+    ["事件行", events, ""],
+    ["参数回显", tune, ""],
+    ["残缺行", recordResult.malformed, ""],
+    ["原始行", recordLines.length, ""],
+  ].map(([k, v, u]) =>
+    `<div class="tile"><div class="k">${k}</div><div class="v">${v}` +
+    `<span style="font-size:11px;color:var(--ink-2)">${u}</span></div></div>`).join("");
+
+  $("recwarn").style.display = recordResult.rows ? "none" : "block";
+  $("reccsv").disabled = !recordResult.rows;
+  $("recdlg").showModal();
+}
+
 /* ===== 导出 ===== */
 function exportC() {
   const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
@@ -641,6 +801,14 @@ function exportC() {
 
 /* ===== 绑定 ===== */
 $("connect").addEventListener("click", () => port ? disconnect() : connect());
+$("record").addEventListener("click", () => recording ? stopRecord() : startRecord());
+$("recdlg-close").addEventListener("click", () => $("recdlg").close());
+$("reccsv").addEventListener("click", () => {
+  download(`scv_${stamp()}.csv`, recordResult.csv);
+});
+$("recraw").addEventListener("click", () => {
+  download(`scv_${stamp()}.txt`, recordLines.join("\r\n") + "\r\n");
+});
 $("reload").addEventListener("click", () => send("?"));
 $("defaults").addEventListener("click", async () => { await send("d"); setTimeout(() => send("?"), 200); });
 $("export").addEventListener("click", exportC);
