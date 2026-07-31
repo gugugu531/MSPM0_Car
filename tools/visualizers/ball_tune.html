@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>H3 滚球实时整定台</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface:      #F2F5F7;
+    --panel:        #FFFFFF;
+    --panel-sunk:   #E9EFF2;
+    --ink:          #14202A;
+    --ink-2:        #4F6070;
+    --ink-3:        #7B8B99;
+    --rule:         #DCE4E9;
+    --rule-soft:    #EAF0F3;
+    --s1: #BE7000;  /* 球 — 取自 pygame_linkage_visualizer 的 BALL 琥珀 */
+    --s2: #0089AD;  /* 水管 — PIPE_FILL 青 */
+    --s3: #B03A1E;  /* 执行器 — PRINTED 铁锈 */
+    --s4: #5257A8;  /* 参考/规划 */
+    --s5: #1C7A55;  /* 链路 */
+    --good:#1C7A55; --warn:#B57A05; --critical:#A8291B;
+    --shadow: 0 1px 2px rgba(20,32,42,.06), 0 4px 14px rgba(20,32,42,.05);
+    --ui: "Segoe UI Variable Text","Segoe UI",-apple-system,"Microsoft YaHei UI",
+          "PingFang SC",sans-serif;
+    --mono: ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --surface:#0B141B; --panel:#101A22; --panel-sunk:#16222C;
+      --ink:#E4ECF1; --ink-2:#96A9B6; --ink-3:#647684;
+      --rule:#1F2E3A; --rule-soft:#182530;
+      --s1:#C98416; --s2:#1E96B5; --s3:#C9553A; --s4:#6E79C9; --s5:#2E9366;
+      --good:#2E9366; --warn:#C08B1C; --critical:#CD5548;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.3);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--surface); color:var(--ink);
+         font-family:var(--ui); font-size:14px; line-height:1.5;
+         -webkit-font-smoothing:antialiased; }
+
+  header { display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;
+           padding:14px 20px; border-bottom:2px solid var(--ink); }
+  h1 { margin:0; font-size:20px; font-weight:650; letter-spacing:-.01em; }
+  .eyebrow { font-family:var(--mono); font-size:10.5px; letter-spacing:.13em;
+             text-transform:uppercase; color:var(--ink-3); }
+  header .grow { flex:1; }
+
+  button { font-family:var(--ui); font-size:13px; font-weight:550; color:var(--ink);
+           background:var(--panel); border:1px solid var(--rule); border-radius:7px;
+           padding:6px 13px; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--ink-3); }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button:focus-visible { outline:2px solid var(--s2); outline-offset:2px; }
+  button.primary { background:var(--ink); color:var(--surface); border-color:var(--ink); }
+
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--ink-3);
+         display:inline-block; margin-right:6px; }
+  .dot.on { background:var(--good); }
+  .dot.err { background:var(--critical); }
+  #status { font-family:var(--mono); font-size:12px; color:var(--ink-2); }
+
+  main { display:grid; grid-template-columns:400px 1fr; gap:12px;
+         padding:12px 20px 24px; align-items:start; }
+  @media (max-width:1100px){ main { grid-template-columns:1fr; } }
+
+  .panel { background:var(--panel); border:1px solid var(--rule); border-radius:10px;
+           box-shadow:var(--shadow); overflow:hidden; }
+  .phead { display:flex; align-items:baseline; gap:10px; padding:8px 13px 6px;
+           border-bottom:1px solid var(--rule-soft); }
+  .ptitle { font-size:13px; font-weight:620; }
+  .punit { font-family:var(--mono); font-size:10.5px; color:var(--ink-3); }
+  .phead .grow { flex:1; }
+
+  .group { border-top:1px solid var(--rule-soft); }
+  .group > summary { padding:7px 13px; font-size:12px; font-weight:600;
+                     color:var(--ink-2); cursor:pointer; user-select:none;
+                     background:var(--panel-sunk); }
+  .group > summary::marker { color:var(--ink-3); }
+
+  .row { display:grid; grid-template-columns:74px 1fr 76px; gap:7px;
+         align-items:center; padding:4px 13px; }
+  .row .name { font-family:var(--mono); font-size:11.5px; color:var(--ink); }
+  .row .name small { display:block; color:var(--ink-3); font-size:9.5px;
+                     letter-spacing:.02em; }
+  .row input[type=range] { width:100%; accent-color:var(--s2); }
+  .row input[type=number] { width:100%; font-family:var(--mono); font-size:11.5px;
+        text-align:right; padding:3px 5px; border:1px solid var(--rule);
+        border-radius:5px; background:var(--panel); color:var(--ink);
+        font-variant-numeric:tabular-nums; }
+  .row.changed input[type=number] { border-color:var(--warn);
+        box-shadow:0 0 0 2px color-mix(in srgb, var(--warn) 22%, transparent); }
+  .row.rejected input[type=number] { border-color:var(--critical); }
+
+  #log { font-family:var(--mono); font-size:11px; height:130px; overflow:auto;
+         padding:7px 13px; border-top:1px solid var(--rule-soft);
+         white-space:pre-wrap; color:var(--ink-2); }
+  #log .ok  { color:var(--good); }
+  #log .bad { color:var(--critical); }
+
+  .charts { display:flex; flex-direction:column; gap:10px; }
+  canvas { display:block; width:100%; }
+  .legend { display:flex; gap:12px; flex-wrap:wrap; margin-left:auto; }
+  .lg { display:inline-flex; align-items:center; gap:5px; font-family:var(--mono);
+        font-size:11px; color:var(--ink-2); }
+  .sw { width:12px; height:3px; border-radius:2px; }
+
+  .tiles { display:grid; gap:8px; grid-template-columns:repeat(auto-fit,minmax(112px,1fr));
+           padding:9px 13px; }
+  .tile { background:var(--panel-sunk); border-radius:7px; padding:7px 9px; }
+  .tile .k { font-size:10.5px; color:var(--ink-3); }
+  .tile .v { font-family:var(--mono); font-size:16px; font-weight:600;
+             font-variant-numeric:tabular-nums; }
+
+  .note { margin:0; padding:10px 13px; font-size:12px; color:var(--ink-2);
+          border-top:1px solid var(--rule-soft); }
+  .note b { color:var(--ink); }
+  dialog { border:1px solid var(--rule); border-radius:10px; background:var(--panel);
+           color:var(--ink); max-width:min(680px,92vw); padding:0; box-shadow:var(--shadow); }
+  dialog::backdrop { background:rgba(0,0,0,.4); }
+  dialog textarea { width:100%; height:340px; font-family:var(--mono); font-size:11.5px;
+        border:none; border-top:1px solid var(--rule-soft); padding:11px 13px;
+        background:var(--panel); color:var(--ink); resize:vertical; }
+  dialog .dfoot { display:flex; gap:8px; justify-content:flex-end; padding:9px 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">MSPM0G3507 · H3 Ball SCurve · Debug_Ex 115200</div>
+    <h1>滚球实时整定台</h1>
+  </div>
+  <div class="grow"></div>
+  <span id="status"><span class="dot" id="dot"></span>未连接</span>
+  <button id="connect" class="primary">连接串口</button>
+  <button id="reload" disabled>重新读取</button>
+  <button id="defaults" disabled>恢复默认</button>
+  <button id="export" disabled>导出为 C</button>
+</header>
+
+<main>
+  <section class="panel">
+    <div class="phead">
+      <span class="ptitle">控制参数</span>
+      <span class="punit" id="pcount">—</span>
+      <span class="grow"></span>
+      <span class="punit">滑块粗调 · 输入框精调</span>
+    </div>
+    <div id="params"></div>
+    <div id="log"></div>
+  </section>
+
+  <section class="charts">
+    <div class="panel">
+      <div class="phead"><span class="ptitle">会话概览</span>
+        <span class="punit">最近 20 s</span></div>
+      <div class="tiles" id="tiles"></div>
+    </div>
+    <div id="plots"></div>
+    <p class="note">
+      固件<b>只改内存、不写 flash</b>——掉电即恢复源码默认值。整定完请用
+      <b>导出为 C</b> 把数值回填 <span style="font-family:var(--mono)">app_ball_scurve_task.c</span> 并提交，否则不算数。
+    </p>
+  </section>
+</main>
+
+<dialog id="expdlg">
+  <div class="phead"><span class="ptitle">粘回 app_ball_scurve_task.c</span></div>
+  <textarea id="exptext" readonly></textarea>
+  <div class="dfoot">
+    <button id="expcopy">复制</button>
+    <button id="expclose" class="primary">关闭</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+
+/* ===== 参数分组：名字须与固件 H3S_TUNE_TABLE 一致 ===== */
+const GROUPS = [
+  ["反馈",              ["kp","kd","holdkd","fblim"]],
+  ["积分 · PID for MOVE", ["ki","kilim","kileak","kiminv"]],
+  ["MOVE / HOLD 调度",   ["henter","hentv","hdwell","hexit","htau"]],
+  ["抖动 · 破静摩擦",     ["dith","dithhz","dithe","dithv","dithd"]],
+  ["前馈与标定",         ["bias","roll","carff"]],
+  ["剖面与执行器",       ["amax","vmax","arate","servokp"]],
+];
+/* 参数中文提示，只为可读性，不影响协议。 */
+const LABEL = {
+  kp:"位置增益", kd:"MOVE 速度增益", holdkd:"HOLD 速度增益", fblim:"反馈限幅",
+  ki:"积分增益", kilim:"积分限幅", kileak:"积分泄漏", kiminv:"积分最小球速",
+  henter:"进 HOLD 误差", hentv:"进 HOLD 速度", hdwell:"进 HOLD 驻留",
+  hexit:"出 HOLD 滞回", htau:"增益过渡",
+  dith:"抖动幅值", dithhz:"抖动频率", dithe:"触发误差", dithv:"触发速度", dithd:"触发驻留",
+  bias:"水平角偏置", roll:"滚阻前馈", carff:"车加速度前馈",
+  amax:"剖面峰值加速度", vmax:"剖面峰值速度", arate:"输出斜率限制", servokp:"步进位置环增益",
+};
+
+const PLOTS = [
+  { title:"球位置", unit:"mm", h:150,
+    series:[{k:"xref",n:"参考 xref",c:"--s4",w:1.5,dash:[5,4]},
+            {k:"x",   n:"x",       c:"--s1",w:2}],
+    guides:[{key:"tgt",label:"目标"}] },
+  { title:"球速度", unit:"mm/s", h:110,
+    series:[{k:"vref",n:"参考",c:"--s4",w:1.4,dash:[5,4]},
+            {k:"v",   n:"v",  c:"--s1",w:1.7}] },
+  { title:"水管角：指令 vs 实际", unit:"deg", h:130,
+    series:[{k:"u",   n:"指令 u",   c:"--s4",w:1.7},
+            {k:"beam",n:"实际 beam",c:"--s2",w:2}] },
+  { title:"控制分量", unit:"deg", h:120,
+    series:[{k:"fb",  n:"fb",  c:"--s3",w:1.5},
+            {k:"ki",  n:"积分",c:"--s5",w:1.5},
+            {k:"dith",n:"抖动",c:"--s1",w:1,alpha:.6}] },
+];
+
+const WINDOW_S = 20;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const $ = id => document.getElementById(id);
+
+/* ===== 串口 ===== */
+let port = null, writer = null, keepReading = false;
+const rows = new Map();          // name -> {el, num, rng, min, max, unit, value}
+let history = [];
+let t0 = null;
+
+function log(text, cls) {
+  const el = $("log");
+  const span = document.createElement("span");
+  if (cls) span.className = cls;
+  span.textContent = text + "\n";
+  el.appendChild(span);
+  while (el.childNodes.length > 400) el.removeChild(el.firstChild);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setStatus(text, state) {
+  $("status").innerHTML = `<span class="dot ${state || ""}" id="dot"></span>${text}`;
+}
+
+async function connect() {
+  if (!("serial" in navigator)) {
+    log("✗ 这个浏览器没有 Web Serial。请用 Chrome/Edge，并从 file:// 或 http://localhost 打开本文件。", "bad");
+    setStatus("不支持 Web Serial", "err");
+    return;
+  }
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200, dataBits: 8, stopBits: 1, parity: "none" });
+  } catch (err) {
+    log("✗ 打开串口失败：" + err.message, "bad");
+    setStatus("连接失败", "err");
+    return;
+  }
+  writer = port.writable.getWriter();
+  keepReading = true;
+  setStatus("已连接 115200 8N1", "on");
+  for (const id of ["reload","defaults","export"]) $(id).disabled = false;
+  $("connect").textContent = "断开";
+  readLoop();
+  setTimeout(() => send("?"), 250);      // 让固件把参数表打一遍
+}
+
+async function disconnect() {
+  keepReading = false;
+  try { if (writer) { writer.releaseLock(); writer = null; } } catch {}
+  try { if (port) await port.close(); } catch {}
+  port = null;
+  setStatus("未连接");
+  for (const id of ["reload","defaults","export"]) $(id).disabled = true;
+  $("connect").textContent = "连接串口";
+}
+
+async function readLoop() {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const reader = port.readable.getReader();
+  try {
+    while (keepReading) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let index;
+      while ((index = buffer.indexOf("\n")) >= 0) {
+        handleLine(buffer.slice(0, index).trim());
+        buffer = buffer.slice(index + 1);
+      }
+      if (buffer.length > 8192) buffer = "";   // 防跑飞
+    }
+  } catch (err) {
+    log("✗ 读取中断：" + err.message, "bad");
+  } finally {
+    try { reader.releaseLock(); } catch {}
+  }
+}
+
+async function send(text) {
+  if (!writer) return;
+  try { await writer.write(new TextEncoder().encode(text + "\n")); }
+  catch (err) { log("✗ 发送失败：" + err.message, "bad"); }
+}
+
+/* ===== 行分流 ===== */
+const RE_SCV  = /(\w+)=(-?[\d.]+)/g;
+const RE_P    = /^\[TUNE\] p name=(\S+) val=(\S+) min=(\S+) max=(\S+) unit=(\S+)/;
+const RE_OK   = /^\[TUNE\] ok name=(\S+) val=(\S+) old=(\S+)/;
+const RE_ERR  = /^\[TUNE\] err (.*)/;
+const RE_END  = /^\[TUNE\] end n=(\d+)/;
+
+function handleLine(line) {
+  if (!line) return;
+  if (line.startsWith("[SCV]") && line.includes("drop=")) {
+    const row = {};
+    for (const m of line.matchAll(RE_SCV)) row[m[1]] = parseFloat(m[2]);
+    if (t0 === null) t0 = row.t ?? 0;
+    row._t = ((row.t ?? 0) - t0) / 1000;
+    history.push(row);
+    if (history.length > 6000) history.splice(0, history.length - 6000);
+    return;
+  }
+  let m;
+  if ((m = RE_P.exec(line))) {
+    upsertRow(m[1], +m[2], +m[3], +m[4], m[5]);
+    return;
+  }
+  if ((m = RE_OK.exec(line))) {
+    const row = rows.get(m[1]);
+    if (row) { row.value = +m[2]; paint(row); row.el.classList.remove("rejected"); }
+    log(`${m[1]} : ${(+m[3]).toPrecision(5)} → ${(+m[2]).toPrecision(5)}`, "ok");
+    return;
+  }
+  if ((m = RE_ERR.exec(line))) {
+    const name = /name=(\S+)/.exec(m[1]);
+    if (name && rows.has(name[1])) rows.get(name[1]).el.classList.add("rejected");
+    log("✗ " + m[1], "bad");
+    return;
+  }
+  if ((m = RE_END.exec(line))) {
+    $("pcount").textContent = `${m[1]} 项`;
+    return;
+  }
+  if (line.startsWith("[SCVCFG]")) log(line);
+}
+
+/* ===== 参数面板 ===== */
+function groupOf(name) {
+  for (const [title, names] of GROUPS) if (names.includes(name)) return title;
+  return "其它";
+}
+
+function ensureGroup(title) {
+  let box = document.querySelector(`details[data-g="${CSS.escape(title)}"]`);
+  if (box) return box;
+  box = document.createElement("details");
+  box.className = "group";
+  box.dataset.g = title;
+  box.open = true;
+  box.innerHTML = `<summary>${title}</summary>`;
+  const order = GROUPS.findIndex(g => g[0] === title);
+  box.dataset.order = order < 0 ? 99 : order;
+  const parent = $("params");
+  const after = [...parent.children].find(c => +c.dataset.order > +box.dataset.order);
+  parent.insertBefore(box, after || null);
+  return box;
+}
+
+function upsertRow(name, value, min, max, unit) {
+  let row = rows.get(name);
+  if (!row) {
+    const el = document.createElement("div");
+    el.className = "row";
+    el.innerHTML =
+      `<span class="name">${name}<small>${LABEL[name] || ""}</small></span>` +
+      `<input type="range">` +
+      `<input type="number">`;
+    ensureGroup(groupOf(name)).appendChild(el);
+    row = { el, rng: el.querySelector("input[type=range]"),
+            num: el.querySelector("input[type=number]") };
+    rows.set(name, row);
+
+    row.rng.addEventListener("input", () => {
+      row.value = +row.rng.value;
+      row.num.value = fmt(row.value);
+      el.classList.add("changed");
+      queueSet(name, row.value);          // 拖动节流
+    });
+    row.num.addEventListener("change", () => {
+      const v = parseFloat(row.num.value);
+      if (!Number.isFinite(v)) return;
+      row.value = v; row.rng.value = v;
+      el.classList.add("changed");
+      flushSet(name, v);                  // 输入框立即发
+    });
+  }
+  Object.assign(row, { min, max, unit, value });
+  const step = (max - min) / 200 || 0.001;
+  row.rng.min = min; row.rng.max = max; row.rng.step = step;
+  row.num.min = min; row.num.max = max; row.num.step = step;
+  row.num.title = `范围 [${min}, ${max}] ${unit}`;
+  paint(row);
+  row.el.classList.remove("changed", "rejected");
+}
+
+const fmt = v => (Math.abs(v) >= 1000 || (v !== 0 && Math.abs(v) < 0.001))
+  ? v.toExponential(3) : String(+v.toPrecision(5));
+
+function paint(row) { row.rng.value = row.value; row.num.value = fmt(row.value); }
+
+/* 滑块拖动会连续触发，10 Hz 节流，避免刷爆串口。 */
+const pending = new Map();
+let lastFlush = 0;
+function queueSet(name, value) { pending.set(name, value); }
+function flushSet(name, value) { send(`s ${name} ${(+value).toPrecision(6)}`); }
+setInterval(() => {
+  if (!pending.size || performance.now() - lastFlush < 100) return;
+  for (const [name, value] of pending) flushSet(name, value);
+  pending.clear();
+  lastFlush = performance.now();
+}, 50);
+
+/* ===== 绘图 ===== */
+const charts = [];
+function buildPlots() {
+  const host = $("plots");
+  host.innerHTML = "";
+  charts.length = 0;
+  for (const spec of PLOTS) {
+    const panel = document.createElement("section");
+    panel.className = "panel";
+    const legend = spec.series.map(s =>
+      `<span class="lg"><i class="sw" style="background:var(${s.c});${
+        s.dash ? "opacity:.8" : ""}"></i>${s.n}</span>`).join("");
+    panel.innerHTML =
+      `<div class="phead"><span class="ptitle">${spec.title}</span>` +
+      `<span class="punit">${spec.unit}</span>` +
+      `<span class="legend">${legend}</span></div><canvas></canvas>`;
+    host.appendChild(panel);
+    charts.push({ spec, canvas: panel.querySelector("canvas") });
+  }
+}
+
+function draw(chart) {
+  const { spec, canvas } = chart;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth || 700, H = spec.h;
+  canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+  canvas.style.height = H + "px";
+  const g = canvas.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+
+  const PL = 50, PR = 12, PT = 8, PB = 18;
+  const iw = W - PL - PR, ih = H - PT - PB;
+  if (!history.length) return;
+  const now = history[history.length - 1]._t;
+  const x0 = Math.max(0, now - WINDOW_S), x1 = now + 0.4;
+  const rowsIn = history.filter(r => r._t >= x0);
+  if (rowsIn.length < 2) return;
+
+  let lo = Infinity, hi = -Infinity;
+  for (const s of spec.series) for (const r of rowsIn) {
+    const v = r[s.k]; if (Number.isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  }
+  for (const gd of (spec.guides || [])) for (const r of rowsIn) {
+    const v = r[gd.key]; if (Number.isFinite(v)) { if (v < lo) lo = v; if (v > hi) hi = v; }
+  }
+  if (!Number.isFinite(lo)) return;
+  if (lo === hi) { lo -= 1; hi += 1; }
+  const pad = (hi - lo) * .1; lo -= pad; hi += pad;
+  const X = t => PL + (t - x0) / (x1 - x0) * iw;
+  const Y = v => PT + (1 - (v - lo) / (hi - lo)) * ih;
+
+  g.strokeStyle = css("--rule-soft"); g.lineWidth = 1;
+  g.fillStyle = css("--ink-3"); g.font = `11px ${css("--mono")}`;
+  g.textAlign = "right"; g.textBaseline = "middle";
+  for (let i = 0; i <= 4; i++) {
+    const v = lo + (hi - lo) * i / 4, y = Math.round(Y(v)) + .5;
+    g.beginPath(); g.moveTo(PL, y); g.lineTo(PL + iw, y); g.stroke();
+    g.fillText(v.toFixed(Math.abs(hi - lo) < 6 ? 2 : 0), PL - 6, Y(v));
+  }
+
+  for (const gd of (spec.guides || [])) {
+    const v = rowsIn[rowsIn.length - 1][gd.key];
+    if (!Number.isFinite(v)) continue;
+    g.strokeStyle = css("--good"); g.globalAlpha = .6;
+    g.setLineDash([4, 4]); g.beginPath();
+    g.moveTo(PL, Math.round(Y(v)) + .5); g.lineTo(PL + iw, Math.round(Y(v)) + .5);
+    g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+    /* ±10 mm 判据带 */
+    g.fillStyle = css("--good"); g.globalAlpha = .08;
+    g.fillRect(PL, Y(v + 10), iw, Math.abs(Y(v - 10) - Y(v + 10)));
+    g.globalAlpha = 1;
+  }
+
+  g.lineJoin = "round"; g.lineCap = "round";
+  for (const s of spec.series) {
+    g.strokeStyle = css(s.c); g.lineWidth = s.w;
+    g.globalAlpha = s.alpha || 1; g.setLineDash(s.dash || []);
+    g.beginPath();
+    let started = false;
+    for (const r of rowsIn) {
+      const v = r[s.k];
+      if (!Number.isFinite(v)) { started = false; continue; }
+      const px = X(r._t), py = Y(v);
+      started ? g.lineTo(px, py) : (g.moveTo(px, py), started = true);
+    }
+    g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+  }
+}
+
+function tiles() {
+  if (!history.length) return;
+  const now = history[history.length - 1]._t;
+  const seg = history.filter(r => r._t >= now - WINDOW_S);
+  const err = seg.map(r => (r.x ?? 0) - (r.tgt ?? 0));
+  const inSpec = err.filter(e => Math.abs(e) < 10).length / (err.length || 1);
+  const still  = seg.filter(r => Math.abs(r.v ?? 0) < 3).length / (seg.length || 1);
+  const last = seg[seg.length - 1];
+  const pk = arr => arr.length ? Math.max(...arr.map(Math.abs)) : NaN;
+  const set = [
+    ["±10 mm 达标率", (inSpec * 100).toFixed(1), "%"],
+    ["当前误差",      (err[err.length - 1] ?? 0).toFixed(2), "mm"],
+    ["球静止占比",    (still * 100).toFixed(0), "%"],
+    ["执行器滞后峰值", pk(seg.map(r => r.lag ?? 0)).toFixed(2), "°"],
+    ["积分 ki",       (last.ki ?? 0).toFixed(4), "°"],
+    ["抖动",          last.dth ? "开" : "关", ""],
+  ];
+  $("tiles").innerHTML = set.map(([k, v, u]) =>
+    `<div class="tile"><div class="k">${k}</div><div class="v">${v}<span style="font-size:11px;color:var(--ink-2)">${u}</span></div></div>`
+  ).join("");
+}
+
+function frame() { for (const c of charts) draw(c); tiles(); requestAnimationFrame(frame); }
+
+/* ===== 导出 ===== */
+function exportC() {
+  const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const out = [`    /* 由 ball_tune.html 导出 ${stamp} */`];
+  for (const [title, names] of GROUPS) {
+    out.push(`    /* --- ${title} --- */`);
+    for (const name of names) {
+      const row = rows.get(name);
+      if (!row) continue;
+      out.push(`    /* ${name.padEnd(9)} */ ${fmt(row.value)}f,   /* ${LABEL[name] || ""} ${row.unit} */`);
+    }
+  }
+  $("exptext").value = out.join("\n");
+  $("expdlg").showModal();
+}
+
+/* ===== 绑定 ===== */
+$("connect").addEventListener("click", () => port ? disconnect() : connect());
+$("reload").addEventListener("click", () => send("?"));
+$("defaults").addEventListener("click", async () => { await send("d"); setTimeout(() => send("?"), 200); });
+$("export").addEventListener("click", exportC);
+$("expclose").addEventListener("click", () => $("expdlg").close());
+$("expcopy").addEventListener("click", () => {
+  navigator.clipboard.writeText($("exptext").value).then(() => log("已复制到剪贴板", "ok"));
+});
+
+buildPlots();
+requestAnimationFrame(frame);
+if (!("serial" in navigator)) {
+  setStatus("浏览器不支持 Web Serial", "err");
+  log("提示：需要 Chrome/Edge，且从 file:// 或 http://localhost 打开。", "bad");
+}
+</script>
+</body>
+</html>
