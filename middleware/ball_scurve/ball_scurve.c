@@ -145,6 +145,9 @@ void BallScurve_Init(BALL_SCURVE_CONTROLLER *controller){
     controller->hold_blend = 0.0f;
     controller->hold_enter_elapsed_s = 0.0f;
     controller->hold_mode = false;
+    controller->capture_blend = 0.0f;
+    controller->replan_error_elapsed_s = 0.0f;
+    controller->replan_cooldown_elapsed_s = 0.0f;
 }
 
 void BallScurve_Reset(BALL_SCURVE_CONTROLLER *controller, float current_angle_deg){
@@ -233,6 +236,9 @@ bool BallScurve_PlanTo(BALL_SCURVE_CONTROLLER *controller,
     controller->breakout_on = false;
     controller->hold_enter_elapsed_s = 0.0f;
     controller->hold_mode = false;
+    controller->capture_blend = 0.0f;
+    controller->replan_error_elapsed_s = 0.0f;
+    controller->replan_cooldown_elapsed_s = 0.0f;
     return true;
 }
 
@@ -273,21 +279,83 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
         a_ref = 0.0f;
     }
 
-    /* --- 2. 可选重规划（默认关闭，replan_error_mm = 0 即纯 S 曲线）--- */
-    if (controller->active && (config->replan_error_mm > 0.0f) &&
-        (BallScurve_Abs(x_ref - input->x_mm) > config->replan_error_mm)){
-        if (BallScurve_PlanTo(controller, config, input->x_mm, input->velocity_mm_s,
-                              controller->target_mm)){
-            BallScurve_Evaluate(controller, 0.0f, &x_ref, &v_ref, &a_ref);
+    /* --- 2. 受控重规划：误差需驻留且带冷却，绝不允许每拍重启剖面 --- */
+    bool replanned = false;
+    if (controller->active){
+        controller->replan_cooldown_elapsed_s += input->dt_s;
+        float abs_target_before_capture =
+            BallScurve_Abs(controller->target_mm - input->x_mm);
+        bool outside_capture = (config->capture_enter_error_mm <= 0.0f) ||
+            (abs_target_before_capture > config->capture_enter_error_mm);
+        bool position_bad = (config->replan_error_mm > 0.0f) &&
+            (BallScurve_Abs(x_ref - input->x_mm) > config->replan_error_mm);
+        bool velocity_bad = (config->replan_velocity_error_mm_s > 0.0f) &&
+            (BallScurve_Abs(v_ref - input->velocity_mm_s) >
+             config->replan_velocity_error_mm_s);
+        bool fresh_velocity = input->velocity_trusted &&
+            (input->measurement_age_ms <= config->velocity_floor_weight_age_ms);
+        bool replan_bad = fresh_velocity && outside_capture &&
+            (position_bad || velocity_bad);
+        if (replan_bad){
+            controller->replan_error_elapsed_s += input->dt_s;
+        } else{
+            controller->replan_error_elapsed_s = 0.0f;
         }
+        if (replan_bad &&
+            (controller->replan_error_elapsed_s >= config->replan_dwell_s) &&
+            (controller->replan_cooldown_elapsed_s >= config->replan_cooldown_s)){
+            float target = controller->target_mm;
+            if (BallScurve_PlanTo(controller, config, input->x_mm,
+                                  input->velocity_mm_s, target)){
+                BallScurve_Evaluate(controller, 0.0f, &x_ref, &v_ref, &a_ref);
+                replanned = true;
+            }
+        }
+    } else{
+        controller->replan_error_elapsed_s = 0.0f;
     }
 
-    /* --- 3. 加速度前馈 asin(a_ref/K_G) --- */
-    float ratio = BallScurve_Clamp(a_ref / config->rolling_acceleration_gain_mm_s2,
-                                   -0.999f, 0.999f);
-    float feedforward_deg = asinf(ratio) * BALL_SCURVE_RAD_TO_DEG;
+    /* --- 3. 末端捕获：按实际目标误差把移动参考平滑拉向固定目标 --- */
+    float target_error_for_capture = controller->target_mm - input->x_mm;
+    float capture_target = controller->active ? 0.0f : 1.0f;
+    float capture_span = config->capture_enter_error_mm - config->capture_full_error_mm;
+    if (controller->active && (config->capture_enter_error_mm > 0.0f) &&
+        (capture_span > 0.0f)){
+        capture_target = BallScurve_SmoothStep(
+            (config->capture_enter_error_mm -
+             BallScurve_Abs(target_error_for_capture)) / capture_span);
+    }
+    controller->capture_blend = BallScurve_FilterToward(
+        controller->capture_blend, capture_target, input->dt_s,
+        config->capture_blend_tau_s);
+    x_ref += controller->capture_blend * (controller->target_mm - x_ref);
+    v_ref *= (1.0f - controller->capture_blend);
+    a_ref *= (1.0f - controller->capture_blend);
 
-    /* --- 4. 滚阻前馈，按参考速度方向施加 --- */
+    /* --- 4. 已知轨迹加速度预览：提前抵消步进位置环滞后 --- */
+    float acceleration_preview = a_ref;
+    if (controller->active && (config->acceleration_preview_s > 0.0f)){
+        float preview_time = controller->elapsed_s + config->acceleration_preview_s;
+        if (preview_time > controller->duration_s){
+            preview_time = controller->duration_s;
+        }
+        float preview_x;
+        float preview_v;
+        BallScurve_Evaluate(controller, preview_time, &preview_x, &preview_v,
+                            &acceleration_preview);
+        acceleration_preview *= (1.0f - controller->capture_blend);
+    }
+    float nominal_ratio = BallScurve_Clamp(
+        a_ref / config->rolling_acceleration_gain_mm_s2, -0.999f, 0.999f);
+    float nominal_feedforward_deg =
+        asinf(nominal_ratio) * BALL_SCURVE_RAD_TO_DEG;
+    float preview_ratio = BallScurve_Clamp(
+        acceleration_preview / config->rolling_acceleration_gain_mm_s2,
+        -0.999f, 0.999f);
+    float feedforward_deg = asinf(preview_ratio) * BALL_SCURVE_RAD_TO_DEG;
+    float actuator_lead_deg = feedforward_deg - nominal_feedforward_deg;
+
+    /* --- 5. 滚阻前馈，按参考速度方向施加 --- */
     float rolling_ff_deg = 0.0f;
     if ((config->rolling_resistance_deg != 0.0f) &&
         (BallScurve_Abs(v_ref) > config->rolling_ff_speed_deadband_mm_s)){
@@ -295,7 +363,7 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
                                         : -config->rolling_resistance_deg;
     }
 
-    /* --- 5. MOVE / BRAKE / HOLD 增益调度 --- */
+    /* --- 6. MOVE / BRAKE / HOLD 增益调度 --- */
     float position_error = x_ref - input->x_mm;
     float velocity_error = v_ref - input->velocity_mm_s;
     float target_error_now = controller->target_mm - input->x_mm;
@@ -324,6 +392,13 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
                 velocity_weight = 1.0f - BallScurve_Clamp(age_blend, 0.0f, 1.0f) *
                                   (1.0f - floor_weight);
             }
+        }
+    }
+    if (!controller->active && !input->moving){
+        float stationary_weight = BallScurve_Clamp(
+            config->stationary_velocity_weight, 0.0f, 1.0f);
+        if (velocity_weight > stationary_weight){
+            velocity_weight = stationary_weight;
         }
     }
 
@@ -597,6 +672,21 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
     /* --- 7. 合成、限幅、斜率限制 --- */
     float command = config->level_bias_deg + feedforward_deg + rolling_ff_deg +
                     feedback_deg + hold_integral_deg + dither_deg + breakout_deg;
+    /*
+     * 积分器自身不设角度上限，但总指令若已撞物理限位，就撤回本拍继续朝
+     * 饱和方向的积分增量。它是抗饱和回算，不是额外倾角钳位：离开饱和后
+     * 积分仍可继续增长，已有积分量也不会被截断。
+     */
+    bool integral_worsens_saturation = controller->hold_integral_on &&
+        (((command > config->angle_max_deg) && (target_error_now > 0.0f)) ||
+         ((command < config->angle_min_deg) && (target_error_now < 0.0f)));
+    if (integral_worsens_saturation){
+        float rejected_increment = config->hold_integral_ki_deg_per_mm_s *
+            target_error_now * input->dt_s;
+        controller->hold_integral_deg -= rejected_increment;
+        hold_integral_deg = controller->hold_integral_deg;
+        command -= rejected_increment;
+    }
     float limited = BallScurve_Clamp(command, config->angle_min_deg, config->angle_max_deg);
     bool saturated = (limited != command);
 
@@ -642,7 +732,9 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
     output->x_ref_mm = x_ref;
     output->v_ref_mm_s = v_ref;
     output->a_ref_mm_s2 = a_ref;
+    output->acceleration_preview_mm_s2 = acceleration_preview;
     output->feedforward_deg = feedforward_deg;
+    output->actuator_lead_deg = actuator_lead_deg;
     output->rolling_ff_deg = rolling_ff_deg;
     output->feedback_deg = feedback_deg;
     output->dither_deg = dither_deg;
@@ -658,6 +750,7 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
     output->effective_kd_deg_per_mm_s = effective_kd;
     output->brake_blend = controller->brake_blend;
     output->hold_blend = controller->hold_blend;
+    output->capture_blend = controller->capture_blend;
     output->stopping_distance_mm = stopping_distance;
     output->closing_velocity_mm_s = closing_velocity;
     output->velocity_weight = velocity_weight;
@@ -668,6 +761,7 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
     output->feedback_clipped = feedback_clipped;
     output->rate_limited = rate_limited;
     output->dither_on = controller->dither_on;
+    output->replanned = replanned;
     output->settled = controller->settled;
     output->gain_mode = (config->gain_schedule_enabled <= 0.0f)
         ? BALL_SCURVE_GAIN_MOVE

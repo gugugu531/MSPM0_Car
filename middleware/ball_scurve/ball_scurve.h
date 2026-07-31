@@ -48,6 +48,11 @@ typedef struct {
     /** 规划时长的下限/上限，s。上限同时兜住"目标极近时时长趋零"。 */
     float min_duration_s;
     float max_duration_s;
+    /**
+     * 加速度前馈预览时间，s。用已知轨迹在 t+preview 的 a_ref 提前驱动水管，
+     * 补偿步进位置环的一阶滞后；0 = 关闭预览，严格使用本拍 a_ref。
+     */
+    float acceleration_preview_s;
 
     /* ===== 剖面跟踪反馈 ===== */
     /** 位置反馈增益，deg/mm。由 wn²/K_G 换算。 */
@@ -91,6 +96,16 @@ typedef struct {
     float velocity_full_weight_age_ms;
     float velocity_floor_weight_age_ms;
     float velocity_untrusted_weight;
+    /** 剖面结束且 MOVING=0 时的速度反馈权重，抑制静止差分测速噪声。 */
+    float stationary_velocity_weight;
+
+    /* ===== 末端固定目标捕获 ===== */
+    /** 实际目标误差进入该范围后，开始把移动参考平滑拉向固定目标。0 = 关闭。 */
+    float capture_enter_error_mm;
+    /** 实际目标误差进入该范围后，固定目标参考完全接管。 */
+    float capture_full_error_mm;
+    /** 捕获混合权重的一阶时间常数，s。 */
+    float capture_blend_tau_s;
 
     /* ===== 前馈修正 ===== */
     /**
@@ -226,11 +241,14 @@ typedef struct {
     float settled_speed_mm_s;
     float settled_time_s;
 
-    /**
-     * 跟踪误差超过本值时按当前实测状态重新规划，mm。
-     * **0 = 关闭 = 纯 S 曲线**，这是本模块的默认语义。
-     */
+    /** 跟踪位置误差阈值，mm。0 = 不按位置误差触发重规划。 */
     float replan_error_mm;
+    /** 跟踪速度误差阈值，mm/s。0 = 不按速度误差触发重规划。 */
+    float replan_velocity_error_mm_s;
+    /** 误差需连续超限多久才重规划，s。 */
+    float replan_dwell_s;
+    /** 两次重规划的最小间隔，s，防止每拍重启剖面。 */
+    float replan_cooldown_s;
 } BALL_SCURVE_CONFIG;
 
 typedef struct {
@@ -271,6 +289,11 @@ typedef struct {
     float hold_blend;
     float hold_enter_elapsed_s;
     bool  hold_mode;
+    float capture_blend;
+
+    /* 受控重规划状态。 */
+    float replan_error_elapsed_s;
+    float replan_cooldown_elapsed_s;
 } BALL_SCURVE_CONTROLLER;
 
 typedef struct {
@@ -301,9 +324,11 @@ typedef struct {
     float x_ref_mm;
     float v_ref_mm_s;
     float a_ref_mm_s2;
+    float acceleration_preview_mm_s2; /**< 用于前馈的 t+preview 加速度 */
 
     /* 指令分解，便于遥测中直接看清每一项的贡献。 */
-    float feedforward_deg;   /**< asin(a_ref/K_G) */
+    float feedforward_deg;   /**< asin(a_ref(t+preview)/K_G) */
+    float actuator_lead_deg; /**< 预览前馈相对本拍 a_ref 前馈的超前量 */
     float rolling_ff_deg;    /**< 滚阻前馈 */
     float feedback_deg;      /**< 限幅后的 PD 分量 */
     float dither_deg;        /**< 本拍注入的抖动量（已含符号） */
@@ -318,6 +343,7 @@ typedef struct {
     float effective_kd_deg_per_mm_s;
     float brake_blend;
     float hold_blend;
+    float capture_blend;
     float stopping_distance_mm;
     float closing_velocity_mm_s;
     float velocity_weight;
@@ -331,6 +357,7 @@ typedef struct {
     bool  dither_on;         /**< 抖动正在注入 */
     bool  hold_integral_on;  /**< 小误差积分本拍正在累积 */
     bool  breakout_on;       /**< 单向脱困正在介入（与 dither_on 互斥） */
+    bool  replanned;         /**< 本拍因跟踪误差执行了受控重规划 */
     bool  settled;
     BALL_SCURVE_GAIN_MODE gain_mode;
 } BALL_SCURVE_OUTPUT;

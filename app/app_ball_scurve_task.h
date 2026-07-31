@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-/** 第三题正式入口：先守住 O，任务内按 ENTER 后执行 +50→−50 mm 并计时。 */
+/** 第三题正式入口：先守住 O；ENTER 后 +50 剖面结束即折返，最终在 −50 mm 停稳。 */
 extern const APP_TASK_DESC APP_H3_CHALLENGE;
 
 /**

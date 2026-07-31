@@ -277,6 +277,13 @@ int main(int argc, char **argv){
     /* 抖动: sim_ball_scurve <sc> <kp> <lim> <wn> <zeta> <amp_deg> <hz> */
     double dither_amp = (argc > 6) ? atof(argv[6]) : 0.0;
     double dither_hz  = (argc > 7) ? atof(argv[7]) : 2.0;
+    /* 诊断覆盖：preview, replan_pos, replan_vel, dwell, cooldown, capture_enter。 */
+    double preview_s = (argc > 8) ? atof(argv[8]) : 0.10;
+    double replan_pos = (argc > 9) ? atof(argv[9]) : 10.0;
+    double replan_vel = (argc > 10) ? atof(argv[10]) : 0.0;
+    double replan_dwell = (argc > 11) ? atof(argv[11]) : 0.12;
+    double replan_cooldown = (argc > 12) ? atof(argv[12]) : 0.50;
+    double capture_enter = (argc > 13) ? atof(argv[13]) : 20.0;
 
     BALL_SCURVE_CONFIG config = {
         .rolling_acceleration_gain_mm_s2 = SIM_K_G_MM_S2,
@@ -284,6 +291,7 @@ int main(int argc, char **argv){
         .max_velocity_mm_s = 120.0f,
         .min_duration_s = 0.40f,
         .max_duration_s = 3.00f,
+        .acceleration_preview_s = (float)preview_s,
         /* Kp = wn²/K_G，Kd = 2ζwn/K_G，rad/m → deg/mm 需 ×57.29578/1000。 */
         .kp_deg_per_mm = (float)(wn * wn / SIM_K_G_MM_S2 * 57.29577951308232),
         .kd_deg_per_mm_s = (float)(2.0 * zeta * wn / SIM_K_G_MM_S2 * 57.29577951308232),
@@ -307,17 +315,28 @@ int main(int argc, char **argv){
         .velocity_full_weight_age_ms = 60.0f,
         .velocity_floor_weight_age_ms = 120.0f,
         .velocity_untrusted_weight = 0.30f,
+        .stationary_velocity_weight = 0.10f,
+        .capture_enter_error_mm = (float)capture_enter,
+        .capture_full_error_mm = 5.0f,
+        .capture_blend_tau_s = 0.08f,
         .rolling_resistance_deg = 0.0f,   /* 首轮刻意关闭，用于测出实际欠冲量 */
         .rolling_ff_speed_deadband_mm_s = 3.0f,
         .level_bias_deg = 0.0f,           /* 未标定：真实水平误差全额暴露 */
         .angle_min_deg = -5.2f,
         .angle_max_deg = 5.1f,
-        .angle_rate_limit_deg_s = 60.0f,
+        .angle_rate_limit_deg_s = 960.0f,
         .dither_amplitude_deg = (float)dither_amp,
         .dither_frequency_hz = (float)dither_hz,
         .dither_min_error_mm = 3.0f,
         .dither_max_speed_mm_s = 8.0f,
         .dither_dwell_s = 0.5f,
+        .hold_integral_ki_deg_per_mm_s = 0.08f,
+        .hold_integral_min_error_mm = 2.0f,
+        .hold_integral_max_error_mm = 15.0f,
+        .hold_integral_max_speed_mm_s = 3.0f,
+        .hold_integral_release_speed_mm_s = 5.0f,
+        .hold_integral_release_rate_deg_s = 8.0f,
+        .hold_integral_motion_comp_deg_per_mm = 0.40f,
         .breakout_max_angle_deg = 1.4f,
         .breakout_ramp_rate_deg_s = 1.2f,
         .breakout_release_rate_deg_s = 8.0f,
@@ -329,7 +348,10 @@ int main(int argc, char **argv){
         .settled_position_mm = 3.0f,
         .settled_speed_mm_s = 5.0f,
         .settled_time_s = 0.5f,
-        .replan_error_mm = 0.0f,          /* 0 = 纯 S 曲线，不重规划 */
+        .replan_error_mm = (float)replan_pos,
+        .replan_velocity_error_mm_s = (float)replan_vel,
+        .replan_dwell_s = (float)replan_dwell,
+        .replan_cooldown_s = (float)replan_cooldown,
     };
     if (!use_feedforward){
         /* 对照组：砍掉前馈，退化成绕参考点的纯 PD，用来看前馈到底值多少。 */
@@ -382,6 +404,8 @@ int main(int argc, char **argv){
     const double arm_delay_s = 0.1;
     const double challenge_start_s = arm_delay_s; /* 第二次 ENTER，比赛计时从这里开始。 */
     double finish_time_s = -1.0;
+    double finish_x_mm = 0.0;
+    double finish_v_mm_s = 0.0;
     bool planned = false;
 
     double next_control = arm_delay_s;
@@ -456,6 +480,7 @@ int main(int argc, char **argv){
                 .velocity_mm_s = (float)vision_v,
                 .actual_angle_deg = (float)SimAngleFromCount(count_actual),
                 .velocity_trusted = true,
+                .moving = fabs(v_mm_s) >= 3.0,
                 .measurement_age_ms = (float)(plant.vision_latency_s * 1000.0),
                 .dt_s = (float)(1.0 / SIM_CONTROL_HZ),
             };
@@ -463,22 +488,27 @@ int main(int argc, char **argv){
             count_target = SimCountFromAngle(out.angle_deg);
 
             /* 与固件一致：剖面结束后按实际位置/速度连续合格时间推进业务。 */
-            if (!out.profile_active || (waypoint_index == 0)){
-                double abs_error = fabs(waypoint_mm[waypoint_index] - vision_x);
-                bool final_target = (waypoint_index + 1) >= waypoint_count;
-                double position_limit = final_target ? 10.0 : 5.0;
-                double speed_limit = final_target ? 5.0 : 20.0;
-                double dwell_limit = final_target ? 0.20 : 0.10;
-                bool qualified = (abs_error <= position_limit) &&
-                                 (fabs(vision_v) <= speed_limit);
-                phase_timer = qualified
-                    ? (phase_timer + 1.0 / SIM_CONTROL_HZ) : 0.0;
-                if (!kick_mode && (phase_timer >= dwell_limit)){
-                    if (!final_target){
-                        waypoint_index++;
-                        planned = false;
-                    } else if (finish_time_s < 0.0){
-                        finish_time_s = t;
+            if (!out.profile_active){
+                if (waypoint_index == 0){
+                    waypoint_index++;
+                    planned = false;
+                    phase_timer = 0.0;
+                } else{
+                    double abs_error = fabs(waypoint_mm[waypoint_index] - vision_x);
+                    double position_limit = 2.0;
+                    double speed_limit = 8.0;
+                    double dwell_limit = 0.20;
+                    bool qualified = (fabs(v_mm_s) < 3.0) &&
+                                     (abs_error <= position_limit) &&
+                                     (fabs(vision_v) <= speed_limit);
+                    phase_timer = qualified
+                        ? (phase_timer + 1.0 / SIM_CONTROL_HZ) : 0.0;
+                    if (!kick_mode && (phase_timer >= dwell_limit)){
+                        if (finish_time_s < 0.0){
+                            finish_time_s = t;
+                            finish_x_mm = x_mm;
+                            finish_v_mm_s = v_mm_s;
+                        }
                     }
                 }
             }
@@ -573,11 +603,13 @@ int main(int argc, char **argv){
     }
 
     fprintf(stderr,
-            "scenario=%s  finish=%.2f s  pass5=%d  final_x=%.2f mm  target=%.1f mm  error=%.2f mm\n",
+            "scenario=%s  finish=%.2f s  pass5=%d  finish_x=%.2f mm  finish_v=%.2f mm/s "
+            "final_x=%.2f mm  target=%.1f mm  error=%.2f mm\n",
             scenario,
             (finish_time_s >= 0.0) ? (finish_time_s - challenge_start_s) : -1.0,
             (!kick_mode && (finish_time_s >= 0.0) &&
              ((finish_time_s - challenge_start_s) <= 5.0)) ? 1 : 0,
+            finish_x_mm, finish_v_mm_s,
             x_mm, waypoint_mm[waypoint_count - 1],
             x_mm - waypoint_mm[waypoint_count - 1]);
     return 0;

@@ -61,14 +61,11 @@
  * 进入任务时同时临时提高位置环增益，避免执行器速度上限提高后仍被慢位置环拖住。
  */
 #define H3S_ACTUATOR_SPEED_DEG_S 960.0f
-#define H3S_ACTUATOR_SERVO_KP_S_INV 6.0f
+#define H3S_ACTUATOR_SERVO_KP_S_INV 12.0f
 /* 独立 Hold 调试入口的视觉接管确认时间；第三题由任务内 ENTER 显式启动。 */
 #define H3S_HOLD_ARM_DWELL_MS     100U
-#define H3S_TURN_POSITION_MM        5.0f
-#define H3S_TURN_SPEED_MM_S         20.0f
-#define H3S_TURN_DWELL_S             0.10f
-#define H3S_FINISH_POSITION_MM     10.0f
-#define H3S_FINISH_SPEED_MM_S        5.0f
+#define H3S_FINISH_POSITION_MM       2.0f
+#define H3S_FINISH_SPEED_MM_S        8.0f
 #define H3S_FINISH_DWELL_S            0.20f
 #define H3S_CHALLENGE_LIMIT_MS    5000U
 
@@ -118,6 +115,8 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     .max_velocity_mm_s = 120.0f,
     .min_duration_s = 0.40f,
     .max_duration_s = 3.00f,
+    /* 第三题位置环 KP=12 s^-1 对应约 83 ms；100 ms 预览覆盖少量通信/机构滞后。 */
+    .acceleration_preview_s = 0.10f,
 
     /* wn = 2.4 rad/s、ζ = 0.9：Kp = wn²/K_G、Kd = 2ζwn/K_G，再由 rad/m 转 deg/mm。 */
     .kp_deg_per_mm = 0.04711f,
@@ -144,6 +143,12 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     .velocity_full_weight_age_ms = 60.0f,
     .velocity_floor_weight_age_ms = 120.0f,
     .velocity_untrusted_weight = 0.30f,
+    .stationary_velocity_weight = 0.10f,
+
+    /* 末端 20 mm 开始转入真实目标捕获，5 mm 内固定目标完全接管。 */
+    .capture_enter_error_mm = 20.0f,
+    .capture_full_error_mm = 5.0f,
+    .capture_blend_tau_s = 0.08f,
 
     /*
      * 滚阻前馈默认 0：先跑一趟测出实际欠冲量 d，再按 θ_roll = 2d/(K_G·T²) 反解填回。
@@ -217,7 +222,11 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     .settled_speed_mm_s = 5.0f,
     .settled_time_s = 0.5f,
 
-    .replan_error_mm = 0.0f,   /* 0 = 纯 S 曲线，不重规划 */
+    /* 只按位置偏差触发：连续 120 ms 超 10 mm，两次至少间隔 500 ms。 */
+    .replan_error_mm = 10.0f,
+    .replan_velocity_error_mm_s = 0.0f,
+    .replan_dwell_s = 0.12f,
+    .replan_cooldown_s = 0.50f,
 };
 
 /* 抖动的角速率需求必须留在输出斜率限制之内，否则会被削顶成三角波。 */
@@ -387,6 +396,69 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
         .min_value = 0.0f,
         .max_value = 1.0f,
         .unit = "ratio",
+    },
+    {
+        .name = "vstill",
+        .value = &H3S_SCURVE_CONFIG.stationary_velocity_weight,
+        .min_value = 0.0f,
+        .max_value = 1.0f,
+        .unit = "ratio",
+    },
+    {
+        .name = "apreview",
+        .value = &H3S_SCURVE_CONFIG.acceleration_preview_s,
+        .min_value = 0.0f,
+        .max_value = 0.30f,
+        .unit = "s",
+    },
+    {
+        .name = "cap_enter",
+        .value = &H3S_SCURVE_CONFIG.capture_enter_error_mm,
+        .min_value = 0.0f,
+        .max_value = 50.0f,
+        .unit = "mm",
+    },
+    {
+        .name = "cap_full",
+        .value = &H3S_SCURVE_CONFIG.capture_full_error_mm,
+        .min_value = 0.0f,
+        .max_value = 20.0f,
+        .unit = "mm",
+    },
+    {
+        .name = "cap_tau",
+        .value = &H3S_SCURVE_CONFIG.capture_blend_tau_s,
+        .min_value = 0.0f,
+        .max_value = 0.50f,
+        .unit = "s",
+    },
+    {
+        .name = "rp_err",
+        .value = &H3S_SCURVE_CONFIG.replan_error_mm,
+        .min_value = 0.0f,
+        .max_value = 30.0f,
+        .unit = "mm",
+    },
+    {
+        .name = "rp_vel",
+        .value = &H3S_SCURVE_CONFIG.replan_velocity_error_mm_s,
+        .min_value = 0.0f,
+        .max_value = 100.0f,
+        .unit = "mm/s",
+    },
+    {
+        .name = "rp_dwell",
+        .value = &H3S_SCURVE_CONFIG.replan_dwell_s,
+        .min_value = 0.0f,
+        .max_value = 1.0f,
+        .unit = "s",
+    },
+    {
+        .name = "rp_cool",
+        .value = &H3S_SCURVE_CONFIG.replan_cooldown_s,
+        .min_value = 0.02f,
+        .max_value = 2.0f,
+        .unit = "s",
     },
     {
         .name = "fblim",
@@ -853,7 +925,7 @@ static void H3S_Enter(bool standalone){
         (double)H3S_SCURVE_CONFIG.hold_blend_tau_s);
     DebugUart_Printf(
         "[SCVCFG] hold enter=%.1fmm/%.1fmmps/%.2fs exit=%.1fmm/%.1fmmps "
-        "vweight=%.0f..%.0fms floor=%.2f\r\n",
+        "vweight=%.0f..%.0fms floor=%.2f still=%.2f\r\n",
         (double)H3S_SCURVE_CONFIG.hold_enter_error_mm,
         (double)H3S_SCURVE_CONFIG.hold_enter_speed_mm_s,
         (double)H3S_SCURVE_CONFIG.hold_enter_dwell_s,
@@ -861,7 +933,19 @@ static void H3S_Enter(bool standalone){
         (double)H3S_SCURVE_CONFIG.hold_exit_speed_mm_s,
         (double)H3S_SCURVE_CONFIG.velocity_full_weight_age_ms,
         (double)H3S_SCURVE_CONFIG.velocity_floor_weight_age_ms,
-        (double)H3S_SCURVE_CONFIG.velocity_untrusted_weight);
+        (double)H3S_SCURVE_CONFIG.velocity_untrusted_weight,
+        (double)H3S_SCURVE_CONFIG.stationary_velocity_weight);
+    DebugUart_Printf(
+        "[SCVCFG] preview=%.3fs capture=%.1f..%.1fmm/tau%.2fs "
+        "replan=%.1fmm/%.1fmmps dwell=%.2fs cool=%.2fs\r\n",
+        (double)H3S_SCURVE_CONFIG.acceleration_preview_s,
+        (double)H3S_SCURVE_CONFIG.capture_enter_error_mm,
+        (double)H3S_SCURVE_CONFIG.capture_full_error_mm,
+        (double)H3S_SCURVE_CONFIG.capture_blend_tau_s,
+        (double)H3S_SCURVE_CONFIG.replan_error_mm,
+        (double)H3S_SCURVE_CONFIG.replan_velocity_error_mm_s,
+        (double)H3S_SCURVE_CONFIG.replan_dwell_s,
+        (double)H3S_SCURVE_CONFIG.replan_cooldown_s);
     DebugUart_Printf(
         "[SCVCFG] alim=%.2f..%.2f arate=%.1f speed=%.1f servo_kp=%.1f "
         "tol=%d resume=%d minspd=%.1f tick=%ums\r\n",
@@ -909,11 +993,10 @@ static void H3S_Enter(bool standalone){
             ? "ACTIVE(dither forced off)" : "off(dither active)");
     }
     if (h3s_mode == H3S_MODE_SCURVE){
-        DebugUart_Printf("[H3CFG] hold0->ENTER->%.0f->%.0f turn=%.1fmm/%.1fmmps/%.2fs "
+        DebugUart_Printf("[H3CFG] hold0->ENTER->%.0f->%.0f turn=no-verify "
                          "finish=%.1fmm/%.1fmmps/%.2fs limit=%ums\r\n",
                          (double)H3S_WAYPOINT_MM[0], (double)H3S_WAYPOINT_MM[1],
-                         (double)H3S_TURN_POSITION_MM, (double)H3S_TURN_SPEED_MM_S,
-                         (double)H3S_TURN_DWELL_S, (double)H3S_FINISH_POSITION_MM,
+                         (double)H3S_FINISH_POSITION_MM,
                          (double)H3S_FINISH_SPEED_MM_S, (double)H3S_FINISH_DWELL_S,
                          (unsigned)H3S_CHALLENGE_LIMIT_MS);
     }
@@ -943,10 +1026,10 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         /* --- 视觉层：原始 / 使用值 / 龄期 / 质量 --- */
         "xr=%.2f x=%.2f vr=%.2f v=%.2f aest=%.1f age=%.1f q=%u "
         /* --- 剖面层 --- */
-        "tgt=%.1f xref=%.2f vref=%.2f aref=%.1f tp=%.3f tpd=%.3f act=%u "
-        "gm=%u bb=%.2f hb=%.2f kpe=%.4f kde=%.4f ds=%.1f vc=%.1f vw=%.2f "
+        "tgt=%.1f xref=%.2f vref=%.2f aref=%.1f apv=%.1f tp=%.3f tpd=%.3f act=%u "
+        "gm=%u bb=%.2f hb=%.2f cb=%.2f kpe=%.4f kde=%.4f ds=%.1f vc=%.1f vw=%.2f "
         /* --- 控制分量：合成前每一项 --- */
-        "bias=%.3f ff=%.3f rff=%.3f fb=%.3f iacc=%.3f dith=%.3f brka=%.3f u=%.3f "
+        "bias=%.3f ff=%.3f lead=%.3f rff=%.3f fb=%.3f iacc=%.3f dith=%.3f brka=%.3f u=%.3f "
         /* --- 跟踪误差 + 单向脱困计时（判误触发 / 判释放是否太晚）--- */
         "ex=%.2f ev=%.2f etgt=%.2f brkst=%.2f brkrel=%.2f "
         /* --- 执行器层：指令角 vs 实际角是滞后的直接指标 --- */
@@ -957,7 +1040,7 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
          * 早期版本缺这一位，45% 的反馈限幅在遥测里是隐形的）。
          * dth = 抖动正在注入；brk = 单向脱困正在介入（两者互斥）。
          */
-        "sat=%u fbc=%u rl=%u iact=%u dth=%u brk=%u set=%u mv=%u vv=%u px=%u edge=%u deg=%u hold=%u "
+        "sat=%u fbc=%u rl=%u rp=%u iact=%u dth=%u brk=%u set=%u mv=%u vv=%u px=%u edge=%u deg=%u hold=%u "
         "guard=%u fps=%.1f gap=%lu inv=%lu crc=%lu drop=%lu\r\n",
         (unsigned long)H3S_ElapsedMs(now), (unsigned)h3s_state,
         (unsigned)h3s_waypoint, (unsigned)(usable ? 1U : 0U),
@@ -973,10 +1056,12 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         (double)target_mm,
         (double)h3s_output.x_ref_mm, (double)h3s_output.v_ref_mm_s,
         (double)h3s_output.a_ref_mm_s2,
+        (double)h3s_output.acceleration_preview_mm_s2,
         (double)h3s_output.profile_time_s, (double)h3s_output.profile_duration_s,
         (unsigned)(h3s_output.profile_active ? 1U : 0U),
         (unsigned)h3s_output.gain_mode,
         (double)h3s_output.brake_blend, (double)h3s_output.hold_blend,
+        (double)h3s_output.capture_blend,
         (double)h3s_output.effective_kp_deg_per_mm,
         (double)h3s_output.effective_kd_deg_per_mm_s,
         (double)h3s_output.stopping_distance_mm,
@@ -984,7 +1069,8 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         (double)h3s_output.velocity_weight,
 
         (double)H3S_SCURVE_CONFIG.level_bias_deg,
-        (double)h3s_output.feedforward_deg, (double)h3s_output.rolling_ff_deg,
+        (double)h3s_output.feedforward_deg, (double)h3s_output.actuator_lead_deg,
+        (double)h3s_output.rolling_ff_deg,
         (double)h3s_output.feedback_deg, (double)h3s_output.hold_integral_deg,
         (double)h3s_output.dither_deg,
         (double)h3s_output.breakout_deg,
@@ -1004,6 +1090,7 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         (unsigned)(h3s_output.saturated ? 1U : 0U),
         (unsigned)(h3s_output.feedback_clipped ? 1U : 0U),
         (unsigned)(h3s_output.rate_limited ? 1U : 0U),
+        (unsigned)(h3s_output.replanned ? 1U : 0U),
         (unsigned)(h3s_output.hold_integral_on ? 1U : 0U),
         (unsigned)(h3s_output.dither_on ? 1U : 0U),
         (unsigned)(h3s_output.breakout_on ? 1U : 0U),
@@ -1114,43 +1201,42 @@ static APP_TASK_STATUS H3S_Tick(float dt){
             }
 
             if ((h3s_state == H3S_STATE_MOVING) && !h3s_output.profile_active){
-                h3s_state = H3S_STATE_VERIFY;
-                h3s_phase_ms = now;
-                h3s_target_dwell_s = 0.0f;
                 DebugUart_Printf("[SCV] arrive wp=%u target=%.1f x=%.2f err=%.2f\r\n",
                                  (unsigned)h3s_waypoint,
                                  (double)H3S_WAYPOINT_MM[h3s_waypoint],
                                  (double)h3s_prediction.x_mm,
                                  (double)(h3s_prediction.x_mm -
                                           H3S_WAYPOINT_MM[h3s_waypoint]));
+                if ((h3s_mode == H3S_MODE_SCURVE) && (h3s_waypoint == 0U)){
+                    DebugUart_Printf(
+                        "[H3] turn +5cm no-verify ms=%lu x=%.2f v=%.2f\r\n",
+                        (unsigned long)(now - h3s_start_ms),
+                        (double)h3s_prediction.x_mm,
+                        (double)h3s_prediction.velocity_mm_s);
+                    h3s_waypoint++;
+                    h3s_target_dwell_s = 0.0f;
+                    H3S_PlanCurrentWaypoint();
+                } else{
+                    h3s_state = H3S_STATE_VERIFY;
+                    h3s_phase_ms = now;
+                    h3s_target_dwell_s = 0.0f;
+                }
             }
             if ((h3s_mode == H3S_MODE_SCURVE) &&
-                ((h3s_state == H3S_STATE_VERIFY) ||
-                 ((h3s_state == H3S_STATE_MOVING) && (h3s_waypoint == 0U)))){
+                (h3s_state == H3S_STATE_VERIFY)){
                 float target_error = H3S_TargetMm() - h3s_prediction.x_mm;
-                float position_limit = (h3s_waypoint == 0U)
-                    ? H3S_TURN_POSITION_MM : H3S_FINISH_POSITION_MM;
-                float speed_limit = (h3s_waypoint == 0U)
-                    ? H3S_TURN_SPEED_MM_S : H3S_FINISH_SPEED_MM_S;
-                float dwell_limit = (h3s_waypoint == 0U)
-                    ? H3S_TURN_DWELL_S : H3S_FINISH_DWELL_S;
+                float position_limit = H3S_FINISH_POSITION_MM;
+                float speed_limit = H3S_FINISH_SPEED_MM_S;
+                float dwell_limit = H3S_FINISH_DWELL_S;
                 bool qualified = h3s_prediction.velocity_trusted &&
+                    !h3s_prediction.moving &&
                     (fabsf(target_error) <= position_limit) &&
                     (fabsf(h3s_prediction.velocity_mm_s) <= speed_limit);
                 h3s_target_dwell_s = qualified
                     ? (h3s_target_dwell_s + dt) : 0.0f;
 
                 if (h3s_target_dwell_s >= dwell_limit){
-                    if ((h3s_waypoint + 1U) < H3S_WAYPOINT_COUNT){
-                        DebugUart_Printf(
-                            "[H3] turn +5cm ms=%lu x=%.2f v=%.2f\r\n",
-                            (unsigned long)(now - h3s_start_ms),
-                            (double)h3s_prediction.x_mm,
-                            (double)h3s_prediction.velocity_mm_s);
-                        h3s_waypoint++;
-                        h3s_target_dwell_s = 0.0f;
-                        H3S_PlanCurrentWaypoint();
-                    } else{
+                    if ((h3s_waypoint + 1U) >= H3S_WAYPOINT_COUNT){
                         h3s_finish_ms = now;
                         h3s_state = H3S_STATE_DONE;
                         DebugUart_Printf(

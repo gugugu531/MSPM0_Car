@@ -35,6 +35,7 @@ static BALL_SCURVE_CONFIG Config(void){
         .velocity_full_weight_age_ms = 60.0f,
         .velocity_floor_weight_age_ms = 120.0f,
         .velocity_untrusted_weight = 0.30f,
+        .stationary_velocity_weight = 1.0f,
         .angle_min_deg = -5.2f,
         .angle_max_deg = 5.1f,
         .angle_rate_limit_deg_s = 1000.0f,
@@ -130,6 +131,60 @@ static void TestLargeErrorUsesBreakoutInsteadOfIntegral(void){
     AssertNear(output.hold_integral_deg, 0.0f, 1e-6f);
 }
 
+static void TestAccelerationPreviewLeadsNominalFeedforward(void){
+    BALL_SCURVE_CONFIG config = Config();
+    config.acceleration_preview_s = 0.12f;
+    BALL_SCURVE_CONTROLLER controller;
+    BALL_SCURVE_OUTPUT output;
+    BallScurve_Init(&controller);
+    assert(BallScurve_PlanTo(&controller, &config, 0.0f, 0.0f, 50.0f));
+    BALL_SCURVE_INPUT input = Input(0.0f, 0.0f);
+
+    assert(BallScurve_Update(&controller, &config, &input, &output));
+    assert(fabsf(output.acceleration_preview_mm_s2 - output.a_ref_mm_s2) > 1.0f);
+    assert(fabsf(output.actuator_lead_deg) > 0.001f);
+}
+
+static void TestReplanRequiresDwellAndCooldown(void){
+    BALL_SCURVE_CONFIG config = Config();
+    config.replan_error_mm = 1.0f;
+    config.replan_velocity_error_mm_s = 0.0f;
+    config.replan_dwell_s = 0.04f;
+    config.replan_cooldown_s = 0.04f;
+    BALL_SCURVE_CONTROLLER controller;
+    BALL_SCURVE_OUTPUT output;
+    BallScurve_Init(&controller);
+    assert(BallScurve_PlanTo(&controller, &config, 0.0f, 0.0f, 50.0f));
+    BALL_SCURVE_INPUT input = Input(-10.0f, 0.0f);
+
+    assert(BallScurve_Update(&controller, &config, &input, &output));
+    assert(!output.replanned);
+    assert(BallScurve_Update(&controller, &config, &input, &output));
+    assert(output.replanned);
+    AssertNear(controller.elapsed_s, 0.0f, 1e-6f);
+
+    assert(BallScurve_Update(&controller, &config, &input, &output));
+    assert(!output.replanned); /* 新剖面仍在冷却期。 */
+}
+
+static void TestCaptureBlendsToFixedTarget(void){
+    BALL_SCURVE_CONFIG config = Config();
+    config.capture_enter_error_mm = 20.0f;
+    config.capture_full_error_mm = 5.0f;
+    config.capture_blend_tau_s = 0.0f;
+    BALL_SCURVE_CONTROLLER controller;
+    BALL_SCURVE_OUTPUT output;
+    BallScurve_Init(&controller);
+    assert(BallScurve_PlanTo(&controller, &config, 0.0f, 0.0f, 50.0f));
+    BALL_SCURVE_INPUT input = Input(48.0f, 0.0f);
+
+    assert(BallScurve_Update(&controller, &config, &input, &output));
+    AssertNear(output.capture_blend, 1.0f, 1e-6f);
+    AssertNear(output.x_ref_mm, 50.0f, 1e-6f);
+    AssertNear(output.v_ref_mm_s, 0.0f, 1e-6f);
+    AssertNear(output.a_ref_mm_s2, 0.0f, 1e-6f);
+}
+
 static void AssertNear(float actual, float expected, float tolerance){
     assert(fabsf(actual - expected) <= tolerance);
 }
@@ -198,6 +253,12 @@ static void TestHoldHysteresisAndVelocityWeight(void){
     input.velocity_trusted = false;
     assert(BallScurve_Update(&controller, &config, &input, &output));
     assert(output.gain_mode == BALL_SCURVE_GAIN_MOVE);
+
+    config.stationary_velocity_weight = 0.10f;
+    BallScurve_Init(&controller);
+    input = Input(10.0f, 0.0f);
+    assert(BallScurve_Update(&controller, &config, &input, &output));
+    AssertNear(output.velocity_weight, 0.10f, 1e-6f);
 }
 
 static void TestNewSegmentClearsBreakout(void){
@@ -230,6 +291,9 @@ static void TestNewSegmentClearsBreakout(void){
 }
 
 int main(void){
+    TestAccelerationPreviewLeadsNominalFeedforward();
+    TestReplanRequiresDwellAndCooldown();
+    TestCaptureBlendsToFixedTarget();
     TestSmallErrorIntegralAccumulatesAndClearsOnMotion();
     TestLargeErrorUsesBreakoutInsteadOfIntegral();
     TestDisabledMatchesFixedPd();

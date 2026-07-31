@@ -30,15 +30,15 @@
 ## 控制链路
 
 ```
-视觉 x, v ──► BallScurve_PlanTo(x, v, target)   一次规划，之后按时钟推进
+视觉 x, v ──► BallScurve_PlanTo(x, v, target)   按误差驻留/冷却受控重规划
                      │
                      ▼
               x_ref, v_ref, a_ref
                      │
    ┌─────────────────┼──────────────────┐
    │                 │                  │
-θ_bias           asin(a_ref/K_G)   Kp·(x_ref−x) + Kd·(v_ref−v)
-（水平点标定）      加速度前馈          剖面跟踪反馈（限幅 ±2°）
+θ_bias       asin(a_ref(t+0.10s)/K_G)   Kp·(x_ref−x) + Kd·(v_ref−v)
+（水平点标定）   预览加速度前馈/提前制动      剖面跟踪反馈（限幅 ±2°）
    │                 │                  │
    └────────► θ_cmd ◄┴──────────────────┘  + θ_roll·sign(v_ref)
                      │
@@ -48,6 +48,25 @@
                      │
               StepMotor_MoveToCount
 ```
+
+接近实际目标 20 mm 后，参考状态按 `capture_blend` 连续拉向固定目标 `(target,0,0)`，
+5 mm 内完全由固定目标参考接管。移动段若位置跟踪误差连续 120 ms 超过 10 mm，允许
+从当前 `(x,v)` 重规划；两次重规划至少间隔 500 ms，且进入捕获区后禁止重规划。
+
+H3 的 +50 mm 航段在剖面结束后直接以当前实测状态规划 −50 mm，不进入业务 VERIFY；
+最终 −50 mm 才执行 `±2 mm + MOVING=0 + |v|≤8 mm/s` 的 200 ms 停稳验证。
+
+主机闭环模型使用与固件一致的 `KP=12`、960 deg/s、100 ms 预览和无 +50 VERIFY：
+
+| 场景 | 完成时间 | 完成瞬间 x / v |
+|---|---:|---:|
+| 理想 | 2.82 s | −50.28 mm / 0.65 mm/s |
+| 视觉 55 ms + 0.3 mm 噪声 | 4.76 s | −50.66 mm / 2.60 mm/s |
+| 动力学增益偏差 | 3.72 s | −49.60 mm / 2.70 mm/s |
+| 静摩擦/粗糙度 | 4.74 s | −48.86 mm / −2.84 mm/s |
+
+全部非理想且水平点保持未标定 0° 的场景仍不能完成，说明下一步实车必须先用
+`beam/aest` 回归填入 `level_bias_deg`；这项不能由仿真替代。
 
 ## 关于"物理换算不准"
 
@@ -248,24 +267,26 @@ HOLD 仅在剖面结束、`|e|<=15 mm`、`|v|<=20 mm/s` 连续 `0.30 s` 后进�
 
 ## 遥测
 
-`[SCV]` 每 80 ms 一行，key=value，按数据流方向分组；当前约占 115200 UART 有效带宽的 72%：
+`[SCV]` 每 80 ms 一行，key=value，按数据流方向分组；当前约占 115200 UART 有效带宽的 76%：
 
 | 组 | 字段 |
 |---|---|
 | 时基状态 | `t st wp ok` |
 | 视觉层 | `xr x vr v aest age q` |
-| 剖面层 | `tgt xref vref aref tp tpd act` |
-| MOVE/HOLD | `hm hb kde` |
-| 控制分量 | `bias ff rff fb iacc dith brka u` |
+| 剖面层 | `tgt xref vref aref apv tp tpd act` |
+| MOVE/BRAKE/HOLD/CAPTURE | `gm bb hb cb kpe kde ds vc vw` |
+| 控制分量 | `bias ff lead rff fb iacc dith brka u` |
 | 跟踪误差 | `ex ev etgt` |
 | 执行器层 | `beam lag cnt cmd perr spd frq at` |
-| 标志与链路 | `sat fbc rl iact dth brk set mv vv px edge deg hold guard fps gap inv crc drop` |
+| 标志与链路 | `sat fbc rl rp iact dth brk set mv vv px edge deg hold guard fps gap inv crc drop` |
 
 `fbc`（PD 分量被 `feedback_limit_deg` 夹住）和 `dth`（抖动注入中）是后加的：
 早期版本只有 `sat`（物理角度范围），导致 45% 的反馈限幅在遥测里完全隐形。
 
-`gm` 是 MOVE/BRAKE/HOLD（0/1/2），`bb`/`hb` 是 BRAKE/HOLD 混合权重，
+`gm` 是 MOVE/BRAKE/HOLD（0/1/2），`bb`/`hb`/`cb` 是 BRAKE/HOLD/CAPTURE 混合权重，
 `kpe`/`kde` 是本拍生效增益；`ds`/`vc` 是停止距离与朝目标速度，`vw` 是速度权重。
+`apv` 是预览加速度，`lead` 是预览相对本拍加速度前馈增加的超前倾角，`rp=1`
+表示本拍执行了受控重规划。
 
 ### 判读顺序
 
