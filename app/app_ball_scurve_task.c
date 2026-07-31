@@ -56,10 +56,11 @@
 #define H3S_TELEMETRY_PERIOD_MS   60U
 #define H3S_ARM_POSITION_MM      120.0f
 /*
- * 步进转速上限。仿真表明限速不是巡航段的瓶颈（60 与 120 deg/s 结果几乎相同），
- * 真正的瓶颈是位置环 STEP_MOTOR_SERVO_KP；这里取 120 只是为了不让限速成为第二个约束。
+ * 步进转速上限。底层 STEP 时钟已提高到 250 kHz，×32 细分下 480 deg/s 需要约 8533 Hz。
+ * 进入任务时同时临时提高位置环增益，避免执行器速度上限提高后仍被慢位置环拖住。
  */
 #define H3S_ACTUATOR_SPEED_DEG_S 480.0f
+#define H3S_ACTUATOR_SERVO_KP_S_INV 6.0f
 /* 进入任务后等视觉稳定、再开始第一段移动的静默时间。 */
 #define H3S_ARM_DWELL_MS         800U
 /* 每个航点到达后的驻留时间：留给观察落点，也给下一段一个静止起点。 */
@@ -127,7 +128,7 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     /* 查表在软限位 20..430 cnt 上的角度范围是 −5.345°..+5.236°，两端各留 0.1°。 */
     .angle_min_deg = -5.2f,
     .angle_max_deg = 5.1f,
-    .angle_rate_limit_deg_s = 240.0f,
+    .angle_rate_limit_deg_s = 480.0f,
 
     /*
      * 抖动：**默认关闭**，让位给单向脱困（见下方 breakout_*）。
@@ -229,7 +230,7 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
         .name = "dith_amp",
         .value = &H3S_SCURVE_CONFIG.dither_amplitude_deg,
         .min_value = 0.0f,    /* 0 = 关闭抖动 */
-        .max_value = 2.0f,    /* 上界：2πfA < angle_rate_limit，2π×2×2 = 25 deg/s < 240 */
+        .max_value = 2.0f,    /* 上界：2πfA < angle_rate_limit，2π×2×2 = 25 deg/s < 480 */
         .unit = "deg",
     },
     {
@@ -283,7 +284,7 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
         .name = "brk_rel",
         .value = &H3S_SCURVE_CONFIG.breakout_release_rate_deg_s,
         .min_value = 0.5f,    /* 下界：撤太慢会把球推过头 */
-        .max_value = 60.0f,   /* 上界受 angle_rate_limit_deg_s(240) 约束 */
+        .max_value = 60.0f,   /* 上界受 angle_rate_limit_deg_s(480) 约束 */
         .unit = "deg/s",
     },
     {
@@ -566,6 +567,7 @@ static void H3S_Enter(void){
     StepMotor_AbortStartup();
     (void)StepMotor_Stop();
     (void)StepMotor_SetSpeedLimit(H3S_ACTUATOR_SPEED_DEG_S);
+    (void)StepMotor_SetServoGain(H3S_ACTUATOR_SERVO_KP_S_INV);
 
     BallScurve_Init(&h3s_controller);
     h3s_output.angle_deg = 0.0f;
@@ -634,7 +636,7 @@ static void H3S_Enter(void){
         (double)H3S_SCURVE_CONFIG.angle_max_deg,
         (double)H3S_SCURVE_CONFIG.angle_rate_limit_deg_s,
         (double)H3S_ACTUATOR_SPEED_DEG_S,
-        (double)STEP_MOTOR_SERVO_KP,
+        (double)H3S_ACTUATOR_SERVO_KP_S_INV,
         (int)STEP_MOTOR_POSITION_TOLERANCE_COUNTS,
         (int)STEP_MOTOR_SERVO_RESUME_COUNTS,
         (double)STEP_MOTOR_SERVO_MIN_SPEED_DEG_S,
@@ -891,6 +893,7 @@ static APP_TASK_STATUS H3S_Tick(float dt){
 
 static void H3S_Exit(void){
     (void)StepMotor_Stop();
+    (void)StepMotor_SetServoGain(STEP_MOTOR_SERVO_KP);
     h3s_target_count = StepMotor_GetEncoderCount();
     DebugUart_Printf("[SCV] exit wp=%u hold-count=%ld beam=%.3f\r\n",
                      (unsigned)h3s_waypoint, (long)h3s_target_count,
