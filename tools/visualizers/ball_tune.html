@@ -239,13 +239,19 @@
 /* ===== 参数分组：名字须与固件 H3S_TUNE_TABLE 一致 ===== */
 const GROUPS = [
   ["反馈增益",       ["kp","kd","fblim"]],
-  ["抖动参数",       ["dith_amp","dith_freq","dith_minerr","dith_maxspd","dith_dwell"]],
+  /* 单向脱困与抖动**互斥**：brk_amp > 0 时脱困接管，抖动恒为 0。 */
+  ["单向脱困 · 推荐", ["brk_amp","brk_ramp","brk_rel","brk_minerr",
+                      "brk_maxspd","brk_dwell","brk_relspd","brk_reldw"]],
+  ["抖动 · 备用",     ["dith_amp","dith_freq","dith_minerr","dith_maxspd","dith_dwell"]],
   ["前馈与补偿",     ["roll_ff","roll_db","lvl_bias"]],
   ["轨迹限制",       ["amax","vmax"]],
 ];
 /* 参数中文提示，只为可读性，不影响协议。 */
 const LABEL = {
   kp:"位置增益", kd:"速度增益", fblim:"反馈限幅",
+  brk_amp:"脱困角上限", brk_ramp:"爬升速率", brk_rel:"撤销速率",
+  brk_minerr:"触发误差", brk_maxspd:"触发速度", brk_dwell:"触发驻留",
+  brk_relspd:"释放速度", brk_reldw:"释放驻留",
   dith_amp:"抖动振幅", dith_freq:"抖动频率", dith_minerr:"触发误差", dith_maxspd:"触发速度", dith_dwell:"触发驻留",
   roll_ff:"滚阻前馈", roll_db:"滚阻死区", lvl_bias:"水平点偏置",
   amax:"最大加速度", vmax:"最大速度",
@@ -262,10 +268,12 @@ const PLOTS = [
   { title:"水管角：指令 vs 实际", unit:"deg", h:130,
     series:[{k:"u",   n:"指令 u",   c:"--s4",w:1.7},
             {k:"beam",n:"实际 beam",c:"--s2",w:2}] },
+  /* 本版基线无积分项，第三条曲线让给单向脱困角——它和 fb 的关系是判断
+     「脱困有没有在该介入的时候介入」的直接依据。 */
   { title:"控制分量", unit:"deg", h:120,
-    series:[{k:"fb",  n:"fb",  c:"--s3",w:1.5},
-            {k:"ki",  n:"积分",c:"--s5",w:1.5},
-            {k:"dith",n:"抖动",c:"--s1",w:1,alpha:.6}] },
+    series:[{k:"fb",  n:"PD fb",  c:"--s3",w:1.5},
+            {k:"brka",n:"脱困角",  c:"--s5",w:2},
+            {k:"dith",n:"抖动",    c:"--s1",w:1,alpha:.6}] },
 ];
 
 const WINDOW_S = 20;
@@ -653,9 +661,11 @@ function tiles() {
     ["当前误差",      (err[err.length - 1] ?? 0).toFixed(2), "mm"],
     ["球静止占比",    (still * 100).toFixed(0), "%"],
     ["执行器滞后峰值", pk(seg.map(r => r.lag ?? 0)).toFixed(2), "°"],
-    ["积分 ki",       (last.ki ?? 0).toFixed(4), "°"],
-    ["抖动",          last.dth ? "开" : "关", ""],
-    ["循环圈数",      String(last.cyc ?? 0), ""],
+    ["脱困",          last.brk ? `${(last.brka ?? 0).toFixed(2)}°` : (last.dth ? "抖动" : "关"), ""],
+    /* 卡住计时：脱困未介入时它在涨，说明触发判据太严；一直是 0 说明球没卡。 */
+    ["卡住计时",      (last.brkst ?? 0).toFixed(2), "s"],
+    /* 反馈限幅命中率。持续为高说明 Kd·v 顶穿 fblim，该降 Kd 或提 fblim。 */
+    ["反馈限幅占比",  (seg.filter(r => r.fbc).length / (seg.length || 1) * 100).toFixed(0), "%"],
   ];
   $("tiles").innerHTML = set.map(([k, v, u]) =>
     `<div class="tile"><div class="k">${k}</div><div class="v">${v}<span style="font-size:11px;color:var(--ink-2)">${u}</span></div></div>`

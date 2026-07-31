@@ -123,6 +123,10 @@ void BallScurve_Init(BALL_SCURVE_CONTROLLER *controller){
     controller->dither_phase_rad = 0.0f;
     controller->dither_stuck_elapsed_s = 0.0f;
     controller->dither_on = false;
+    controller->breakout_angle_deg = 0.0f;
+    controller->breakout_stuck_elapsed_s = 0.0f;
+    controller->breakout_release_elapsed_s = 0.0f;
+    controller->breakout_on = false;
 }
 
 void BallScurve_Reset(BALL_SCURVE_CONTROLLER *controller, float current_angle_deg){
@@ -311,9 +315,112 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
         controller->dither_phase_rad = 0.0f;
     }
 
+    /* --- 6b. 单向渐增脱困：只朝目标方向加倾角，球一动就撤 --- */
+    /*
+     * 与抖动**互斥**（见下方 breakout_enabled 判断），因为两者解决同一个问题
+     * 但代价不同：
+     *
+     *   抖动   —— 双向往复。能脱困，但向系统注入往复能量，末端不安静；
+     *              且经步进位置环衰减后（τ=1/SERVO_KP=0.333 s @ KP=3），
+     *              2 Hz 时管身只剩指令的 23%，实际破不了 0.62° 的脱离角。
+     *   单向脱困 —— 只朝目标方向加倾角。是直流量，**不受位置环频率衰减**，
+     *              指令 1.0° 就是管身 1.0°，权限真实可用。
+     *
+     * ⚠ 刻意**不用积分器**做这件事。积分在静摩擦期间会持续蓄力，突破瞬间
+     *   已经攒下远超所需的角度，必然过冲，并演化成黏滑极限环。单向脱困的
+     *   全部意义就是「推过阈值就立刻松手」，所以释放速率(8°/s)比爬升速率
+     *   (0.8°/s)快一个数量级。
+     */
+    float breakout_deg = 0.0f;
+    bool breakout_enabled = (config->breakout_max_angle_deg > 0.0f);
+    if (breakout_enabled){
+        /* 互斥：脱困接管后抖动必须闭嘴，否则两个机构互相打架。 */
+        dither_deg = 0.0f;
+        controller->dither_on = false;
+        controller->dither_phase_rad = 0.0f;
+
+        float abs_err = BallScurve_Abs(target_error_now);
+        float abs_v = BallScurve_Abs(input->velocity_mm_s);
+
+        if (!controller->breakout_on){
+            /*
+             * 触发三条同时满足并持续 dwell：剖面已结束、误差仍大、球基本不动。
+             * 必须看速度——只看误差会在移动末段（球高速穿过目标附近）误触发。
+             */
+            bool stuck = !controller->active &&
+                         (abs_err > config->breakout_min_error_mm) &&
+                         (abs_v < config->breakout_max_speed_mm_s);
+            if (stuck){
+                controller->breakout_stuck_elapsed_s += input->dt_s;
+                if (controller->breakout_stuck_elapsed_s >= config->breakout_dwell_s){
+                    controller->breakout_on = true;
+                    controller->breakout_release_elapsed_s = 0.0f;
+                }
+            } else{
+                controller->breakout_stuck_elapsed_s = 0.0f;
+            }
+        }
+
+        if (controller->breakout_on){
+            /*
+             * 释放判据不能用 v != 0：视觉速度有量化（1 mm/s 台阶）和延迟，
+             * 噪声就能满足。要求「速度方向确实朝向目标」**且**「超过可靠阈值」，
+             * 再持续 release_dwell 才认定脱困成功。
+             */
+            bool moving_to_target =
+                ((input->velocity_mm_s * target_error_now) > 0.0f) &&
+                (abs_v > config->breakout_release_speed_mm_s);
+            if (moving_to_target){
+                controller->breakout_release_elapsed_s += input->dt_s;
+            } else{
+                controller->breakout_release_elapsed_s = 0.0f;
+            }
+
+            /*
+             * ⚠ 必须带上 moving_to_target 这一项。少了它，当
+             *   breakout_release_dwell_s = 0 时 `elapsed >= 0` 恒真，release
+             *   首拍就成立，倾角永远爬不起来——脱困功能**静默失效**，而遥测里
+             *   brk 一直是 0，看不出是被这个判据卡死的。
+             */
+            bool release = (moving_to_target &&
+                            (controller->breakout_release_elapsed_s >=
+                             config->breakout_release_dwell_s)) ||
+                           (abs_err <= config->breakout_min_error_mm);
+            if (release){
+                /* 快速斜坡归零而非瞬间置 0——瞬间撤销就是一个角度阶跃。 */
+                float step = config->breakout_release_rate_deg_s * input->dt_s;
+                if (controller->breakout_angle_deg > step){
+                    controller->breakout_angle_deg -= step;
+                } else if (controller->breakout_angle_deg < -step){
+                    controller->breakout_angle_deg += step;
+                } else{
+                    controller->breakout_angle_deg = 0.0f;
+                    controller->breakout_on = false;
+                    controller->breakout_stuck_elapsed_s = 0.0f;
+                    controller->breakout_release_elapsed_s = 0.0f;
+                }
+            } else{
+                /* 朝目标方向按斜坡加倾角，钳在上限。 */
+                float dir = (target_error_now >= 0.0f) ? 1.0f : -1.0f;
+                controller->breakout_angle_deg +=
+                    dir * config->breakout_ramp_rate_deg_s * input->dt_s;
+                controller->breakout_angle_deg =
+                    BallScurve_Clamp(controller->breakout_angle_deg,
+                                     -config->breakout_max_angle_deg,
+                                     config->breakout_max_angle_deg);
+            }
+        }
+        breakout_deg = controller->breakout_angle_deg;
+    } else{
+        controller->breakout_angle_deg = 0.0f;
+        controller->breakout_stuck_elapsed_s = 0.0f;
+        controller->breakout_release_elapsed_s = 0.0f;
+        controller->breakout_on = false;
+    }
+
     /* --- 7. 合成、限幅、斜率限制 --- */
     float command = config->level_bias_deg + feedforward_deg + rolling_ff_deg +
-                    feedback_deg + dither_deg;
+                    feedback_deg + dither_deg + breakout_deg;
     float limited = BallScurve_Clamp(command, config->angle_min_deg, config->angle_max_deg);
     bool saturated = (limited != command);
 
@@ -363,6 +470,10 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
     output->rolling_ff_deg = rolling_ff_deg;
     output->feedback_deg = feedback_deg;
     output->dither_deg = dither_deg;
+    output->breakout_deg = breakout_deg;
+    output->breakout_on = controller->breakout_on;
+    output->breakout_stuck_s = controller->breakout_stuck_elapsed_s;
+    output->breakout_release_s = controller->breakout_release_elapsed_s;
     output->position_error_mm = position_error;
     output->velocity_error_mm_s = velocity_error;
     output->profile_time_s = controller->elapsed_s;

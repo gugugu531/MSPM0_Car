@@ -133,6 +133,49 @@ typedef struct {
     /** 上述条件需连续满足多久才起振，s。防止移动末段的瞬时低速误触发。 */
     float dither_dwell_s;
 
+    /* ===== 单向脱困：破静摩擦的另一条路线 =====
+     *
+     * 与抖动的根本区别在于**能量方向**：
+     *
+     *   抖动   —— 左右往复，一半的功用在把球往远离目标的方向推，
+     *              且突破瞬间球的速度方向是随机的（取决于在哪个相位挣脱）。
+     *   单向脱困 —— 只朝目标方向渐增倾角，突破瞬间球必然朝目标走。
+     *
+     * 代价是它依赖**可靠的释放判据**：撤销太晚就过冲，撤销太早又缩回死区。
+     * 抖动不需要释放判据（误差进判据自动停振），这是抖动唯一的结构优势。
+     *
+     * ⚠ 与抖动**互斥**。breakout_max_angle_deg > 0 时抖动被强制置 0，
+     *   因为两者叠加会让脱困方向变得不确定，等于两个机制互相拆台。
+     *
+     * ⚠ **不用积分器实现这件事**。积分在静摩擦期间持续蓄力，
+     *   突破瞬间已经累积了远超所需的角度 → 过冲 → 反向卡住 → 黏滑极限环。
+     *   单向脱困的斜坡是**有上限、可撤销**的，这是它与积分的本质差别。
+     */
+    /** 脱困额外倾角上限，deg。**0 = 关闭单向脱困（回退到抖动）**。
+     *  实测静摩擦脱离角 θ_stick ≈ 0.62°，取 1.0° 留 60% 余量。
+     *  不建议一开始超过 1.2°——顶太高会在突破瞬间给出过量驱动。 */
+    float breakout_max_angle_deg;
+    /** 倾角渐增速率，deg/s。决定"多久能突破"：0.8°/s 时约 0.8 s 爬到 0.62°。 */
+    float breakout_ramp_rate_deg_s;
+    /** 撤销速率，deg/s。远大于渐增速率——检测到动了就要赶紧撤，
+     *  但仍走斜坡而不是瞬间归零，避免指令角阶跃。 */
+    float breakout_release_rate_deg_s;
+    /** 触发所需的最小目标误差，mm。 */
+    float breakout_min_error_mm;
+    /** 触发所需的最大球速，mm/s。球还在滚就不是卡住。 */
+    float breakout_max_speed_mm_s;
+    /** 触发条件需连续满足多久，s。 */
+    float breakout_dwell_s;
+    /**
+     * 判定"已脱困"的速度阈值，mm/s。
+     *
+     * ⚠ 不能用 v != 0 —— 视觉速度有量化（1 mm/s 台阶）和 62 ms 滤波延迟，
+     *   噪声就能满足 v != 0，会在球还没真动时就撤销倾角，形成"爬升-撤销"循环。
+     */
+    float breakout_release_speed_mm_s;
+    /** 释放条件需连续满足多久，s。 */
+    float breakout_release_dwell_s;
+
     /* ===== 稳定判据（只影响遥测与状态，不参与控制律）===== */
     float settled_position_mm;
     float settled_speed_mm_s;
@@ -167,6 +210,12 @@ typedef struct {
     float dither_phase_rad;
     float dither_stuck_elapsed_s;
     bool  dither_on;
+
+    /* 单向脱困状态 */
+    float breakout_angle_deg;           /**< 当前额外倾角，**带符号** */
+    float breakout_stuck_elapsed_s;     /**< 卡住条件已持续多久 */
+    float breakout_release_elapsed_s;   /**< 释放条件已持续多久 */
+    bool  breakout_on;
 } BALL_SCURVE_CONTROLLER;
 
 typedef struct {
@@ -191,6 +240,9 @@ typedef struct {
     float rolling_ff_deg;    /**< 滚阻前馈 */
     float feedback_deg;      /**< 限幅后的 PD 分量 */
     float dither_deg;        /**< 本拍注入的抖动量（已含符号） */
+    float breakout_deg;      /**< 本拍的单向脱困倾角（已含符号，朝目标为正） */
+    float breakout_stuck_s;  /**< 卡住条件已连续满足多久，s（遥测用，判误触发） */
+    float breakout_release_s;/**< 释放条件已连续满足多久，s（遥测用，判释放是否太晚） */
 
     float position_error_mm;
     float velocity_error_mm_s;
@@ -202,6 +254,7 @@ typedef struct {
     bool  feedback_clipped;  /**< PD 分量被 feedback_limit_deg 夹住 */
     bool  rate_limited;      /**< 本拍被输出斜率限制削过 */
     bool  dither_on;         /**< 抖动正在注入 */
+    bool  breakout_on;       /**< 单向脱困正在介入（与 dither_on 互斥） */
     bool  settled;
 } BALL_SCURVE_OUTPUT;
 
