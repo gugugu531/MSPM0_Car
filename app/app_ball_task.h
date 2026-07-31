@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-/** 赛题要求 3 的第一阶段：小车静止，闭环守住水管 0 cm。 */
+/** 反馈主导的 0 cm 静态调试入口，正式第三题使用 APP_H3_CHALLENGE。 */
 extern const APP_TASK_DESC APP_H3_BALL_STATIC;
 
 #ifdef __cplusplus

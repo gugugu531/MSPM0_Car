@@ -153,7 +153,7 @@
 
 <header>
   <div>
-    <div class="eyebrow">MSPM0G3507 · H3 Ball SCurve · Debug_Ex 115200</div>
+    <div class="eyebrow">MSPM0G3507 · H3 Challenge · Debug_Ex 115200</div>
     <h1>滚球实时整定台</h1>
   </div>
   <div class="grow"></div>
@@ -210,7 +210,7 @@
     <span class="punit">选择导出格式</span></div>
   <div class="tiles" id="recstats"></div>
   <p class="note" id="recwarn" style="display:none">
-    <b>没有采到遥测行。</b>可能是任务没进（菜单里选 H3 Ball SCurve 或 H3 Hold 0mm），
+    <b>没有采到遥测行。</b>可能是任务没进（根菜单选 H3 Challenge，或 Device Check 选 H3 Hold 0cm），
     或者串口选错了设备。原始 txt 仍可下载，用来看究竟收到了什么。
   </p>
   <p class="note">
@@ -245,6 +245,7 @@ const GROUPS = [
   ["制动判定",       ["bdelay","bacc","bstart","bfull","btau"]],
   ["保持判定",       ["hent_e","hent_v","hent_dw","hext_e","hext_v","htau"]],
   ["速度可信度",     ["vage1","vage0","vfloor"]],
+  ["小误差静止积分", ["i_ki","i_minerr","i_maxerr","i_maxspd","i_relspd","i_relrate","i_mcomp"]],
   /* 单向脱困与抖动**互斥**：brk_amp > 0 时脱困接管，抖动恒为 0。 */
   ["单向脱困 · 推荐", ["brk_amp","brk_ramp","brk_rel","brk_minerr",
                       "brk_maxspd","brk_dwell","brk_relspd","brk_reldw"]],
@@ -262,6 +263,9 @@ const LABEL = {
   hent_e:"HOLD 进入误差", hent_v:"HOLD 进入速度", hent_dw:"HOLD 进入驻留",
   hext_e:"HOLD 退出误差", hext_v:"HOLD 退出速度", htau:"HOLD 混合时间常数",
   vage1:"速度满权龄期", vage0:"速度最低权龄期", vfloor:"速度最低权重",
+  i_ki:"积分增益", i_minerr:"停止积分误差", i_maxerr:"积分区上限",
+  i_maxspd:"积分速度上限", i_relspd:"快速清零速度", i_relrate:"基础清零速率",
+  i_mcomp:"运动退积分补偿",
   brk_amp:"脱困角上限", brk_ramp:"爬升速率", brk_rel:"撤销速率",
   brk_minerr:"触发误差", brk_maxspd:"触发速度", brk_dwell:"触发驻留",
   brk_relspd:"释放速度", brk_reldw:"释放驻留",
@@ -281,12 +285,12 @@ const PLOTS = [
   { title:"水管角：指令 vs 实际", unit:"deg", h:130,
     series:[{k:"u",   n:"指令 u",   c:"--s4",w:1.7},
             {k:"beam",n:"实际 beam",c:"--s2",w:2}] },
-  /* 本版基线无积分项，第三条曲线让给单向脱困角——它和 fb 的关系是判断
-     「脱困有没有在该介入的时候介入」的直接依据。 */
   { title:"控制分量", unit:"deg", h:120,
     series:[{k:"fb",  n:"PD fb",  c:"--s3",w:1.5},
             {k:"brka",n:"脱困角",  c:"--s5",w:2},
              {k:"dith",n:"抖动",    c:"--s1",w:1,alpha:.6}] },
+  { title:"小误差积分量（独立监视）", unit:"deg", h:110,
+    series:[{k:"iacc",n:"积分额外倾角",c:"--s2",w:2}] },
   { title:"生效反馈增益", unit:"", h:110,
     series:[{k:"kpe",n:"Kp eff",c:"--s3",w:1.8},
             {k:"kde",n:"Kd eff",c:"--s4",w:1.8}] },
@@ -420,10 +424,8 @@ function handleLine(line) {
     }
   }
   /*
-   * 固件把遥测拆成两行分频：[SCV] 60 ms 只发控制必需字段，[SCVD] 500 ms 发
-   * 诊断量。拆分是为了把 UART 占用从 115%（会溢出截断）降到 53%。
-   * 这里把最近一次 [SCVD] 的字段并进每一行 [SCV]，下游画图/瓦片不必关心
-   * 某个字段究竟来自哪一行。
+   * 当前固件使用单行 [SCV] @80 ms；同时保留对历史 [SCVD] 分频日志的兼容，
+   * 若读到旧格式，就把最近一次诊断字段并进后续 [SCV]。
    */
   if (line.startsWith("[SCVD]")) {
     for (const m of line.matchAll(RE_SCV)) {
@@ -435,6 +437,10 @@ function handleLine(line) {
   if (line.startsWith("[SCV]") && line.includes("drop=")) {
     const row = Object.assign({}, diag);
     for (const m of line.matchAll(RE_SCV)) row[m[1]] = parseFloat(m[2]);
+    if (Number.isFinite(row.iact)) {
+      diag.iact = row.iact;
+      renderDiag();
+    }
     if (t0 === null) t0 = row.t ?? 0;
     row._t = ((row.t ?? 0) - t0) / 1000;
     history.push(row);
@@ -709,6 +715,7 @@ function tiles() {
     ["制动距离",      (last.ds ?? 0).toFixed(1), "mm"],
     ["执行器滞后峰值", pk(seg.map(r => r.lag ?? 0)).toFixed(2), "°"],
     ["脱困",          last.brk ? `${(last.brka ?? 0).toFixed(2)}°` : (last.dth ? "抖动" : "关"), ""],
+    ["小误差积分",    `${(last.iacc ?? 0).toFixed(3)}°${last.iact ? " 累积" : ""}`, ""],
     /* 卡住计时：脱困未介入时它在涨，说明触发判据太严；一直是 0 说明球没卡。 */
     ["卡住计时",      (last.brkst ?? 0).toFixed(2), "s"],
     /* 反馈限幅命中率。持续为高说明 Kd·v 顶穿 fblim，该降 Kd 或提 fblim。 */
@@ -876,6 +883,13 @@ function exportC() {
                   : name === "brk_dwell" ? "breakout_dwell_s"
                   : name === "brk_relspd" ? "breakout_release_speed_mm_s"
                   : name === "brk_reldw" ? "breakout_release_dwell_s"
+                  : name === "i_ki" ? "hold_integral_ki_deg_per_mm_s"
+                  : name === "i_minerr" ? "hold_integral_min_error_mm"
+                  : name === "i_maxerr" ? "hold_integral_max_error_mm"
+                  : name === "i_maxspd" ? "hold_integral_max_speed_mm_s"
+                  : name === "i_relspd" ? "hold_integral_release_speed_mm_s"
+                  : name === "i_relrate" ? "hold_integral_release_rate_deg_s"
+                  : name === "i_mcomp" ? "hold_integral_motion_comp_deg_per_mm"
                   : name === "dith_amp" ? "dither_amplitude_deg"
                   : name === "dith_freq" ? "dither_frequency_hz"
                   : name === "dith_minerr" ? "dither_min_error_mm"

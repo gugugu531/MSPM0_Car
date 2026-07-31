@@ -4,6 +4,8 @@
 #include <math.h>
 #include <stdio.h>
 
+static void AssertNear(float actual, float expected, float tolerance);
+
 static BALL_SCURVE_CONFIG Config(void){
     BALL_SCURVE_CONFIG config = {
         .rolling_acceleration_gain_mm_s2 = 7004.75f,
@@ -49,10 +51,83 @@ static BALL_SCURVE_INPUT Input(float x_mm, float velocity_mm_s){
         .velocity_mm_s = velocity_mm_s,
         .actual_angle_deg = 0.0f,
         .velocity_trusted = true,
+        .moving = false,
         .measurement_age_ms = 20.0f,
         .dt_s = 0.02f,
     };
     return input;
+}
+
+static void TestSmallErrorIntegralAccumulatesAndClearsOnMotion(void){
+    BALL_SCURVE_CONFIG config = Config();
+    config.hold_integral_ki_deg_per_mm_s = 0.10f;
+    config.hold_integral_min_error_mm = 2.0f;
+    config.hold_integral_max_error_mm = 15.0f;
+    config.hold_integral_max_speed_mm_s = 3.0f;
+    config.hold_integral_release_speed_mm_s = 5.0f;
+    config.hold_integral_release_rate_deg_s = 8.0f;
+    config.hold_integral_motion_comp_deg_per_mm = 0.40f;
+
+    BALL_SCURVE_CONTROLLER controller;
+    BALL_SCURVE_OUTPUT output;
+    BallScurve_Init(&controller);
+    controller.target_mm = 10.0f;
+    BALL_SCURVE_INPUT input = Input(5.0f, 0.0f);
+
+    /* 超过旧版 0.80° 上限，确认积分器自身不再钳位。 */
+    for (unsigned i = 0U; i < 100U; i++){
+        assert(BallScurve_Update(&controller, &config, &input, &output));
+    }
+    assert(output.hold_integral_on);
+    AssertNear(output.hold_integral_deg, 1.00f, 1e-5f);
+    assert(!output.breakout_on);
+
+    input.moving = true;
+    input.velocity_mm_s = 10.0f;
+    assert(BallScurve_Update(&controller, &config, &input, &output));
+    assert(!output.hold_integral_on);
+    /* 8 deg/s 基础清零 + 0.4*10=4 deg/s 运动补偿。 */
+    AssertNear(output.hold_integral_deg, 0.76f, 1e-5f);
+    for (unsigned i = 0U; i < 6U; i++){
+        assert(BallScurve_Update(&controller, &config, &input, &output));
+    }
+    AssertNear(output.hold_integral_deg, 0.0f, 1e-6f);
+
+    input.moving = false;
+    input.x_mm = 8.5f; /* 误差 <= 2 mm：不再积分。 */
+    assert(BallScurve_Update(&controller, &config, &input, &output));
+    assert(!output.hold_integral_on);
+    AssertNear(output.hold_integral_deg, 0.0f, 1e-6f);
+}
+
+static void TestLargeErrorUsesBreakoutInsteadOfIntegral(void){
+    BALL_SCURVE_CONFIG config = Config();
+    config.hold_integral_ki_deg_per_mm_s = 0.10f;
+    config.hold_integral_min_error_mm = 2.0f;
+    config.hold_integral_max_error_mm = 15.0f;
+    config.hold_integral_max_speed_mm_s = 3.0f;
+    config.hold_integral_release_speed_mm_s = 5.0f;
+    config.hold_integral_release_rate_deg_s = 8.0f;
+    config.hold_integral_motion_comp_deg_per_mm = 0.40f;
+    config.breakout_max_angle_deg = 1.4f;
+    config.breakout_ramp_rate_deg_s = 1.0f;
+    config.breakout_release_rate_deg_s = 8.0f;
+    config.breakout_min_error_mm = 2.0f;
+    config.breakout_max_speed_mm_s = 5.0f;
+    config.breakout_dwell_s = 0.0f;
+    config.breakout_release_speed_mm_s = 6.0f;
+    config.breakout_release_dwell_s = 0.1f;
+
+    BALL_SCURVE_CONTROLLER controller;
+    BALL_SCURVE_OUTPUT output;
+    BallScurve_Init(&controller);
+    controller.target_mm = 30.0f;
+    BALL_SCURVE_INPUT input = Input(0.0f, 0.0f);
+    assert(BallScurve_Update(&controller, &config, &input, &output));
+    assert(output.breakout_on);
+    assert(output.breakout_deg > 0.0f);
+    assert(!output.hold_integral_on);
+    AssertNear(output.hold_integral_deg, 0.0f, 1e-6f);
 }
 
 static void AssertNear(float actual, float expected, float tolerance){
@@ -125,10 +200,42 @@ static void TestHoldHysteresisAndVelocityWeight(void){
     assert(output.gain_mode == BALL_SCURVE_GAIN_MOVE);
 }
 
+static void TestNewSegmentClearsBreakout(void){
+    BALL_SCURVE_CONFIG config = Config();
+    config.breakout_max_angle_deg = 1.4f;
+    config.breakout_ramp_rate_deg_s = 1.0f;
+    config.breakout_release_rate_deg_s = 8.0f;
+    config.breakout_min_error_mm = 2.0f;
+    config.breakout_max_speed_mm_s = 5.0f;
+    config.breakout_dwell_s = 0.0f;
+    config.breakout_release_speed_mm_s = 6.0f;
+    config.breakout_release_dwell_s = 0.1f;
+
+    BALL_SCURVE_CONTROLLER controller;
+    BALL_SCURVE_OUTPUT output;
+    BallScurve_Init(&controller);
+    controller.target_mm = 50.0f;
+    BALL_SCURVE_INPUT input = Input(20.0f, 0.0f);
+
+    assert(BallScurve_Update(&controller, &config, &input, &output));
+    assert(output.breakout_on);
+    assert(output.breakout_deg > 0.0f);
+
+    assert(BallScurve_PlanTo(&controller, &config, input.x_mm,
+                             input.velocity_mm_s, -50.0f));
+    AssertNear(controller.breakout_angle_deg, 0.0f, 1e-6f);
+    AssertNear(controller.breakout_stuck_elapsed_s, 0.0f, 1e-6f);
+    AssertNear(controller.breakout_release_elapsed_s, 0.0f, 1e-6f);
+    assert(!controller.breakout_on);
+}
+
 int main(void){
+    TestSmallErrorIntegralAccumulatesAndClearsOnMotion();
+    TestLargeErrorUsesBreakoutInsteadOfIntegral();
     TestDisabledMatchesFixedPd();
     TestBrakeSchedule();
     TestHoldHysteresisAndVelocityWeight();
+    TestNewSegmentClearsBreakout();
     puts("ball_scurve gain schedule tests passed");
     return 0;
 }

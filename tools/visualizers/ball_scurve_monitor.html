@@ -133,7 +133,7 @@
 
 <header>
   <div>
-    <div class="eyebrow">MSPM0G3507 · H3 Ball SCurve 基线 · Debug_Ex 115200</div>
+    <div class="eyebrow">MSPM0G3507 · H3 Challenge · Debug_Ex 115200</div>
     <h1>纯 S 曲线观测台</h1>
   </div>
   <div class="grow"></div>
@@ -215,7 +215,7 @@
  *
  * 与之前那版整定台的区别，都源自固件本身：
  *   · config 是 static const，**参数不可热更** → 没有滑块，这里只观测不下发
- *   · 遥测是**单行 [SCV]**、52 字段 @50 ms（没有 [SCVD] 分频行）
+ *   · 遥测是**单行 [SCV]**、64 字段 @80 ms（没有 [SCVD] 分频行）
  *   · 没有 [TUNE] 协议
  *
  * 所以本页的职责是「量出这条基线值多少」，而不是「把它调好」。
@@ -288,7 +288,7 @@ async function connect() {
   $("connect").textContent = "断开";
   $("clear").disabled = false;
   $("table").disabled = false;
-  log("已连接。进入 Main Menu → H3 Ball SCurve 开始。", "ok");
+  log("已连接。进入 Main Menu → H3 Challenge 开始。", "ok");
   readLoop();
 }
 
@@ -328,7 +328,7 @@ const FIELD = /(\w+)=(-?[\d.]+)/g;
 /*
  * 一整行遥测的形状：以 `[SCV] t=<数字>` 开头、以 `drop=<数字>` 收尾。
  * 串口偶尔会把两行搅在一起（缓冲区瞬时满），拼出 `-1.37.0353` 这类伪数字。
- * 现在单行 49 字段 @50ms 已占 UART 84%，余量很薄，这种坏行必须整行丢弃，
+ * 现在单行最大约 640 B @80ms，占 UART 约 69%，这种坏行仍必须整行丢弃，
  * 否则一个 NaN 会顺着均值污染整段统计。
  */
 const WELL_FORMED = /^\[SCV\] t=\d+ .*drop=\d+$/;

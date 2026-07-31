@@ -280,8 +280,8 @@ int main(int argc, char **argv){
 
     BALL_SCURVE_CONFIG config = {
         .rolling_acceleration_gain_mm_s2 = SIM_K_G_MM_S2,
-        .max_acceleration_mm_s2 = 200.0f,
-        .max_velocity_mm_s = 90.0f,
+        .max_acceleration_mm_s2 = 280.0f,
+        .max_velocity_mm_s = 120.0f,
         .min_duration_s = 0.40f,
         .max_duration_s = 3.00f,
         /* Kp = wn²/K_G，Kd = 2ζwn/K_G，rad/m → deg/mm 需 ×57.29578/1000。 */
@@ -318,6 +318,14 @@ int main(int argc, char **argv){
         .dither_min_error_mm = 3.0f,
         .dither_max_speed_mm_s = 8.0f,
         .dither_dwell_s = 0.5f,
+        .breakout_max_angle_deg = 1.4f,
+        .breakout_ramp_rate_deg_s = 1.2f,
+        .breakout_release_rate_deg_s = 8.0f,
+        .breakout_min_error_mm = 2.0f,
+        .breakout_max_speed_mm_s = 5.0f,
+        .breakout_dwell_s = 0.25f,
+        .breakout_release_speed_mm_s = 6.0f,
+        .breakout_release_dwell_s = 0.10f,
         .settled_position_mm = 3.0f,
         .settled_speed_mm_s = 5.0f,
         .settled_time_s = 0.5f,
@@ -361,17 +369,19 @@ int main(int argc, char **argv){
     double vision_prev_x = 0.0;
     bool vision_have_prev = false;
 
-    /* --- 任务序列：0 → +50 → −50，与要求 3 一致；kick 模式全程守 0 --- */
-    double waypoint_mm[3] = { 0.0, 50.0, -50.0 };
-    if (kick_mode){ waypoint_mm[1] = 0.0; waypoint_mm[2] = 0.0; }
+    /* --- 第三题正式序列：O 是初态，按键后只规划 +50 → −50；kick 模式守 0。 --- */
+    double waypoint_mm[2] = { 50.0, -50.0 };
+    int waypoint_count = 2;
+    if (kick_mode){ waypoint_mm[0] = 0.0; waypoint_count = 1; }
     /* kick 模式的速度冲击时刻与幅值（mm/s），模拟外部拨动小球。 */
     const double kick_time_s[3] = { 3.0, 11.0, 19.0 };
     const double kick_speed[3]  = { 90.0, -120.0, 70.0 };
     int kick_index = 0;
     int waypoint_index = 0;
     double phase_timer = 0.0;
-    const double arm_delay_s = 0.5;
-    const double dwell_s = 1.8;
+    const double arm_delay_s = 0.1;
+    const double challenge_start_s = arm_delay_s; /* 第二次 ENTER，比赛计时从这里开始。 */
+    double finish_time_s = -1.0;
     bool planned = false;
 
     double next_control = arm_delay_s;
@@ -452,12 +462,24 @@ int main(int argc, char **argv){
             BallScurve_Update(&controller, &config, &in, &out);
             count_target = SimCountFromAngle(out.angle_deg);
 
-            /* 剖面走完后驻留 dwell_s，再进入下一个航点。 */
-            if (!out.profile_active){
-                phase_timer += 1.0 / SIM_CONTROL_HZ;
-                if (!kick_mode && (phase_timer >= dwell_s) && (waypoint_index < 2)){
-                    waypoint_index++;
-                    planned = false;
+            /* 与固件一致：剖面结束后按实际位置/速度连续合格时间推进业务。 */
+            if (!out.profile_active || (waypoint_index == 0)){
+                double abs_error = fabs(waypoint_mm[waypoint_index] - vision_x);
+                bool final_target = (waypoint_index + 1) >= waypoint_count;
+                double position_limit = final_target ? 10.0 : 5.0;
+                double speed_limit = final_target ? 5.0 : 20.0;
+                double dwell_limit = final_target ? 0.20 : 0.10;
+                bool qualified = (abs_error <= position_limit) &&
+                                 (fabs(vision_v) <= speed_limit);
+                phase_timer = qualified
+                    ? (phase_timer + 1.0 / SIM_CONTROL_HZ) : 0.0;
+                if (!kick_mode && (phase_timer >= dwell_limit)){
+                    if (!final_target){
+                        waypoint_index++;
+                        planned = false;
+                    } else if (finish_time_s < 0.0){
+                        finish_time_s = t;
+                    }
                 }
             }
         }
@@ -550,7 +572,13 @@ int main(int argc, char **argv){
         }
     }
 
-    fprintf(stderr, "scenario=%s  final_x=%.2f mm  target=%.1f mm  error=%.2f mm\n",
-            scenario, x_mm, waypoint_mm[2], x_mm - waypoint_mm[2]);
+    fprintf(stderr,
+            "scenario=%s  finish=%.2f s  pass5=%d  final_x=%.2f mm  target=%.1f mm  error=%.2f mm\n",
+            scenario,
+            (finish_time_s >= 0.0) ? (finish_time_s - challenge_start_s) : -1.0,
+            (!kick_mode && (finish_time_s >= 0.0) &&
+             ((finish_time_s - challenge_start_s) <= 5.0)) ? 1 : 0,
+            x_mm, waypoint_mm[waypoint_count - 1],
+            x_mm - waypoint_mm[waypoint_count - 1]);
     return 0;
 }

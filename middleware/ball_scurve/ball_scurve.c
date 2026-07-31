@@ -135,6 +135,8 @@ void BallScurve_Init(BALL_SCURVE_CONTROLLER *controller){
     controller->dither_phase_rad = 0.0f;
     controller->dither_stuck_elapsed_s = 0.0f;
     controller->dither_on = false;
+    controller->hold_integral_deg = 0.0f;
+    controller->hold_integral_on = false;
     controller->breakout_angle_deg = 0.0f;
     controller->breakout_stuck_elapsed_s = 0.0f;
     controller->breakout_release_elapsed_s = 0.0f;
@@ -219,6 +221,16 @@ bool BallScurve_PlanTo(BALL_SCURVE_CONTROLLER *controller,
     controller->active = true;
     controller->settled_elapsed_s = 0.0f;
     controller->settled = false;
+    /* 新航段不能继承上一目标的单向脱困方向或驻留计时。 */
+    controller->dither_phase_rad = 0.0f;
+    controller->dither_stuck_elapsed_s = 0.0f;
+    controller->dither_on = false;
+    controller->hold_integral_deg = 0.0f;
+    controller->hold_integral_on = false;
+    controller->breakout_angle_deg = 0.0f;
+    controller->breakout_stuck_elapsed_s = 0.0f;
+    controller->breakout_release_elapsed_s = 0.0f;
+    controller->breakout_on = false;
     controller->hold_enter_elapsed_s = 0.0f;
     controller->hold_mode = false;
     return true;
@@ -426,7 +438,57 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
         controller->dither_phase_rad = 0.0f;
     }
 
-    /* --- 6b. 单向渐增脱困：只朝目标方向加倾角，球一动就撤 --- */
+    /* --- 6b. 小误差静止积分：不动时补力，一动就快速撤销 --- */
+    float hold_integral_deg = 0.0f;
+    bool hold_integral_enabled =
+        (config->hold_integral_ki_deg_per_mm_s > 0.0f) &&
+        (config->hold_integral_max_error_mm > config->hold_integral_min_error_mm);
+    if (hold_integral_enabled){
+        float abs_err = BallScurve_Abs(target_error_now);
+        float abs_v = BallScurve_Abs(input->velocity_mm_s);
+        bool fresh_velocity = input->velocity_trusted &&
+            (input->measurement_age_ms <= config->velocity_floor_weight_age_ms);
+        bool in_small_error_band =
+            (abs_err > config->hold_integral_min_error_mm) &&
+            (abs_err <= config->hold_integral_max_error_mm);
+        bool stationary = fresh_velocity && !input->moving &&
+            (abs_v <= config->hold_integral_max_speed_mm_s);
+        bool motion_release = input->moving ||
+            (abs_v >= config->hold_integral_release_speed_mm_s);
+        bool release = controller->active || !fresh_velocity || motion_release ||
+            !in_small_error_band;
+
+        controller->hold_integral_on = !controller->active &&
+            in_small_error_band && stationary;
+        if (controller->hold_integral_on){
+            controller->hold_integral_deg +=
+                config->hold_integral_ki_deg_per_mm_s * target_error_now * input->dt_s;
+        } else if (release){
+            /*
+             * 球一动，累计倾角就从“克服静摩擦”变成额外加速误差。除固定退积分外，
+             * 再按实测球速追加反向补偿；速度越大，撤销越快。速度不可信时只用
+             * 固定速率，避免噪声把积分瞬间抽空。
+             */
+            float release_rate = config->hold_integral_release_rate_deg_s;
+            if (motion_release && fresh_velocity){
+                release_rate += config->hold_integral_motion_comp_deg_per_mm * abs_v;
+            }
+            float step = release_rate * input->dt_s;
+            if (controller->hold_integral_deg > step){
+                controller->hold_integral_deg -= step;
+            } else if (controller->hold_integral_deg < -step){
+                controller->hold_integral_deg += step;
+            } else{
+                controller->hold_integral_deg = 0.0f;
+            }
+        }
+        hold_integral_deg = controller->hold_integral_deg;
+    } else{
+        controller->hold_integral_deg = 0.0f;
+        controller->hold_integral_on = false;
+    }
+
+    /* --- 6c. 单向渐增脱困：只朝目标方向加倾角，球一动就撤 --- */
     /*
      * 与抖动**互斥**（见下方 breakout_enabled 判断），因为两者解决同一个问题
      * 但代价不同：
@@ -437,10 +499,7 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
      *   单向脱困 —— 只朝目标方向加倾角。是直流量，**不受位置环频率衰减**，
      *              指令 1.0° 就是管身 1.0°，权限真实可用。
      *
-     * ⚠ 刻意**不用积分器**做这件事。积分在静摩擦期间会持续蓄力，突破瞬间
-     *   已经攒下远超所需的角度，必然过冲，并演化成黏滑极限环。单向脱困的
-     *   全部意义就是「推过阈值就立刻松手」，所以释放速率(8°/s)比爬升速率
-     *   (0.8°/s)快一个数量级。
+     * 小误差由上面的有界积分处理；这里只接管更大的误差。两个机构不叠加。
      */
     float breakout_deg = 0.0f;
     bool breakout_enabled = (config->breakout_max_angle_deg > 0.0f);
@@ -458,8 +517,14 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
              * 触发三条同时满足并持续 dwell：剖面已结束、误差仍大、球基本不动。
              * 必须看速度——只看误差会在移动末段（球高速穿过目标附近）误触发。
              */
+            float breakout_error_floor = config->breakout_min_error_mm;
+            if (hold_integral_enabled &&
+                (config->hold_integral_max_error_mm > breakout_error_floor)){
+                breakout_error_floor = config->hold_integral_max_error_mm;
+            }
             bool stuck = !controller->active &&
-                         (abs_err > config->breakout_min_error_mm) &&
+                         (abs_err > breakout_error_floor) &&
+                         (BallScurve_Abs(controller->hold_integral_deg) < 0.001f) &&
                          (abs_v < config->breakout_max_speed_mm_s);
             if (stuck){
                 controller->breakout_stuck_elapsed_s += input->dt_s;
@@ -531,7 +596,7 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
 
     /* --- 7. 合成、限幅、斜率限制 --- */
     float command = config->level_bias_deg + feedforward_deg + rolling_ff_deg +
-                    feedback_deg + dither_deg + breakout_deg;
+                    feedback_deg + hold_integral_deg + dither_deg + breakout_deg;
     float limited = BallScurve_Clamp(command, config->angle_min_deg, config->angle_max_deg);
     bool saturated = (limited != command);
 
@@ -581,6 +646,8 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
     output->rolling_ff_deg = rolling_ff_deg;
     output->feedback_deg = feedback_deg;
     output->dither_deg = dither_deg;
+    output->hold_integral_deg = hold_integral_deg;
+    output->hold_integral_on = controller->hold_integral_on;
     output->breakout_deg = breakout_deg;
     output->breakout_on = controller->breakout_on;
     output->breakout_stuck_s = controller->breakout_stuck_elapsed_s;
