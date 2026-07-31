@@ -92,158 +92,6 @@ typedef struct {
     /** 输出斜率限制，deg/s。须覆盖剖面所需的 dθ_ff/dt，否则前馈会被削顶。 */
     float angle_rate_limit_deg_s;
 
-    /* ===== 车加速度前馈（要求 4/5/6）===== */
-    /*
-     * 车动起来后，球在车体系里感受到一个惯性力。小角度下：
-     *
-     *     ẍ_ball = K_G·(sinθ − (a_car/g)·cosθ)
-     *
-     * 要抵消它，令 tanθ = a_car/g，即 θ_ff = atan(a_car/g)。
-     *
-     * **为什么反馈救不了**：这是一个阶跃型加速度扰动。纯 PD 的稳态偏差是
-     * A/ωn²，其中 A = (5/7)·a_car。a_car = 150 mm/s² 时 A = 107 mm/s²，
-     * 除以 ωn²=5.76 得 **18.6 mm——已经出界**。而闭环带宽被视觉时延卡在
-     * 2.4 rad/s（周期 2.6 s），面对 1~2 s 的加速段根本来不及。
-     *
-     * ⚠ 必须喂**规划值**而不是编码器实测值：实测有滞后，而规划值提前已知，
-     *   还能超前下发以补执行器滞后。倾角要在车真正加速的那一刻就已经到位。
-     */
-    /** 车加速度前馈系数，0 = 关闭，1 = 全额补偿。留出 <1 的余地以便实机整定。 */
-    float car_feedforward_gain;
-
-    /* ===== MOVE 段积分（PID for MOVE, PD for HOLD）===== */
-    /*
-     * 为什么积分只放在 MOVE 段：
-     *
-     *   MOVE —— 球在滚，误差来源是**常值角度偏置**（水平点未标定 +0.25°、
-     *           滚阻 ±0.05°）。它在 T 秒移动里造成 0.5·K_G·Δθ·T² 的漂移，
-     *           正是积分该干的活。球在动，不存在黏滑。
-     *   HOLD —— 球静止，误差来源是**静摩擦死区**（实测 θ_stick≈0.62°）。
-     *           对静摩擦用积分是教科书级的错误：积分一路顶到脱离角，
-     *           球一挣脱就带着满额驱动窜出去，然后再卡住——黏滑极限环。
-     *
-     * 所以：MOVE 累积、HOLD 冻结。冻结而非清零是关键——积分学到的正是
-     * `level_bias_deg` 该填的那个值，把它带进 HOLD 等于自动标定。
-     *
-     * ⚠ 积分项**放在 feedback_limit_deg 之外**单独限幅。它代表"学到的偏置"
-     *   而不是反馈修正，混进 PD 限幅里会挤占 P/D 的权限。
-     *
-     * ⚠ 相位代价：积分在穿越频率 ω_c 处引入 atan(Ki/Kp/ω_c) 的滞后。
-     *   Ki/Kp = 0.42 rad/s、ω_c ≈ 3.2 rad/s 时约 7.5°——在可接受范围，
-     *   但再大就会吃掉 MOVE/HOLD 调度好不容易挣回来的裕度。
-     */
-    /** MOVE 段积分增益，deg/(mm·s)。**0 = 关闭，退化为纯 PD**。 */
-    float move_ki_deg_per_mm_s;
-    /**
-     * HOLD 段积分增益，deg/(mm·s)。**0 = 冻结（默认）**。
-     *
-     * 置 >0 表示球静止时也继续累积，靠抬高平均倾角把球从静摩擦里"顶"出来——
-     * 与抖动是**两条互斥的解困路线**：
-     *
-     *   抖动 —— 平均倾角保持在 Kp·e（小），用 ±A 的峰值反复越过脱离角，
-     *           每周期蚕食一点。球从不积累大的净驱动，释放温和，
-     *           但电机持续运动。
-     *   积分 —— 平均倾角一路抬到超过 θ_stick 才挣脱。挣脱瞬间球带着
-     *           (θ_int − θ_roll) 的**满额净驱动**冲出去，靠 Kd 去吸收。
-     *           电机安静，但释放剧烈。
-     *
-     * ⚠ 这正是经典黏滑的成因。能否用取决于「挣脱后 Kd 吸不吸得住」：
-     *   θ_stick=0.62° 挣脱时净加速度约 K_G·sin(0.57°)=70 mm/s²，
-     *   走完 13 mm 到达目标时 v≈42 mm/s，而 Kd_hold×42 = 0.85° 的反向
-     *   制动大于 0.62° 的驱动——理论上刹得住，但余量不大。
-     *
-     * ⚠ HOLD 段积分**刻意不设 move_integral_min_speed_mm_s 门控**：
-     *   那条门控的用意是"球没滚起来就别积分"，而这里的用意恰恰相反。
-     */
-    float hold_ki_deg_per_mm_s;
-    /** 积分项的角度限幅，deg。须覆盖预期偏置（水平点 0.25° + 滚阻 0.05°）。 */
-    float move_integral_limit_deg;
-    /**
-     * 积分泄漏时间常数，s。**0 = 不泄漏**。
-     * 开泄漏能防止陈旧值永久驻留，但会在长时间 HOLD 中把学到的偏置慢慢丢掉，
-     * 所以做辨识实验时应保持 0。
-     */
-    float move_integral_leak_tau_s;
-    /**
-     * HOLD 段是否继续施加已学到的积分量。
-     *   true  —— 当作自动标定的 level_bias 用（推荐）
-     *   false —— 字面意义的 "HOLD 用纯 PD"，用于 A/B 对照
-     * 两种情况下 HOLD 段都**不再累积**。
-     */
-    bool move_integral_apply_in_hold;
-    /**
-     * 累积积分所需的最小球速，mm/s。**0 = 不设门控**。
-     *
-     * 移动刚起步时球可能仍被静摩擦钉着（实测：某次规划后球先反向滚了 8 mm
-     * 才挣脱）。这段时间累积积分就是在对静摩擦积分，与 HOLD 段同样的错误。
-     */
-    float move_integral_min_speed_mm_s;
-    /**
-     * 规划时用**当前实际水管角**作为积分初值。
-     *
-     * 这是对"起步 overshoot"的直接修复。规划那一刻水管正停在把球托住的
-     * 保持角上（实测 −0.615°），而加速度前馈假设它在 0°——指令角于是要求
-     * 瞬间跨越 0.6°+，水管要 360 ms 才转过去，这期间球朝反方向滚，
-     * 跟踪误差让 fb 打满 ±2°，指令角冲到 3.46°（前馈峰值的 2.1 倍），
-     * 球被加速到 214 mm/s（规划峰值 89）。实测两次：
-     * −54.5 → 冲到 +52.7；−68.5 → 冲到 +48.7。
-     *
-     * 用保持角做种子后，指令首拍 = 保持角 + ff(0) = 保持角，**零阶跃**，
-     * 上面那条因果链从第一步就断了。而且保持角本身就是对"平衡倾角"的
-     * 一次直接测量（误差不超过 ±θ_stick），比从 0 开始猜好得多。
-     */
-    bool move_integral_seed_from_angle;
-
-    /* ===== MOVE / HOLD 增益调度 ===== */
-    /*
-     * 为什么要分两段——**两段的敌人根本不同**：
-     *
-     *            MOVE                        HOLD
-     *   球速     60~90 mm/s（远超逃逸速度）    ≈0
-     *   主敌     轨迹跟踪误差、执行器带宽      静摩擦死区、饱和极限环
-     *   缺陷     按 1/v² 衰减，可忽略          主导
-     *   速度信号 有效信号                      树莓派给整数 mm/s，多为量化噪声
-     *   Kd       提供阻尼，**必需**            **有害**：放大量化噪声、驱动饱和
-     *   Kp       跟踪刚度                      直接决定静摩擦残差 θ_stick/Kp
-     *
-     * 2026-07-31 实测：剖面走完后（act=0、ff=0，控制律已退化成绕固定目标的
-     * 纯 PD）仍出现 6.42 rad/s、峰峰 17~28 mm 的持续极限环。分解指令角：
-     *
-     *     Kp·e = 0.04711 × 12 mm   = 0.57°
-     *     Kd·v = 0.03533 × 40 mm/s = 1.41°   ← 饱和的是这一项
-     *     合计 1.98° ≈ 限幅 2.000°
-     *
-     * 而 fbc（反馈限幅命中率）与极限环振幅单调相关（0%→17.4mm，30%→27.7mm）。
-     * **极限环由 Kd 项饱和驱动，而那个 Kd 只有移动段才需要。**
-     *
-     * ⚠ 只做增益调度，不做两套算法：结构相同才能无扰切换。两个独立算法会带来
-     *   两套状态、两处限幅和切换瞬间的角度阶跃，都是新的失效面。
-     *
-     * ⚠ **Kp 不参与调度**。降 Kp 会让静摩擦残差 θ_stick/Kp 变大（实测
-     *   θ_stick≈0.62°，Kp=0.04711 时残差 13.2 mm），方向正好反了。
-     */
-    /**
-     * HOLD 段的速度反馈增益，deg/(mm/s)。**0 = 关闭调度**，全程用
-     * kd_deg_per_mm_s。
-     *
-     * 取值约束是「切入瞬间不许饱和」，最坏情况 v≈50 mm/s：
-     *     Kd_hold × 50 < 1.0°  →  Kd_hold < 0.020
-     */
-    float hold_kd_deg_per_mm_s;
-    /**
-     * 进入 HOLD 的判据：误差和速度**同时**满足并持续 hold_enter_dwell_s。
-     *
-     * ⚠ 只看距离是不够的——极限环里球在 −45 mm、目标 −50 mm，只差 5 mm
-     *   已经"很近"，却正以 40~70 mm/s 高速穿过。此时切到低 Kd 会直接飞过去。
-     */
-    float hold_enter_error_mm;
-    float hold_enter_speed_mm_s;
-    float hold_enter_dwell_s;
-    /** 退出 HOLD 的误差阈值（滞回），须显著大于 hold_enter_error_mm。 */
-    float hold_exit_error_mm;
-    /** 增益过渡时间常数，s。让 Kd 连续变化，切换瞬间指令角不跳变。 */
-    float hold_blend_tau_s;
-
     /* ===== 抖动：破静摩擦死区 ===== */
     /*
      * 为什么需要它——纯 PD 的稳态残差有一个**与整定无关的数学下限**：
@@ -319,14 +167,6 @@ typedef struct {
     float dither_phase_rad;
     float dither_stuck_elapsed_s;
     bool  dither_on;
-
-    /* MOVE/HOLD 调度状态。blend 0=MOVE 增益，1=HOLD 增益，一阶过渡。 */
-    bool  hold_mode;
-    float hold_enter_elapsed_s;
-    float hold_blend;
-
-    /** 积分器状态，单位 mm·s（乘 move_ki_deg_per_mm_s 得角度）。 */
-    float integral_mm_s;
 } BALL_SCURVE_CONTROLLER;
 
 typedef struct {
@@ -334,12 +174,6 @@ typedef struct {
     float velocity_mm_s;
     /** 由编码器经查表得到的**实际**水管角，用于斜率限制的续接。 */
     float actual_angle_deg;
-    /**
-     * 车体纵向加速度，mm/s²，正方向与球坐标正方向一致。
-     * **应传运动规划器的期望值而非编码器实测值**——实测有滞后，
-     * 而倾角必须在车真正加速的那一刻就已经到位。车静止的任务传 0。
-     */
-    float car_acceleration_mm_s2;
     float dt_s;
 } BALL_SCURVE_INPUT;
 
@@ -356,31 +190,18 @@ typedef struct {
     float feedforward_deg;   /**< asin(a_ref/K_G) */
     float rolling_ff_deg;    /**< 滚阻前馈 */
     float feedback_deg;      /**< 限幅后的 PD 分量 */
-    /**
-     * 积分分量，deg。**收敛值就是自动标定出的水平角偏置**——
-     * 应当与离线用 (beam, aest) 回归得到的值一致（2026-07-31 实测 +0.254°）。
-     * 两条独立路径互相印证；若不一致，说明其中一条有系统误差。
-     */
-    float integral_deg;
-    bool  integral_active;   /**< 本拍积分器在累积（MOVE 段且未卡住/未饱和） */
-    float car_feedforward_deg; /**< 车加速度前馈分量 atan(a_car/g) */
     float dither_deg;        /**< 本拍注入的抖动量（已含符号） */
 
     float position_error_mm;
     float velocity_error_mm_s;
     float profile_time_s;
     float profile_duration_s;
-    /** 本拍实际生效的速度反馈增益（MOVE 与 HOLD 之间的过渡值）。 */
-    float kd_effective_deg_per_mm_s;
-    /** 增益混合比，0=MOVE，1=HOLD。 */
-    float hold_blend;
 
     bool  profile_active;    /**< 剖面尚未走完 */
     bool  saturated;         /**< 总指令被物理角度范围夹住 */
     bool  feedback_clipped;  /**< PD 分量被 feedback_limit_deg 夹住 */
     bool  rate_limited;      /**< 本拍被输出斜率限制削过 */
     bool  dither_on;         /**< 抖动正在注入 */
-    bool  hold_mode;         /**< 已判定进入 HOLD 段 */
     bool  settled;
 } BALL_SCURVE_OUTPUT;
 
@@ -411,17 +232,6 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
                        const BALL_SCURVE_CONFIG *config,
                        const BALL_SCURVE_INPUT *input,
                        BALL_SCURVE_OUTPUT *output);
-
-/**
- * @brief 视觉短暂丢失后恢复：清动态状态但**保留积分器学到的偏置**。
- *
- * 与 BallScurve_Reset 的唯一差别就是这一条，而这一条很关键——积分收敛值
- * 就是自动标定出的水平角，用 Reset 会把它抹掉、重新从 0 学。实测视觉降级
- * 占 2~4%，一次长采集里会反复触发，用 Reset 就永远读不到稳定的收敛值。
- *
- * ⚠ 只在"丢帧恢复"这种**对象未变**的场合用。换任务、换机械状态必须用 Reset。
- */
-void BallScurve_Resume(BALL_SCURVE_CONTROLLER *controller, float current_angle_deg);
 
 /** 剖面是否已走完（不代表球已停稳，稳定看 output.settled）。 */
 bool BallScurve_IsProfileFinished(const BALL_SCURVE_CONTROLLER *controller);

@@ -27,7 +27,12 @@ TASK = ROOT / "app" / "app_ball_scurve_task.c"
 TUNE_HTML = ROOT / "tools" / "visualizers" / "ball_tune.html"
 
 UART_BPS = 115200 / 10.0        # 8N1：每字节 10 位
-BUDGET = 0.70                   # 留 30% 余量给 [TUNE] 回显与状态日志
+# 预算随遥测模式变化：
+#   拆分版（[SCV]+[SCVD]）：[TUNE] 热更回显最多占 ~5%，加状态日志约 5%，预留 20% 余量 → 70%
+#   单行版（无 [TUNE]）  ：偶发 plan/arrive 日志行 <2%，物理极限 ~95%，宽松限 90%
+#   这个常量在 main() 里会按是否有 [SCVD] 行动态选择。
+BUDGET_SPLIT  = 0.70    # 拆分模式（有 [TUNE]）
+BUDGET_SINGLE = 0.90    # 单行模式（无 [TUNE]，只有偶发日志行）
 CTRL_TICK_MS = 20.0
 
 # 各分析脚本依赖的字段，必须全在 [SCV]（高频行）里。
@@ -38,8 +43,14 @@ ANALYSIS_NEEDS = {
 }
 
 
-def format_string(src: str, anchor: str) -> str:
-    """把 printf 里连续的字符串字面量拼起来，直到以 \\r\\n 结尾的那一段。"""
+def format_string(src: str, anchor: str) -> str | None:
+    """把 printf 里连续的字符串字面量拼起来，直到以 \\r\\n 结尾的那一段。
+
+    找不到锚点返回 None——遥测是单行还是拆成两行分频，取决于当前采用的
+    控制方案，不是错误。回退到纯 S 曲线基线时就只有 [SCV] 一行。
+    """
+    if anchor not in src:
+        return None
     index = src.index(anchor)
     parts, cursor = [], index
     while True:
@@ -79,24 +90,35 @@ def main() -> int:
     src = TASK.read_text(encoding="utf-8")
     html = TUNE_HTML.read_text(encoding="utf-8")
 
-    scv, scv_f, scv_len, scv_rate = measure(
-        format_string(src, '"[SCV] t=%lu st='), 60.0)
-    scvd, scvd_f, scvd_len, scvd_rate = measure(
-        format_string(src, '"[SCVD] t=%lu vr='), 500.0)
+    # 周期取自任务里的 H3S_TELEMETRY_PERIOD_MS，别写死——拆分版是 60 ms，
+    # 纯 S 曲线基线是 50 ms，写死会把带宽算错 20%。
+    period = re.search(r"H3S_TELEMETRY_PERIOD_MS\s+(\d+)U", src)
+    scv_period = float(period.group(1)) if period else 60.0
+
+    scv_fmt = format_string(src, '"[SCV] t=%lu st=')
+    scv, scv_f, scv_len, scv_rate = measure(scv_fmt, scv_period)
+    scvd_fmt = format_string(src, '"[SCVD] t=%lu vr=')
 
     ok = True
     print(f"{'行':<8}{'字段':>5}{'%f':>5}{'行长':>7}{'周期':>8}{'B/s':>8}{'占UART':>8}")
     print("-" * 49)
-    print(f"[SCV] {'':<2}{len(scv):>5}{scv_f:>5}{scv_len:>7}{60:>6}ms{scv_rate:>8.0f}"
-          f"{scv_rate / UART_BPS:>8.0%}")
-    print(f"[SCVD]{'':<2}{len(scvd):>5}{scvd_f:>5}{scvd_len:>7}{500:>6}ms{scvd_rate:>8.0f}"
-          f"{scvd_rate / UART_BPS:>8.0%}")
-    total = scv_rate + scvd_rate
+    print(f"[SCV] {'':<2}{len(scv):>5}{scv_f:>5}{scv_len:>7}{scv_period:>6.0f}ms"
+          f"{scv_rate:>8.0f}{scv_rate / UART_BPS:>8.0%}")
+    total = scv_rate
+    if scvd_fmt is None:
+        scvd, scvd_f = set(), 0
+        print(f"[SCVD]{'':<2}{'—':>5}{'—':>5}{'—':>7}{'—':>8}{'未拆分':>8}")
+    else:
+        scvd, scvd_f, scvd_len, scvd_rate = measure(scvd_fmt, 500.0)
+        total += scvd_rate
+        print(f"[SCVD]{'':<2}{len(scvd):>5}{scvd_f:>5}{scvd_len:>7}{500:>6}ms"
+              f"{scvd_rate:>8.0f}{scvd_rate / UART_BPS:>8.0%}")
     print("-" * 49)
     print(f"{'合计':<8}{'':>17}{total:>16.0f}{total / UART_BPS:>8.0%}")
 
-    if total / UART_BPS > BUDGET:
-        print(f"\n★ 带宽超预算：{total / UART_BPS:.0%} > {BUDGET:.0%}。"
+    budget = BUDGET_SPLIT if scvd_fmt is not None else BUDGET_SINGLE
+    if total / UART_BPS > budget:
+        print(f"\n★ 带宽超预算：{total / UART_BPS:.0%} > {budget:.0%}。"
               f"DebugUart 会丢字节、遥测随机截断。")
         ok = False
 
@@ -117,13 +139,16 @@ def main() -> int:
 
     known = scv | scvd
     print()
-    for label, used in html_fields(html).items():
-        missing = sorted(f for f in used if f not in known)
-        if missing:
-            print(f"★ ball_tune.html {label}用到固件没有的字段：{missing}")
-            ok = False
-        else:
-            print(f"  ball_tune.html {label}：{len(used)} 个字段全部存在 ✓")
+    if scvd_fmt is None:
+        print("  ball_tune.html：固件未启用热更/[SCVD]，该页当前无对应固件，跳过核对")
+    else:
+        for label, used in html_fields(html).items():
+            missing = sorted(f for f in used if f not in known)
+            if missing:
+                print(f"★ ball_tune.html {label}用到固件没有的字段：{missing}")
+                ok = False
+            else:
+                print(f"  ball_tune.html {label}：{len(used)} 个字段全部存在 ✓")
 
     print()
     for name, need in ANALYSIS_NEEDS.items():
