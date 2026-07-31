@@ -15,9 +15,7 @@
  * 起伏只造成 0.17 mm 位置扰动。**滚动中的球基本不受凹槽缺陷影响**，
  * 模型可信，所以应当把权重放在前馈而不是高增益反馈上。
  *
- * ⚠ 本模块**刻意不含**低速捕获逻辑（抖动、蠕进、单向逼近、俘获偏置）。
- *   剖面末端速度二阶趋零，球会在 v < v_esc(约 20~40 mm/s) 的低速段被局部
- *   凹陷俘获，落点误差就是本模块的固有下限。这是刻意留出的对照基线。
+ * 低速段由可选抖动或单向脱困突破静摩擦；两者互斥，均可关闭以恢复纯 S 曲线基线。
  *
  * 正方向约定：水管正倾角使球向正方向加速。调用方须保证视觉 x/v 与之一致。
  */
@@ -61,6 +59,38 @@ typedef struct {
      * 必要驱动，把它一起夹掉会让剖面根本走不动。
      */
     float feedback_limit_deg;
+
+    /* ===== MOVE / BRAKE / HOLD 增益调度 ===== */
+    /** 0 = 严格使用上面的固定 kp/kd；>0 = 启用连续增益调度。 */
+    float gain_schedule_enabled;
+    /** 制动段和保持段的目标增益。MOVE 继续使用 kp_deg_per_mm/kd_deg_per_mm_s。 */
+    float brake_kp_deg_per_mm;
+    float brake_kd_deg_per_mm_s;
+    float hold_kp_deg_per_mm;
+    float hold_kd_deg_per_mm_s;
+    /** 停止距离模型：d = v*delay + v^2/(2*acceleration)。 */
+    float brake_delay_s;
+    float brake_acceleration_mm_s2;
+    /** d_stop/|e_target| 从 start 到 full 时，BRAKE 权重由 0 平滑升到 1。 */
+    float brake_blend_start_ratio;
+    float brake_blend_full_ratio;
+    /** BRAKE 权重的一阶平滑时间常数。 */
+    float brake_blend_tau_s;
+    /** HOLD 进入条件、退出滞回和进入驻留。 */
+    float hold_enter_error_mm;
+    float hold_enter_speed_mm_s;
+    float hold_enter_dwell_s;
+    float hold_exit_error_mm;
+    float hold_exit_speed_mm_s;
+    /** HOLD 权重的一阶平滑时间常数。 */
+    float hold_blend_tau_s;
+    /**
+     * 速度测量权重：可信测量在 full_age 前权重为 1，之后线性降至 floor；
+     * V_VALID 不可信时直接使用 floor。应用层的 200 ms 超时保护仍优先。
+     */
+    float velocity_full_weight_age_ms;
+    float velocity_floor_weight_age_ms;
+    float velocity_untrusted_weight;
 
     /* ===== 前馈修正 ===== */
     /**
@@ -216,6 +246,12 @@ typedef struct {
     float breakout_stuck_elapsed_s;     /**< 卡住条件已持续多久 */
     float breakout_release_elapsed_s;   /**< 释放条件已持续多久 */
     bool  breakout_on;
+
+    /* 增益调度状态。权重连续变化，状态切换不直接制造输出阶跃。 */
+    float brake_blend;
+    float hold_blend;
+    float hold_enter_elapsed_s;
+    bool  hold_mode;
 } BALL_SCURVE_CONTROLLER;
 
 typedef struct {
@@ -223,8 +259,18 @@ typedef struct {
     float velocity_mm_s;
     /** 由编码器经查表得到的**实际**水管角，用于斜率限制的续接。 */
     float actual_angle_deg;
+    /** 视觉速度是否通过 V_VALID 与连续帧恢复判据。 */
+    bool  velocity_trusted;
+    /** 当前有效测量龄，ms。 */
+    float measurement_age_ms;
     float dt_s;
 } BALL_SCURVE_INPUT;
+
+typedef enum {
+    BALL_SCURVE_GAIN_MOVE = 0,
+    BALL_SCURVE_GAIN_BRAKE,
+    BALL_SCURVE_GAIN_HOLD
+} BALL_SCURVE_GAIN_MODE;
 
 typedef struct {
     /** 最终下发的水管角指令，deg（已含 level_bias、限幅与斜率限制）。 */
@@ -246,6 +292,13 @@ typedef struct {
 
     float position_error_mm;
     float velocity_error_mm_s;
+    float effective_kp_deg_per_mm;
+    float effective_kd_deg_per_mm_s;
+    float brake_blend;
+    float hold_blend;
+    float stopping_distance_mm;
+    float closing_velocity_mm_s;
+    float velocity_weight;
     float profile_time_s;
     float profile_duration_s;
 
@@ -256,6 +309,7 @@ typedef struct {
     bool  dither_on;         /**< 抖动正在注入 */
     bool  breakout_on;       /**< 单向脱困正在介入（与 dither_on 互斥） */
     bool  settled;
+    BALL_SCURVE_GAIN_MODE gain_mode;
 } BALL_SCURVE_OUTPUT;
 
 /** 初始化并清空全部状态；不产生任何输出。 */

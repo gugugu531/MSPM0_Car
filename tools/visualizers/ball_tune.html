@@ -107,6 +107,8 @@
         font-variant-numeric:tabular-nums; font-weight:550; transition:all .15s; }
   .row input[type=number]:focus { outline:none; border-color:var(--s2);
         box-shadow:0 0 0 2.5px color-mix(in srgb, var(--s2) 20%, transparent); }
+  .row .toggle { width:18px; height:18px; margin:0; accent-color:var(--s2); cursor:pointer; }
+  .row .toggle-state { font-family:var(--mono); font-size:11px; color:var(--ink-2); }
   .row.changed input[type=number] { border-color:var(--warn);
         box-shadow:0 0 0 2.5px color-mix(in srgb, var(--warn) 22%, transparent); }
   .row.rejected input[type=number] { border-color:var(--critical);
@@ -174,7 +176,7 @@
     <div class="help-note">
       <b>使用说明：</b>连接串口后面板自动读取参数；拖动滑块或输入数值后<b>立即生效</b>（节流 10 Hz）；
       <b>掉电恢复默认</b>——整定完用「导出为 C」粘回源码并提交。
-      <br><b>协议：</b>手动命令 <code>?</code> 列表，<code>kp</code> 读取，<code>kp=0.05</code> 写入，<code>d</code> 恢复默认。
+      <br><b>协议：</b>手动命令 <code>?</code> 列表，<code>g kp</code> 读取，<code>s kp 0.05</code> 写入，<code>d</code> 恢复默认。
     </div>
     <div id="params"></div>
     <div id="log"></div>
@@ -238,7 +240,11 @@
 
 /* ===== 参数分组：名字须与固件 H3S_TUNE_TABLE 一致 ===== */
 const GROUPS = [
-  ["反馈增益",       ["kp","kd","fblim"]],
+  ["MOVE 与反馈限幅", ["kp","kd","fblim"]],
+  ["增益调度",       ["sched","bkp","bkd","hkp","hkd"]],
+  ["制动判定",       ["bdelay","bacc","bstart","bfull","btau"]],
+  ["保持判定",       ["hent_e","hent_v","hent_dw","hext_e","hext_v","htau"]],
+  ["速度可信度",     ["vage1","vage0","vfloor"]],
   /* 单向脱困与抖动**互斥**：brk_amp > 0 时脱困接管，抖动恒为 0。 */
   ["单向脱困 · 推荐", ["brk_amp","brk_ramp","brk_rel","brk_minerr",
                       "brk_maxspd","brk_dwell","brk_relspd","brk_reldw"]],
@@ -248,7 +254,14 @@ const GROUPS = [
 ];
 /* 参数中文提示，只为可读性，不影响协议。 */
 const LABEL = {
-  kp:"位置增益", kd:"速度增益", fblim:"反馈限幅",
+  kp:"MOVE 位置增益", kd:"MOVE 速度增益", fblim:"反馈限幅",
+  sched:"调度总开关", bkp:"BRAKE 位置增益", bkd:"BRAKE 速度增益",
+  hkp:"HOLD 位置增益", hkd:"HOLD 速度增益",
+  bdelay:"执行器延迟", bacc:"有效制动加速度", bstart:"制动混合起点",
+  bfull:"制动完全接管", btau:"制动混合时间常数",
+  hent_e:"HOLD 进入误差", hent_v:"HOLD 进入速度", hent_dw:"HOLD 进入驻留",
+  hext_e:"HOLD 退出误差", hext_v:"HOLD 退出速度", htau:"HOLD 混合时间常数",
+  vage1:"速度满权龄期", vage0:"速度最低权龄期", vfloor:"速度最低权重",
   brk_amp:"脱困角上限", brk_ramp:"爬升速率", brk_rel:"撤销速率",
   brk_minerr:"触发误差", brk_maxspd:"触发速度", brk_dwell:"触发驻留",
   brk_relspd:"释放速度", brk_reldw:"释放驻留",
@@ -273,7 +286,14 @@ const PLOTS = [
   { title:"控制分量", unit:"deg", h:120,
     series:[{k:"fb",  n:"PD fb",  c:"--s3",w:1.5},
             {k:"brka",n:"脱困角",  c:"--s5",w:2},
-            {k:"dith",n:"抖动",    c:"--s1",w:1,alpha:.6}] },
+             {k:"dith",n:"抖动",    c:"--s1",w:1,alpha:.6}] },
+  { title:"生效反馈增益", unit:"", h:110,
+    series:[{k:"kpe",n:"Kp eff",c:"--s3",w:1.8},
+            {k:"kde",n:"Kd eff",c:"--s4",w:1.8}] },
+  { title:"调度混合权重", unit:"0..1", h:110,
+    series:[{k:"bb",n:"BRAKE",c:"--s3",w:1.7},
+            {k:"hb",n:"HOLD",c:"--s5",w:1.7},
+            {k:"vw",n:"速度",c:"--s2",w:1.4}] },
 ];
 
 const WINDOW_S = 20;
@@ -477,34 +497,49 @@ function upsertRow(name, value, min, max, unit) {
   if (!row) {
     const el = document.createElement("div");
     el.className = "row";
+    const binary = unit === "bool";
     el.innerHTML =
       `<span class="name">${name}<small>${LABEL[name] || ""}</small></span>` +
-      `<input type="range">` +
-      `<input type="number">`;
+      (binary
+        ? `<input type="checkbox" class="toggle"><span class="toggle-state"></span>`
+        : `<input type="range"><input type="number">`);
     ensureGroup(groupOf(name)).appendChild(el);
     row = { el, rng: el.querySelector("input[type=range]"),
-            num: el.querySelector("input[type=number]") };
+            num: el.querySelector("input[type=number]"),
+            toggle: el.querySelector("input[type=checkbox]"),
+            toggleState: el.querySelector(".toggle-state"), binary };
     rows.set(name, row);
 
-    row.rng.addEventListener("input", () => {
-      row.value = +row.rng.value;
-      row.num.value = fmt(row.value);
-      el.classList.add("changed");
-      queueSet(name, row.value);          // 拖动节流
-    });
-    row.num.addEventListener("change", () => {
-      const v = parseFloat(row.num.value);
-      if (!Number.isFinite(v)) return;
-      row.value = v; row.rng.value = v;
-      el.classList.add("changed");
-      flushSet(name, v);                  // 输入框立即发
-    });
+    if (binary) {
+      row.toggle.addEventListener("change", () => {
+        row.value = row.toggle.checked ? 1 : 0;
+        el.classList.add("changed");
+        paint(row);
+        flushSet(name, row.value);
+      });
+    } else {
+      row.rng.addEventListener("input", () => {
+        row.value = +row.rng.value;
+        row.num.value = fmt(row.value);
+        el.classList.add("changed");
+        queueSet(name, row.value);          // 拖动节流
+      });
+      row.num.addEventListener("change", () => {
+        const v = parseFloat(row.num.value);
+        if (!Number.isFinite(v)) return;
+        row.value = v; row.rng.value = v;
+        el.classList.add("changed");
+        flushSet(name, v);                  // 输入框立即发
+      });
+    }
   }
   Object.assign(row, { min, max, unit, value });
-  const step = (max - min) / 200 || 0.001;
-  row.rng.min = min; row.rng.max = max; row.rng.step = step;
-  row.num.min = min; row.num.max = max; row.num.step = step;
-  row.num.title = `范围 [${min}, ${max}] ${unit}`;
+  if (!row.binary) {
+    const step = (max - min) / 200 || 0.001;
+    row.rng.min = min; row.rng.max = max; row.rng.step = step;
+    row.num.min = min; row.num.max = max; row.num.step = step;
+    row.num.title = `范围 [${min}, ${max}] ${unit}`;
+  }
   paint(row);
   row.el.classList.remove("changed", "rejected");
 }
@@ -512,7 +547,15 @@ function upsertRow(name, value, min, max, unit) {
 const fmt = v => (Math.abs(v) >= 1000 || (v !== 0 && Math.abs(v) < 0.001))
   ? v.toExponential(3) : String(+v.toPrecision(5));
 
-function paint(row) { row.rng.value = row.value; row.num.value = fmt(row.value); }
+function paint(row) {
+  if (row.binary) {
+    row.toggle.checked = row.value >= 0.5;
+    row.toggleState.textContent = row.toggle.checked ? "启用" : "关闭";
+  } else {
+    row.rng.value = row.value;
+    row.num.value = fmt(row.value);
+  }
+}
 
 /* 滑块拖动会连续触发，10 Hz 节流，避免刷爆串口。 */
 const pending = new Map();
@@ -656,10 +699,14 @@ function tiles() {
   const still  = seg.filter(r => Math.abs(r.v ?? 0) < 3).length / (seg.length || 1);
   const last = seg[seg.length - 1];
   const pk = arr => arr.length ? Math.max(...arr.map(Math.abs)) : NaN;
+  const gainMode = ["MOVE", "BRAKE", "HOLD"][last.gm] || "—";
   const set = [
     ["±10 mm 达标率", (inSpec * 100).toFixed(1), "%"],
     ["当前误差",      (err[err.length - 1] ?? 0).toFixed(2), "mm"],
     ["球静止占比",    (still * 100).toFixed(0), "%"],
+    ["增益状态",      gainMode, ""],
+    ["当前 Kp / Kd",  `${(last.kpe ?? 0).toFixed(4)} / ${(last.kde ?? 0).toFixed(4)}`, ""],
+    ["制动距离",      (last.ds ?? 0).toFixed(1), "mm"],
     ["执行器滞后峰值", pk(seg.map(r => r.lag ?? 0)).toFixed(2), "°"],
     ["脱困",          last.brk ? `${(last.brka ?? 0).toFixed(2)}°` : (last.dth ? "抖动" : "关"), ""],
     /* 卡住计时：脱困未介入时它在涨，说明触发判据太严；一直是 0 说明球没卡。 */
@@ -802,6 +849,33 @@ function exportC() {
       const field = name === "kp" ? "kp_deg_per_mm"
                   : name === "kd" ? "kd_deg_per_mm_s"
                   : name === "fblim" ? "feedback_limit_deg"
+                  : name === "sched" ? "gain_schedule_enabled"
+                  : name === "bkp" ? "brake_kp_deg_per_mm"
+                  : name === "bkd" ? "brake_kd_deg_per_mm_s"
+                  : name === "hkp" ? "hold_kp_deg_per_mm"
+                  : name === "hkd" ? "hold_kd_deg_per_mm_s"
+                  : name === "bdelay" ? "brake_delay_s"
+                  : name === "bacc" ? "brake_acceleration_mm_s2"
+                  : name === "bstart" ? "brake_blend_start_ratio"
+                  : name === "bfull" ? "brake_blend_full_ratio"
+                  : name === "btau" ? "brake_blend_tau_s"
+                  : name === "hent_e" ? "hold_enter_error_mm"
+                  : name === "hent_v" ? "hold_enter_speed_mm_s"
+                  : name === "hent_dw" ? "hold_enter_dwell_s"
+                  : name === "hext_e" ? "hold_exit_error_mm"
+                  : name === "hext_v" ? "hold_exit_speed_mm_s"
+                  : name === "htau" ? "hold_blend_tau_s"
+                  : name === "vage1" ? "velocity_full_weight_age_ms"
+                  : name === "vage0" ? "velocity_floor_weight_age_ms"
+                  : name === "vfloor" ? "velocity_untrusted_weight"
+                  : name === "brk_amp" ? "breakout_max_angle_deg"
+                  : name === "brk_ramp" ? "breakout_ramp_rate_deg_s"
+                  : name === "brk_rel" ? "breakout_release_rate_deg_s"
+                  : name === "brk_minerr" ? "breakout_min_error_mm"
+                  : name === "brk_maxspd" ? "breakout_max_speed_mm_s"
+                  : name === "brk_dwell" ? "breakout_dwell_s"
+                  : name === "brk_relspd" ? "breakout_release_speed_mm_s"
+                  : name === "brk_reldw" ? "breakout_release_dwell_s"
                   : name === "dith_amp" ? "dither_amplitude_deg"
                   : name === "dith_freq" ? "dither_frequency_hz"
                   : name === "dith_minerr" ? "dither_min_error_mm"

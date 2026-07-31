@@ -8,7 +8,7 @@
 
 #include <stddef.h>
 
-/* 参数表上限。当前 ball_scurve 可调项约 25 个，留一倍余量。 */
+/* 参数表上限。当前 ball_scurve 可调项约 40 个，保留少量扩展余量。 */
 #define APP_BALL_TUNE_MAX_ENTRIES 48U
 /* 单条命令的最大长度。超长直接丢弃整行，不做截断执行——半条命令比不执行危险。 */
 #define APP_BALL_TUNE_LINE_MAX 64U

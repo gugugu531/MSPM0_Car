@@ -1,5 +1,13 @@
 # 变更记录
 
+## 2026-07-31：滚球 MOVE/BRAKE/HOLD 连续增益调度
+
+- `ball_scurve` 增加基于停止距离的 BRAKE 权重、带滞回的 HOLD 状态和连续增益混合；
+  `gain_schedule_enabled=0` 可回退到原固定增益。
+- 速度反馈按 `V_VALID` 与测量龄期降权，200 ms 视觉失联的就地保持策略不变。
+- H3 S-Curve / Hold 及 H4/H5 共享链路新增 `gm/bb/hb/kpe/kde/ds/vc/vw` 遥测。
+- `ball_tune.html` 新增全部调度参数、有效增益和混合权重的实时调节与显示。
+
 ## 未发布
 - **H5/H6 ODOM 编码器阈值增加公共偏置**：新增
   `LT_LOADED_LAP_ODOM_ARRIVAL_OFFSET_M`，在当前 `LT_LAP_STOP_DISTANCE_M` 基准上做加减，

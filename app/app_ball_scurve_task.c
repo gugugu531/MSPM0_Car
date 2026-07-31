@@ -118,6 +118,27 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     .kd_deg_per_mm_s = 0.03533f,
     .feedback_limit_deg = 2.0f,
 
+    /* MOVE/BRAKE/HOLD 连续增益调度。sched=0 可严格回退到上面的固定增益。 */
+    .gain_schedule_enabled = 1.0f,
+    .brake_kp_deg_per_mm = 0.03000f,
+    .brake_kd_deg_per_mm_s = 0.03533f,
+    .hold_kp_deg_per_mm = 0.04711f,
+    .hold_kd_deg_per_mm_s = 0.02000f,
+    .brake_delay_s = 0.22f,
+    .brake_acceleration_mm_s2 = 120.0f,
+    .brake_blend_start_ratio = 0.60f,
+    .brake_blend_full_ratio = 1.00f,
+    .brake_blend_tau_s = 0.08f,
+    .hold_enter_error_mm = 15.0f,
+    .hold_enter_speed_mm_s = 20.0f,
+    .hold_enter_dwell_s = 0.30f,
+    .hold_exit_error_mm = 30.0f,
+    .hold_exit_speed_mm_s = 35.0f,
+    .hold_blend_tau_s = 0.25f,
+    .velocity_full_weight_age_ms = 60.0f,
+    .velocity_floor_weight_age_ms = 120.0f,
+    .velocity_untrusted_weight = 0.30f,
+
     /*
      * 滚阻前馈默认 0：先跑一趟测出实际欠冲量 d，再按 θ_roll = 2d/(K_G·T²) 反解填回。
      * 拍脑袋填值会把一个可测量的系统性偏差换成一个不可测的。
@@ -217,6 +238,139 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
         .min_value = 0.005f,  /* 下界：欠阻尼会震荡 */
         .max_value = 0.10f,   /* 上界：过阻尼响应慢 */
         .unit = "deg/(mm/s)",
+    },
+    {
+        .name = "sched",
+        .value = &H3S_SCURVE_CONFIG.gain_schedule_enabled,
+        .min_value = 0.0f,
+        .max_value = 1.0f,
+        .unit = "bool",
+    },
+    {
+        .name = "bkp",
+        .value = &H3S_SCURVE_CONFIG.brake_kp_deg_per_mm,
+        .min_value = 0.005f,
+        .max_value = 0.15f,
+        .unit = "deg/mm",
+    },
+    {
+        .name = "bkd",
+        .value = &H3S_SCURVE_CONFIG.brake_kd_deg_per_mm_s,
+        .min_value = 0.005f,
+        .max_value = 0.10f,
+        .unit = "deg/(mm/s)",
+    },
+    {
+        .name = "hkp",
+        .value = &H3S_SCURVE_CONFIG.hold_kp_deg_per_mm,
+        .min_value = 0.01f,
+        .max_value = 0.15f,
+        .unit = "deg/mm",
+    },
+    {
+        .name = "hkd",
+        .value = &H3S_SCURVE_CONFIG.hold_kd_deg_per_mm_s,
+        .min_value = 0.0f,
+        .max_value = 0.10f,
+        .unit = "deg/(mm/s)",
+    },
+    {
+        .name = "bdelay",
+        .value = &H3S_SCURVE_CONFIG.brake_delay_s,
+        .min_value = 0.0f,
+        .max_value = 0.60f,
+        .unit = "s",
+    },
+    {
+        .name = "bacc",
+        .value = &H3S_SCURVE_CONFIG.brake_acceleration_mm_s2,
+        .min_value = 20.0f,
+        .max_value = 500.0f,
+        .unit = "mm/s2",
+    },
+    {
+        .name = "bstart",
+        .value = &H3S_SCURVE_CONFIG.brake_blend_start_ratio,
+        .min_value = 0.10f,
+        .max_value = 1.50f,
+        .unit = "ratio",
+    },
+    {
+        .name = "bfull",
+        .value = &H3S_SCURVE_CONFIG.brake_blend_full_ratio,
+        .min_value = 0.20f,
+        .max_value = 2.50f,
+        .unit = "ratio",
+    },
+    {
+        .name = "btau",
+        .value = &H3S_SCURVE_CONFIG.brake_blend_tau_s,
+        .min_value = 0.0f,
+        .max_value = 1.0f,
+        .unit = "s",
+    },
+    {
+        .name = "hent_e",
+        .value = &H3S_SCURVE_CONFIG.hold_enter_error_mm,
+        .min_value = 1.0f,
+        .max_value = 50.0f,
+        .unit = "mm",
+    },
+    {
+        .name = "hent_v",
+        .value = &H3S_SCURVE_CONFIG.hold_enter_speed_mm_s,
+        .min_value = 1.0f,
+        .max_value = 80.0f,
+        .unit = "mm/s",
+    },
+    {
+        .name = "hent_dw",
+        .value = &H3S_SCURVE_CONFIG.hold_enter_dwell_s,
+        .min_value = 0.0f,
+        .max_value = 2.0f,
+        .unit = "s",
+    },
+    {
+        .name = "hext_e",
+        .value = &H3S_SCURVE_CONFIG.hold_exit_error_mm,
+        .min_value = 2.0f,
+        .max_value = 100.0f,
+        .unit = "mm",
+    },
+    {
+        .name = "hext_v",
+        .value = &H3S_SCURVE_CONFIG.hold_exit_speed_mm_s,
+        .min_value = 2.0f,
+        .max_value = 150.0f,
+        .unit = "mm/s",
+    },
+    {
+        .name = "htau",
+        .value = &H3S_SCURVE_CONFIG.hold_blend_tau_s,
+        .min_value = 0.0f,
+        .max_value = 2.0f,
+        .unit = "s",
+    },
+    {
+        .name = "vage1",
+        .value = &H3S_SCURVE_CONFIG.velocity_full_weight_age_ms,
+        .min_value = 0.0f,
+        .max_value = 180.0f,
+        .unit = "ms",
+    },
+    {
+        .name = "vage0",
+        .value = &H3S_SCURVE_CONFIG.velocity_floor_weight_age_ms,
+        .min_value = 1.0f,
+        .max_value = 200.0f,
+        .unit = "ms",
+    },
+    {
+        .name = "vfloor",
+        .value = &H3S_SCURVE_CONFIG.velocity_untrusted_weight,
+        .min_value = 0.0f,
+        .max_value = 1.0f,
+        .unit = "ratio",
     },
     {
         .name = "fblim",
@@ -574,28 +728,7 @@ static void H3S_Enter(bool standalone){
     (void)StepMotor_SetServoGain(H3S_ACTUATOR_SERVO_KP_S_INV);
 
     BallScurve_Init(&h3s_controller);
-    h3s_output.angle_deg = 0.0f;
-    h3s_output.x_ref_mm = 0.0f;
-    h3s_output.v_ref_mm_s = 0.0f;
-    h3s_output.a_ref_mm_s2 = 0.0f;
-    h3s_output.feedforward_deg = 0.0f;
-    h3s_output.rolling_ff_deg = 0.0f;
-    h3s_output.feedback_deg = 0.0f;
-    h3s_output.dither_deg = 0.0f;
-    h3s_output.breakout_deg = 0.0f;
-    h3s_output.breakout_stuck_s = 0.0f;
-    h3s_output.breakout_release_s = 0.0f;
-    h3s_output.position_error_mm = 0.0f;
-    h3s_output.velocity_error_mm_s = 0.0f;
-    h3s_output.profile_time_s = 0.0f;
-    h3s_output.profile_duration_s = 0.0f;
-    h3s_output.profile_active = false;
-    h3s_output.saturated = false;
-    h3s_output.feedback_clipped = false;
-    h3s_output.rate_limited = false;
-    h3s_output.dither_on = false;
-    h3s_output.breakout_on = false;
-    h3s_output.settled = false;
+    h3s_output = (BALL_SCURVE_OUTPUT){0};
 
     h3s_state = H3S_STATE_WAIT_VISION;
     h3s_waypoint = 0U;
@@ -633,6 +766,33 @@ static void H3S_Enter(bool standalone){
         (double)H3S_SCURVE_CONFIG.rolling_resistance_deg,
         (double)H3S_SCURVE_CONFIG.rolling_ff_speed_deadband_mm_s,
         (double)H3S_SCURVE_CONFIG.replan_error_mm);
+    DebugUart_Printf(
+        "[SCVCFG] sched=%.0f move=%.5f/%.5f brake=%.5f/%.5f hold=%.5f/%.5f "
+        "bd=%.2f ba=%.1f br=%.2f..%.2f bt=%.2f ht=%.2f\r\n",
+        (double)H3S_SCURVE_CONFIG.gain_schedule_enabled,
+        (double)H3S_SCURVE_CONFIG.kp_deg_per_mm,
+        (double)H3S_SCURVE_CONFIG.kd_deg_per_mm_s,
+        (double)H3S_SCURVE_CONFIG.brake_kp_deg_per_mm,
+        (double)H3S_SCURVE_CONFIG.brake_kd_deg_per_mm_s,
+        (double)H3S_SCURVE_CONFIG.hold_kp_deg_per_mm,
+        (double)H3S_SCURVE_CONFIG.hold_kd_deg_per_mm_s,
+        (double)H3S_SCURVE_CONFIG.brake_delay_s,
+        (double)H3S_SCURVE_CONFIG.brake_acceleration_mm_s2,
+        (double)H3S_SCURVE_CONFIG.brake_blend_start_ratio,
+        (double)H3S_SCURVE_CONFIG.brake_blend_full_ratio,
+        (double)H3S_SCURVE_CONFIG.brake_blend_tau_s,
+        (double)H3S_SCURVE_CONFIG.hold_blend_tau_s);
+    DebugUart_Printf(
+        "[SCVCFG] hold enter=%.1fmm/%.1fmmps/%.2fs exit=%.1fmm/%.1fmmps "
+        "vweight=%.0f..%.0fms floor=%.2f\r\n",
+        (double)H3S_SCURVE_CONFIG.hold_enter_error_mm,
+        (double)H3S_SCURVE_CONFIG.hold_enter_speed_mm_s,
+        (double)H3S_SCURVE_CONFIG.hold_enter_dwell_s,
+        (double)H3S_SCURVE_CONFIG.hold_exit_error_mm,
+        (double)H3S_SCURVE_CONFIG.hold_exit_speed_mm_s,
+        (double)H3S_SCURVE_CONFIG.velocity_full_weight_age_ms,
+        (double)H3S_SCURVE_CONFIG.velocity_floor_weight_age_ms,
+        (double)H3S_SCURVE_CONFIG.velocity_untrusted_weight);
     DebugUart_Printf(
         "[SCVCFG] alim=%.2f..%.2f arate=%.1f speed=%.1f servo_kp=%.1f "
         "tol=%d resume=%d minspd=%.1f tick=%ums\r\n",
@@ -698,6 +858,7 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         "xr=%.2f x=%.2f vr=%.2f v=%.2f aest=%.1f age=%.1f q=%u "
         /* --- 剖面层 --- */
         "tgt=%.1f xref=%.2f vref=%.2f aref=%.1f tp=%.3f tpd=%.3f act=%u "
+        "gm=%u bb=%.2f hb=%.2f kpe=%.4f kde=%.4f ds=%.1f vc=%.1f vw=%.2f "
         /* --- 控制分量：合成前每一项 --- */
         "bias=%.3f ff=%.3f rff=%.3f fb=%.3f dith=%.3f brka=%.3f u=%.3f "
         /* --- 跟踪误差 + 单向脱困计时（判误触发 / 判释放是否太晚）--- */
@@ -728,6 +889,13 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         (double)h3s_output.a_ref_mm_s2,
         (double)h3s_output.profile_time_s, (double)h3s_output.profile_duration_s,
         (unsigned)(h3s_output.profile_active ? 1U : 0U),
+        (unsigned)h3s_output.gain_mode,
+        (double)h3s_output.brake_blend, (double)h3s_output.hold_blend,
+        (double)h3s_output.effective_kp_deg_per_mm,
+        (double)h3s_output.effective_kd_deg_per_mm_s,
+        (double)h3s_output.stopping_distance_mm,
+        (double)h3s_output.closing_velocity_mm_s,
+        (double)h3s_output.velocity_weight,
 
         (double)H3S_SCURVE_CONFIG.level_bias_deg,
         (double)h3s_output.feedforward_deg, (double)h3s_output.rolling_ff_deg,
@@ -833,6 +1001,8 @@ static APP_TASK_STATUS H3S_Tick(float dt){
                 .x_mm = h3s_prediction.x_mm,
                 .velocity_mm_s = h3s_prediction.velocity_mm_s,
                 .actual_angle_deg = H3S_ActualBeamAngleDeg(),
+                .velocity_trusted = h3s_prediction.velocity_trusted,
+                .measurement_age_ms = h3s_prediction.age_ms,
                 .dt_s = dt,
             };
             if (!BallScurve_Update(&h3s_controller, &H3S_SCURVE_CONFIG, &input,

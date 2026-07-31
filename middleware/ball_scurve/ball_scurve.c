@@ -31,6 +31,18 @@ static float BallScurve_Abs(float value){
     return (value < 0.0f) ? -value : value;
 }
 
+static float BallScurve_SmoothStep(float value){
+    value = BallScurve_Clamp(value, 0.0f, 1.0f);
+    return value * value * (3.0f - 2.0f * value);
+}
+
+static float BallScurve_FilterToward(float current, float target,
+                                     float dt_s, float tau_s){
+    if (tau_s <= 0.0f){ return target; }
+    float alpha = BallScurve_Clamp(dt_s / (tau_s + dt_s), 0.0f, 1.0f);
+    return current + alpha * (target - current);
+}
+
 /**
  * @brief 由归一化时间求剖面的位置/速度/加速度。
  *
@@ -127,6 +139,10 @@ void BallScurve_Init(BALL_SCURVE_CONTROLLER *controller){
     controller->breakout_stuck_elapsed_s = 0.0f;
     controller->breakout_release_elapsed_s = 0.0f;
     controller->breakout_on = false;
+    controller->brake_blend = 0.0f;
+    controller->hold_blend = 0.0f;
+    controller->hold_enter_elapsed_s = 0.0f;
+    controller->hold_mode = false;
 }
 
 void BallScurve_Reset(BALL_SCURVE_CONTROLLER *controller, float current_angle_deg){
@@ -203,6 +219,8 @@ bool BallScurve_PlanTo(BALL_SCURVE_CONTROLLER *controller,
     controller->active = true;
     controller->settled_elapsed_s = 0.0f;
     controller->settled = false;
+    controller->hold_enter_elapsed_s = 0.0f;
+    controller->hold_mode = false;
     return true;
 }
 
@@ -265,11 +283,105 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
                                         : -config->rolling_resistance_deg;
     }
 
-    /* --- 5. 剖面跟踪反馈（只对剖面误差，不对目标误差）--- */
+    /* --- 5. MOVE / BRAKE / HOLD 增益调度 --- */
     float position_error = x_ref - input->x_mm;
     float velocity_error = v_ref - input->velocity_mm_s;
-    float raw_feedback_deg = config->kp_deg_per_mm * position_error +
-                             config->kd_deg_per_mm_s * velocity_error;
+    float target_error_now = controller->target_mm - input->x_mm;
+    float abs_target_error = BallScurve_Abs(target_error_now);
+    float closing_velocity = 0.0f;
+    if (target_error_now > 0.0f){
+        closing_velocity = input->velocity_mm_s;
+    } else if (target_error_now < 0.0f){
+        closing_velocity = -input->velocity_mm_s;
+    }
+
+    float velocity_weight = 1.0f;
+    if (config->gain_schedule_enabled > 0.0f){
+        float floor_weight = BallScurve_Clamp(config->velocity_untrusted_weight,
+                                               0.0f, 1.0f);
+        if (!input->velocity_trusted){
+            velocity_weight = floor_weight;
+        } else if (input->measurement_age_ms > config->velocity_full_weight_age_ms){
+            float age_span = config->velocity_floor_weight_age_ms -
+                             config->velocity_full_weight_age_ms;
+            if (age_span <= 0.0f){
+                velocity_weight = floor_weight;
+            } else{
+                float age_blend = (input->measurement_age_ms -
+                                   config->velocity_full_weight_age_ms) / age_span;
+                velocity_weight = 1.0f - BallScurve_Clamp(age_blend, 0.0f, 1.0f) *
+                                  (1.0f - floor_weight);
+            }
+        }
+    }
+
+    float stopping_distance = 0.0f;
+    float brake_target = 0.0f;
+    if ((config->gain_schedule_enabled > 0.0f) && controller->active &&
+        (closing_velocity > 0.0f) && (config->brake_acceleration_mm_s2 > 0.0f)){
+        stopping_distance = closing_velocity * config->brake_delay_s +
+            closing_velocity * closing_velocity /
+            (2.0f * config->brake_acceleration_mm_s2);
+        float error_scale = (abs_target_error > 0.1f) ? abs_target_error : 0.1f;
+        float stop_ratio = stopping_distance / error_scale;
+        float ratio_span = config->brake_blend_full_ratio -
+                           config->brake_blend_start_ratio;
+        if (ratio_span > 0.0f){
+            brake_target = BallScurve_SmoothStep(
+                (stop_ratio - config->brake_blend_start_ratio) / ratio_span);
+        }
+    }
+    controller->brake_blend = BallScurve_FilterToward(
+        controller->brake_blend, brake_target, input->dt_s,
+        config->brake_blend_tau_s);
+
+    if (config->gain_schedule_enabled > 0.0f){
+        if (controller->hold_mode){
+            if (controller->active ||
+                (abs_target_error >= config->hold_exit_error_mm) ||
+                (BallScurve_Abs(input->velocity_mm_s) >= config->hold_exit_speed_mm_s)){
+                controller->hold_mode = false;
+                controller->hold_enter_elapsed_s = 0.0f;
+            }
+        } else if (!controller->active && input->velocity_trusted &&
+                   (input->measurement_age_ms <=
+                    config->velocity_floor_weight_age_ms) &&
+                   (abs_target_error <= config->hold_enter_error_mm) &&
+                   (BallScurve_Abs(input->velocity_mm_s) <=
+                    config->hold_enter_speed_mm_s)){
+            controller->hold_enter_elapsed_s += input->dt_s;
+            if (controller->hold_enter_elapsed_s >= config->hold_enter_dwell_s){
+                controller->hold_mode = true;
+            }
+        } else{
+            controller->hold_enter_elapsed_s = 0.0f;
+        }
+    } else{
+        controller->brake_blend = 0.0f;
+        controller->hold_blend = 0.0f;
+        controller->hold_mode = false;
+        controller->hold_enter_elapsed_s = 0.0f;
+    }
+    controller->hold_blend = BallScurve_FilterToward(
+        controller->hold_blend, controller->hold_mode ? 1.0f : 0.0f,
+        input->dt_s, config->hold_blend_tau_s);
+
+    float move_brake_kp = config->kp_deg_per_mm + controller->brake_blend *
+        (config->brake_kp_deg_per_mm - config->kp_deg_per_mm);
+    float move_brake_kd = config->kd_deg_per_mm_s + controller->brake_blend *
+        (config->brake_kd_deg_per_mm_s - config->kd_deg_per_mm_s);
+    float effective_kp = move_brake_kp + controller->hold_blend *
+        (config->hold_kp_deg_per_mm - move_brake_kp);
+    float effective_kd = move_brake_kd + controller->hold_blend *
+        (config->hold_kd_deg_per_mm_s - move_brake_kd);
+    if (config->gain_schedule_enabled <= 0.0f){
+        effective_kp = config->kp_deg_per_mm;
+        effective_kd = config->kd_deg_per_mm_s;
+        velocity_weight = 1.0f;
+    }
+
+    float raw_feedback_deg = effective_kp * position_error +
+        velocity_weight * effective_kd * velocity_error;
     float feedback_deg = raw_feedback_deg;
     if (config->feedback_limit_deg > 0.0f){
         feedback_deg = BallScurve_Clamp(feedback_deg,
@@ -286,7 +398,6 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
      * 这同时提供了捕获：抖动破摩擦让球爬过去，停振让摩擦把它锁住。
      */
     float dither_deg = 0.0f;
-    float target_error_now = controller->target_mm - input->x_mm;
     if ((config->dither_amplitude_deg > 0.0f) && !controller->active){
         bool needed =
             (BallScurve_Abs(target_error_now) > config->dither_min_error_mm) &&
@@ -476,6 +587,13 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
     output->breakout_release_s = controller->breakout_release_elapsed_s;
     output->position_error_mm = position_error;
     output->velocity_error_mm_s = velocity_error;
+    output->effective_kp_deg_per_mm = effective_kp;
+    output->effective_kd_deg_per_mm_s = effective_kd;
+    output->brake_blend = controller->brake_blend;
+    output->hold_blend = controller->hold_blend;
+    output->stopping_distance_mm = stopping_distance;
+    output->closing_velocity_mm_s = closing_velocity;
+    output->velocity_weight = velocity_weight;
     output->profile_time_s = controller->elapsed_s;
     output->profile_duration_s = controller->duration_s;
     output->profile_active = controller->active;
@@ -484,5 +602,11 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
     output->rate_limited = rate_limited;
     output->dither_on = controller->dither_on;
     output->settled = controller->settled;
+    output->gain_mode = (config->gain_schedule_enabled <= 0.0f)
+        ? BALL_SCURVE_GAIN_MOVE
+        : ((controller->hold_blend >= 0.5f)
+        ? BALL_SCURVE_GAIN_HOLD
+        : ((controller->brake_blend >= 0.5f)
+            ? BALL_SCURVE_GAIN_BRAKE : BALL_SCURVE_GAIN_MOVE));
     return true;
 }

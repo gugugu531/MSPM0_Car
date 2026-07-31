@@ -288,6 +288,25 @@ int main(int argc, char **argv){
         .kp_deg_per_mm = (float)(wn * wn / SIM_K_G_MM_S2 * 57.29577951308232),
         .kd_deg_per_mm_s = (float)(2.0 * zeta * wn / SIM_K_G_MM_S2 * 57.29577951308232),
         .feedback_limit_deg = 2.0f,
+        .gain_schedule_enabled = 1.0f,
+        .brake_kp_deg_per_mm = 0.03000f,
+        .brake_kd_deg_per_mm_s = 0.03533f,
+        .hold_kp_deg_per_mm = 0.04711f,
+        .hold_kd_deg_per_mm_s = 0.02000f,
+        .brake_delay_s = 0.22f,
+        .brake_acceleration_mm_s2 = 120.0f,
+        .brake_blend_start_ratio = 0.60f,
+        .brake_blend_full_ratio = 1.00f,
+        .brake_blend_tau_s = 0.08f,
+        .hold_enter_error_mm = 15.0f,
+        .hold_enter_speed_mm_s = 20.0f,
+        .hold_enter_dwell_s = 0.30f,
+        .hold_exit_error_mm = 30.0f,
+        .hold_exit_speed_mm_s = 35.0f,
+        .hold_blend_tau_s = 0.25f,
+        .velocity_full_weight_age_ms = 60.0f,
+        .velocity_floor_weight_age_ms = 120.0f,
+        .velocity_untrusted_weight = 0.30f,
         .rolling_resistance_deg = 0.0f,   /* 首轮刻意关闭，用于测出实际欠冲量 */
         .rolling_ff_speed_deadband_mm_s = 3.0f,
         .level_bias_deg = 0.0f,           /* 未标定：真实水平误差全额暴露 */
@@ -370,7 +389,8 @@ int main(int argc, char **argv){
      * 二者之差就是水平点标定误差。辨识必须用 beam，否则会假装误差不存在。
      */
     printf("t,phase,target,x,v,a,x_ref,v_ref,a_ref,theta_cmd,theta_actual,beam,"
-           "cnt,cnt_tgt,ff,roll_ff,fb,err,stuck,surf,vis_x,vis_v,active,settled\n");
+           "cnt,cnt_tgt,ff,roll_ff,fb,err,stuck,surf,vis_x,vis_v,active,settled,"
+           "gain_mode,brake_blend,hold_blend,kp_eff,kd_eff,dstop,vclose,vweight\n");
 
     if (kick_mode){ duration_s = 26.0; }
 
@@ -425,6 +445,8 @@ int main(int argc, char **argv){
                 .x_mm = (float)vision_x,
                 .velocity_mm_s = (float)vision_v,
                 .actual_angle_deg = (float)SimAngleFromCount(count_actual),
+                .velocity_trusted = true,
+                .measurement_age_ms = (float)(plant.vision_latency_s * 1000.0),
                 .dt_s = (float)(1.0 / SIM_CONTROL_HZ),
             };
             BallScurve_Update(&controller, &config, &in, &out);
@@ -505,7 +527,8 @@ int main(int argc, char **argv){
         /* ---- 记录：按 100 Hz 输出，够画图也不至于文件过大 ---- */
         if ((step % (long)(SIM_PHYSICS_HZ / 100.0)) == 0){
             printf("%.4f,%d,%.2f,%.4f,%.3f,%.2f,%.4f,%.3f,%.2f,%.4f,%.4f,%.4f,"
-                   "%d,%d,%.4f,%.4f,%.4f,%.4f,%d,%.4f,%.3f,%.3f,%d,%d\n",
+                   "%d,%d,%.4f,%.4f,%.4f,%.4f,%d,%.4f,%.3f,%.3f,%d,%d,"
+                   "%u,%.3f,%.3f,%.5f,%.5f,%.2f,%.2f,%.3f\n",
                    t, waypoint_index, waypoint_mm[waypoint_index],
                    x_mm, v_mm_s, a_mm_s2,
                    (double)out.x_ref_mm, (double)out.v_ref_mm_s, (double)out.a_ref_mm_s2,
@@ -516,7 +539,14 @@ int main(int argc, char **argv){
                    (double)out.feedback_deg,
                    waypoint_mm[waypoint_index] - x_mm,
                    stuck ? 1 : 0, surface, vision_x, vision_v,
-                   out.profile_active ? 1 : 0, out.settled ? 1 : 0);
+                   out.profile_active ? 1 : 0, out.settled ? 1 : 0,
+                   (unsigned)out.gain_mode, (double)out.brake_blend,
+                   (double)out.hold_blend,
+                   (double)out.effective_kp_deg_per_mm,
+                   (double)out.effective_kd_deg_per_mm_s,
+                   (double)out.stopping_distance_mm,
+                   (double)out.closing_velocity_mm_s,
+                   (double)out.velocity_weight);
         }
     }
 
