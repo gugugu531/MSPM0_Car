@@ -6,6 +6,7 @@
  * 时间片：只在 JY61P 异步事务空闲时切换总线所有权。
  */
 #include "app_line_task.h"
+#include "app_ball_scurve_task.h"
 
 #include "line_follow.h"
 #include "chassis.h"
@@ -1172,10 +1173,12 @@ static void H2_Enter(void){
 }
 static void H4_Enter(void){
     LineFollowTask_EnterCommon(&LT_PROFILE_H4, 4U, "H4 Loaded A-B");
+    AppBallHold_Enter();
 }
 static void H5_Enter(void){
     LineFollowTask_EnterCommon(
         &LT_PROFILE_LOADED_LAP, 5U, "H5 Loaded Lap O");
+    AppBallHold_Enter();
 }
 static void H6_Enter(void){
     LineFollowTask_EnterCommon(
@@ -1237,6 +1240,13 @@ static bool H5_IsRunoutSafetyReached(uint32_t now, float distance_m){
 }
 
 static APP_TASK_STATUS LineFollowTest_Tick(float dt){
+    if (((lt_requirement == 4U) || (lt_requirement == 5U)) &&
+        (AppBallHold_Tick(dt) == APP_TASK_FAULT)){
+        AppBallHold_Exit();
+        (void)Chassis_Brake();
+        return APP_TASK_FAULT;
+    }
+
     uint8_t detected_mask;
     bool sensor_ready = LineSensor_Tick(&detected_mask);
     uint32_t now = BSP_Time_GetMs();
@@ -1626,11 +1636,14 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
 const APP_TASK_DESC APP_H2_LAP = {
     "H2 Lap", H2_Enter, LineFollowTest_Tick, NULL
 };
+static void LoadedBallHold_Exit(void){
+    AppBallHold_Exit();
+}
 const APP_TASK_DESC APP_H4_LOADED_STRAIGHT = {
-    "H4 Loaded A-B", H4_Enter, LineFollowTest_Tick, NULL
+    "H4 Loaded A-B", H4_Enter, LineFollowTest_Tick, LoadedBallHold_Exit
 };
 const APP_TASK_DESC APP_H5_LOADED_LAP_CENTER = {
-    "H5 Loaded Lap O", H5_Enter, LineFollowTest_Tick, NULL
+    "H5 Loaded Lap O", H5_Enter, LineFollowTest_Tick, LoadedBallHold_Exit
 };
 const APP_TASK_DESC APP_H6_LOADED_LAP_TARGET = {
     "H6 Loaded Any", H6_Enter, LineFollowTest_Tick, NULL

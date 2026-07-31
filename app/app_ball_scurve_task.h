@@ -21,6 +21,14 @@ extern const APP_TASK_DESC APP_H3_BALL_SCURVE;
  */
 extern const APP_TASK_DESC APP_H3_BALL_HOLD;
 
+/**
+ * H4/H5 组合任务使用的 0mm 保持生命周期。
+ * 与 APP_H3_BALL_HOLD 共用同一控制器和参数，但不会刹停底盘或刷新 OLED。
+ */
+void AppBallHold_Enter(void);
+APP_TASK_STATUS AppBallHold_Tick(float dt);
+void AppBallHold_Exit(void);
+
 #ifdef __cplusplus
 }
 #endif

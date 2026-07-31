@@ -89,6 +89,7 @@ static const float H3S_WAYPOINT_MM[] = { 0.0f, 50.0f, -50.0f };
  */
 typedef enum { H3S_MODE_SCURVE = 0, H3S_MODE_HOLD } H3S_MODE;
 static H3S_MODE h3s_mode;
+static bool h3s_standalone;
 
 static const char *H3S_ModeName(H3S_MODE m){
     return m == H3S_MODE_HOLD ? "hold" : "scurve";
@@ -562,8 +563,11 @@ static void H3S_PlanCurrentWaypoint(void){
                      (double)h3s_controller.duration_s);
 }
 
-static void H3S_Enter(void){
-    (void)Chassis_Brake();
+static void H3S_Enter(bool standalone){
+    h3s_standalone = standalone;
+    if (h3s_standalone){
+        (void)Chassis_Brake();
+    }
     StepMotor_AbortStartup();
     (void)StepMotor_Stop();
     (void)StepMotor_SetSpeedLimit(H3S_ACTUATOR_SPEED_DEG_S);
@@ -876,17 +880,21 @@ static APP_TASK_STATUS H3S_Tick(float dt){
             return APP_TASK_FAULT;
     }
 
-    if ((now - h3s_last_telemetry) >= H3S_TELEMETRY_PERIOD_MS){
+    /* 组合模式由循迹任务独占调试串口，避免两路 50ms 遥测挤满 115200 UART。 */
+    if (h3s_standalone &&
+        ((now - h3s_last_telemetry) >= H3S_TELEMETRY_PERIOD_MS)){
         h3s_last_telemetry = now;
         H3S_Telemetry(now, usable, guard);
     }
 
-    bool render_changed = (h3s_state != h3s_rendered_state);
-    bool render_periodic = (now - h3s_last_ui) >= H3S_UI_PERIOD_MS;
-    if ((render_changed || render_periodic) && !Ui_IsFlushBusy()){
-        h3s_last_ui = now;
-        H3S_Render();
-        h3s_rendered_state = h3s_state;
+    if (h3s_standalone){
+        bool render_changed = (h3s_state != h3s_rendered_state);
+        bool render_periodic = (now - h3s_last_ui) >= H3S_UI_PERIOD_MS;
+        if ((render_changed || render_periodic) && !Ui_IsFlushBusy()){
+            h3s_last_ui = now;
+            H3S_Render();
+            h3s_rendered_state = h3s_state;
+        }
     }
     return APP_TASK_RUNNING;
 }
@@ -906,8 +914,21 @@ static void H3S_Exit(void){
  * 自动对两个入口一致生效，A/B 对比的差异才只可能来自行为，不可能
  * 来自代码漂移。
  */
-static void H3S_EnterSCurve(void){ h3s_mode = H3S_MODE_SCURVE; H3S_Enter(); }
-static void H3S_EnterHold(void)  { h3s_mode = H3S_MODE_HOLD;   H3S_Enter(); }
+static void H3S_EnterSCurve(void){ h3s_mode = H3S_MODE_SCURVE; H3S_Enter(true); }
+static void H3S_EnterHold(void)  { h3s_mode = H3S_MODE_HOLD;   H3S_Enter(true); }
+
+void AppBallHold_Enter(void){
+    h3s_mode = H3S_MODE_HOLD;
+    H3S_Enter(false);
+}
+
+APP_TASK_STATUS AppBallHold_Tick(float dt){
+    return H3S_Tick(dt);
+}
+
+void AppBallHold_Exit(void){
+    H3S_Exit();
+}
 
 /** 完整 S 曲线序列：0 → +50 → −50 mm，前馈 + 剖面跟踪 PD + 抖动。比赛用链路。 */
 const APP_TASK_DESC APP_H3_BALL_SCURVE = {
