@@ -203,10 +203,12 @@ extern "C" {
  *
  * 坐标轴(当前实测值):
  *
- *         0        20              220              430      450
- *         │         │               │                │        │
- *     HARD_MIN  SOFT_MIN          水平位          SOFT_MAX  HARD_MAX
+ *         0        20          180                  430      450
+ *         │         │           │                    │        │
+ *     HARD_MIN  SOFT_MIN      水平位              SOFT_MAX  HARD_MAX
  *    上电参考位   ├──── 合法工作区间 ────────────────┤   另一端机械端
+ *
+ * 上电后摆杆自重靠在 HARD_MIN 一端(计数 0),抬升是**正方向**运动到 180。
  */
 
 /*
@@ -243,10 +245,17 @@ extern "C" {
 
 /*
  * 水管名义水平位的计数,即「从上电参考位到水平位」的估计距离。不是限位。
- * 目前水平观测范围为 200~240 cnt，220 只作上电抬升名义目标；H3 不把它当作
- * safe return，也不假设它就是动力学真零点。
+ *
+ * **取 180**,与两处保持一致——三者必须同步,否则上电抬升会停在一个
+ * 控制律并不认为是水平的姿态上:
+ *   1. app/app_ball_config.h 的 APP_BALL_LINKAGE_MODEL_LEVEL_COUNTS = 180;
+ *   2. app_ball_scurve_task.c 的 H3S_LINKAGE_TABLE 中 { 180, +0.000000f }。
+ *
+ * ⚠ 这只是**几何名义水平**,不是"球不动"的那个角。二者之差(实测约 +0.25°,
+ *   见 docs/ball-scurve.md 的辨识一节)由 H3S_LEVEL_BIAS_DEG 承担。
+ *   本值只决定上电抬升停在哪,H3 不把它当作 safe return。
  */
-#define STEP_MOTOR_ENC_LEVEL_COUNTS 220
+#define STEP_MOTOR_ENC_LEVEL_COUNTS 180
 
 /* ===== 上电自动抬升 ===== */
 /*
