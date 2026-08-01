@@ -626,15 +626,11 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
 
 #define H3S_TUNE_COUNT ((uint8_t)(sizeof(H3S_TUNE_TABLE) / sizeof(H3S_TUNE_TABLE[0])))
 
+/** 精简状态：只回答"能不能控"，标志位回答"控到哪了"。 */
 typedef enum {
-    H3S_STATE_WAIT_VISION = 0,
-    H3S_STATE_WAIT_START,
-    H3S_STATE_ARMING,
-    H3S_STATE_MOVING,
-    H3S_STATE_VERIFY,
-    H3S_STATE_DONE,
-    H3S_STATE_DEGRADED,
-    H3S_STATE_ACTUATOR_FAULT
+    H3S_STATE_IDLE = 0,   /* 无有效视觉 / 球出界：保持当前水管角不动 */
+    H3S_STATE_ACTIVE,     /* 视觉有效，控制律运行中，行为全由标志位驱动 */
+    H3S_STATE_FAULT       /* 执行器故障 */
 } H3S_STATE;
 
 static H3S_STATE h3s_state;
@@ -652,6 +648,7 @@ static uint32_t h3s_last_telemetry;
 static H3S_STATE h3s_rendered_state;
 static float h3s_target_dwell_s;
 static bool h3s_challenge_started;
+static bool h3s_armed;
 static float h3s_hold_target_mm;
 /* 组合任务提供的车辆规划加速度；H3 独立任务始终保持为 0。 */
 static float h3s_vehicle_acceleration_mm_s2;
@@ -761,24 +758,23 @@ static bool H3S_StartReady(void){
 }
 
 static const char *H3S_StateName(void){
-    switch (h3s_state){
-        case H3S_STATE_WAIT_VISION:
-            return "WAIT VISION";
-        case H3S_STATE_WAIT_START:
-            return H3S_StartReady() ? "ENTER TO START" : "HOLDING AT O";
-        case H3S_STATE_ARMING:         return "READY AT O";
-        case H3S_STATE_MOVING:
-            return (h3s_waypoint == 0U) ? "MOVE TO +5cm" : "MOVE TO -5cm";
-        case H3S_STATE_VERIFY:
-            return (h3s_waypoint == 0U) ? "VERIFY +5cm" : "STABILIZE -5cm";
-        case H3S_STATE_DONE:
-            if (h3s_mode == H3S_MODE_HOLD){ return "HOLD 0cm"; }
-            return ((h3s_finish_ms - h3s_start_ms) <= H3S_CHALLENGE_LIMIT_MS)
-                ? "DONE <=5s" : "DONE OVERTIME";
-        case H3S_STATE_DEGRADED:       return "HOLD ANGLE";
-        case H3S_STATE_ACTUATOR_FAULT: return "ACTUATOR ERR";
-        default:                       return "UNKNOWN";
+    if (h3s_state == H3S_STATE_IDLE){ return "NO VISION"; }
+    if (h3s_state == H3S_STATE_FAULT){ return "ACTUATOR ERR"; }
+    /* ACTIVE: 行为由标志位区分 */
+    if (h3s_mode == H3S_MODE_HOLD){
+        return h3s_armed ? "HOLD 0cm" : "ARMING...";
     }
+    if (h3s_finish_ms != 0U){
+        return ((h3s_finish_ms - h3s_start_ms) <= H3S_CHALLENGE_LIMIT_MS)
+            ? "DONE <=5s" : "DONE OVERTIME";
+    }
+    if (!h3s_challenge_started){
+        return H3S_StartReady() ? "ENTER TO START" : "HOLDING 0mm";
+    }
+    if (h3s_output.profile_active){
+        return (h3s_waypoint == 0U) ? "MOVE +5cm" : "MOVE -5cm";
+    }
+    return (h3s_waypoint == 0U) ? "TURN" : "STABILIZE";
 }
 
 static void H3S_Render(void){
@@ -816,9 +812,8 @@ static void H3S_Render(void){
     n += H3S_PutStr(&l5[n], " >");
     AppFmt_I32(&l5[n], h3s_target_count);
 
-    const char *footer = ((h3s_mode == H3S_MODE_SCURVE) &&
-                          (h3s_state == H3S_STATE_WAIT_START))
-        ? "ENTER:start BACK:exit" : "BACK: safe exit";
+    bool show_enter = (h3s_mode == H3S_MODE_SCURVE) && !h3s_challenge_started;
+    const char *footer = show_enter ? "ENTER:start BACK:exit" : "BACK: safe exit";
     Ui_RenderLines((h3s_mode == H3S_MODE_HOLD) ? "H3 Hold 0cm" : "H3 Challenge",
                    l1, l2, l3, l4, l5, footer);
 }
@@ -845,7 +840,6 @@ static void H3S_PlanCurrentWaypoint(void){
     BallScurve_PlanTo(&h3s_controller, &H3S_SCURVE_CONFIG,
                       h3s_prediction.x_mm, h3s_prediction.velocity_mm_s,
                       H3S_WAYPOINT_MM[h3s_waypoint]);
-    h3s_state = H3S_STATE_MOVING;
     h3s_phase_ms = BSP_Time_GetMs();
     DebugUart_Printf("[SCV] plan wp=%u target=%.1f from x=%.2f v=%.2f T=%.3f\r\n",
                      (unsigned)h3s_waypoint,
@@ -868,7 +862,7 @@ static void H3S_Enter(bool standalone){
     BallScurve_Init(&h3s_controller);
     h3s_output = (BALL_SCURVE_OUTPUT){0};
 
-    h3s_state = H3S_STATE_WAIT_VISION;
+    h3s_state = H3S_STATE_IDLE;
     h3s_waypoint = 0U;
     h3s_target_count = StepMotor_GetEncoderCount();
     h3s_have_prediction = false;
@@ -883,6 +877,7 @@ static void H3S_Enter(bool standalone){
     h3s_rendered_state = (H3S_STATE)0xFF;
     h3s_target_dwell_s = 0.0f;
     h3s_challenge_started = false;
+    h3s_armed = false;
     h3s_hold_target_mm = 0.0f;
     h3s_vehicle_acceleration_mm_s2 = 0.0f;
     RpiUart_ResetStats();
@@ -1119,7 +1114,7 @@ static APP_TASK_STATUS H3S_Tick(float dt){
     AppBallTune_Poll();
 
     if (guard == STEP_MOTOR_GUARD_FAULT){
-        h3s_state = H3S_STATE_ACTUATOR_FAULT;
+        h3s_state = H3S_STATE_FAULT;
         return APP_TASK_FAULT;
     }
 
@@ -1127,152 +1122,134 @@ static APP_TASK_STATUS H3S_Tick(float dt){
         H3S_UpdateAccelerationEstimate(h3s_prediction.velocity_mm_s, dt);
     }
 
-    switch (h3s_state){
-        case H3S_STATE_WAIT_VISION:
-            if (usable && (fabsf(h3s_prediction.x_mm) <= H3S_VISION_RANGE_MM)){
-                BallScurve_Reset(&h3s_controller, H3S_ActualBeamAngleDeg());
-                h3s_state = (h3s_mode == H3S_MODE_SCURVE)
-                    ? H3S_STATE_WAIT_START : H3S_STATE_ARMING;
-                h3s_phase_ms = now;
-                DebugUart_Printf("[SCV] armed x=%.2f v=%.2f age=%.1f beam=%.3f\r\n",
+    /* IDLE: 无有效视觉，保持当前水管角，等待视觉恢复。 */
+    if (h3s_state == H3S_STATE_IDLE){
+        if (usable && (fabsf(h3s_prediction.x_mm) <= H3S_VISION_RANGE_MM)){
+            BallScurve_Reset(&h3s_controller, H3S_ActualBeamAngleDeg());
+            h3s_state = H3S_STATE_ACTIVE;
+            h3s_phase_ms = now;
+            h3s_target_dwell_s = 0.0f;
+            DebugUart_Printf("[SCV] armed x=%.2f v=%.2f age=%.1f beam=%.3f\r\n",
+                             (double)h3s_prediction.x_mm,
+                             (double)h3s_prediction.velocity_mm_s,
+                             (double)h3s_prediction.age_ms,
+                             (double)H3S_ActualBeamAngleDeg());
+        }
+        goto render_and_return;
+    }
+
+    /* FAULT: 执行器故障，终止任务。 */
+    if (h3s_state == H3S_STATE_FAULT){
+        return APP_TASK_FAULT;
+    }
+
+    /* ===== ACTIVE：视觉有效，统一跑控制律，行为全由标志位驱动 ===== */
+
+    /* 视觉丢失 → 回到 IDLE，保持当前水管角不动。 */
+    if (!usable || (fabsf(h3s_prediction.x_mm) > H3S_VISION_RANGE_MM)){
+        (void)StepMotor_Stop();
+        h3s_target_count = StepMotor_GetEncoderCount();
+        h3s_target_dwell_s = 0.0f;
+        h3s_state = H3S_STATE_IDLE;
+        goto render_and_return;
+    }
+
+    /* HOLD 模式：100ms 视觉武装确认。 */
+    if ((h3s_mode == H3S_MODE_HOLD) && !h3s_armed){
+        if ((now - h3s_phase_ms) >= H3S_HOLD_ARM_DWELL_MS){
+            h3s_armed = true;
+            DebugUart_Printf("[SCV] hold0 armed x=%.2f beam=%.3f\r\n",
+                             (double)h3s_prediction.x_mm,
+                             (double)H3S_ActualBeamAngleDeg());
+        }
+    }
+
+    /* SCURVE 模式：未发车时守 0mm，检测 ENTER。 */
+    if ((h3s_mode == H3S_MODE_SCURVE) && !h3s_challenge_started){
+        if (Key_GetEvent(KEY_ID_ENTER) == KEY_EVENT_SHORT_PRESS){
+            if (H3S_StartReady()){
+                h3s_challenge_started = true;
+                h3s_start_ms = now;
+                h3s_finish_ms = 0U;
+                h3s_waypoint = 0U;
+                h3s_target_dwell_s = 0.0f;
+                DebugUart_Printf("[H3] start x=%.2f v=%.2f\r\n",
+                                 (double)h3s_prediction.x_mm,
+                                 (double)h3s_prediction.velocity_mm_s);
+                H3S_PlanCurrentWaypoint();
+            } else{
+                DebugUart_Printf("[H3] start rejected x=%.2f v=%.2f vv=%u\r\n",
                                  (double)h3s_prediction.x_mm,
                                  (double)h3s_prediction.velocity_mm_s,
-                                 (double)h3s_prediction.age_ms,
-                                 (double)H3S_ActualBeamAngleDeg());
+                                 (unsigned)(h3s_prediction.velocity_trusted ? 1U : 0U));
             }
-            break;
-
-        case H3S_STATE_ARMING:
-            if (!usable){
-                h3s_state = H3S_STATE_WAIT_VISION;
-                h3s_target_dwell_s = 0.0f;
-                break;
-            }
-            if ((now - h3s_phase_ms) >= H3S_HOLD_ARM_DWELL_MS){
-                h3s_state = H3S_STATE_DONE;
-                DebugUart_Printf("[SCV] hold0 armed x=%.2f beam=%.3f\r\n",
-                                 (double)h3s_prediction.x_mm,
-                                 (double)H3S_ActualBeamAngleDeg());
-            }
-            break;
-
-        case H3S_STATE_WAIT_START:
-        case H3S_STATE_MOVING:
-        case H3S_STATE_VERIFY:
-        case H3S_STATE_DONE: {
-            if (!usable){
-                /* 失去视觉时就地保持水管角，绝不向可能错误的标定水平位回归。 */
-                (void)StepMotor_Stop();
-                h3s_target_count = StepMotor_GetEncoderCount();
-                h3s_state = H3S_STATE_DEGRADED;
-                h3s_target_dwell_s = 0.0f;
-                break;
-            }
-            if ((h3s_state == H3S_STATE_WAIT_START) &&
-                (Key_GetEvent(KEY_ID_ENTER) == KEY_EVENT_SHORT_PRESS)){
-                if (H3S_StartReady()){
-                    h3s_challenge_started = true;
-                    h3s_start_ms = now;
-                    h3s_finish_ms = 0U;
-                    h3s_waypoint = 0U;
-                    h3s_target_dwell_s = 0.0f;
-                    DebugUart_Printf("[H3] start x=%.2f v=%.2f\r\n",
-                                     (double)h3s_prediction.x_mm,
-                                     (double)h3s_prediction.velocity_mm_s);
-                    H3S_PlanCurrentWaypoint();
-                } else{
-                    DebugUart_Printf("[H3] start rejected x=%.2f v=%.2f vv=%u\r\n",
-                                     (double)h3s_prediction.x_mm,
-                                     (double)h3s_prediction.velocity_mm_s,
-                                     (unsigned)(h3s_prediction.velocity_trusted ? 1U : 0U));
-                }
-            }
-            BALL_SCURVE_INPUT input = {
-                .x_mm = h3s_prediction.x_mm,
-                .velocity_mm_s = h3s_prediction.velocity_mm_s,
-                .vehicle_acceleration_mm_s2 = h3s_vehicle_acceleration_mm_s2,
-                .actual_angle_deg = H3S_ActualBeamAngleDeg(),
-                .velocity_trusted = h3s_prediction.velocity_trusted,
-                .moving = h3s_prediction.moving,
-                .measurement_age_ms = h3s_prediction.age_ms,
-                .dt_s = dt,
-            };
-            if (!BallScurve_Update(&h3s_controller, &H3S_SCURVE_CONFIG, &input,
-                                   &h3s_output) ||
-                (H3S_CommandAngle(h3s_output.angle_deg) != BSP_STATUS_OK)){
-                h3s_state = H3S_STATE_ACTUATOR_FAULT;
-                return APP_TASK_FAULT;
-            }
-
-            if ((h3s_state == H3S_STATE_MOVING) && !h3s_output.profile_active){
-                DebugUart_Printf("[SCV] arrive wp=%u target=%.1f x=%.2f err=%.2f\r\n",
-                                 (unsigned)h3s_waypoint,
-                                 (double)H3S_WAYPOINT_MM[h3s_waypoint],
-                                 (double)h3s_prediction.x_mm,
-                                 (double)(h3s_prediction.x_mm -
-                                          H3S_WAYPOINT_MM[h3s_waypoint]));
-                if ((h3s_mode == H3S_MODE_SCURVE) && (h3s_waypoint == 0U)){
-                    DebugUart_Printf(
-                        "[H3] turn +5cm no-verify ms=%lu x=%.2f v=%.2f\r\n",
-                        (unsigned long)(now - h3s_start_ms),
-                        (double)h3s_prediction.x_mm,
-                        (double)h3s_prediction.velocity_mm_s);
-                    h3s_waypoint++;
-                    h3s_target_dwell_s = 0.0f;
-                    H3S_PlanCurrentWaypoint();
-                } else{
-                    h3s_state = H3S_STATE_VERIFY;
-                    h3s_phase_ms = now;
-                    h3s_target_dwell_s = 0.0f;
-                }
-            }
-            if ((h3s_mode == H3S_MODE_SCURVE) &&
-                (h3s_state == H3S_STATE_VERIFY)){
-                float target_error = H3S_TargetMm() - h3s_prediction.x_mm;
-                float position_limit = H3S_FINISH_POSITION_MM;
-                float speed_limit = H3S_FINISH_SPEED_MM_S;
-                float dwell_limit = H3S_FINISH_DWELL_S;
-                bool qualified = h3s_prediction.velocity_trusted &&
-                    !h3s_prediction.moving &&
-                    (fabsf(target_error) <= position_limit) &&
-                    (fabsf(h3s_prediction.velocity_mm_s) <= speed_limit);
-                h3s_target_dwell_s = qualified
-                    ? (h3s_target_dwell_s + dt) : 0.0f;
-
-                if (h3s_target_dwell_s >= dwell_limit){
-                    if ((h3s_waypoint + 1U) >= H3S_WAYPOINT_COUNT){
-                        h3s_finish_ms = now;
-                        h3s_state = H3S_STATE_DONE;
-                        DebugUart_Printf(
-                            "[H3] done ms=%lu pass=%u x=%.2f v=%.2f\r\n",
-                            (unsigned long)(h3s_finish_ms - h3s_start_ms),
-                            (unsigned)(((h3s_finish_ms - h3s_start_ms) <=
-                                        H3S_CHALLENGE_LIMIT_MS) ? 1U : 0U),
-                            (double)h3s_prediction.x_mm,
-                            (double)h3s_prediction.velocity_mm_s);
-                    }
-                }
-            }
-            break;
         }
-
-        case H3S_STATE_DEGRADED:
-            if (usable && (fabsf(h3s_prediction.x_mm) <= H3S_VISION_RANGE_MM)){
-                BallScurve_Reset(&h3s_controller, H3S_ActualBeamAngleDeg());
-                if ((h3s_mode == H3S_MODE_HOLD) || (h3s_finish_ms != 0U)){
-                    h3s_state = H3S_STATE_DONE;
-                } else if (!h3s_challenge_started){
-                    h3s_state = H3S_STATE_WAIT_START;
-                } else{
-                    H3S_PlanCurrentWaypoint();
-                }
-            }
-            break;
-
-        case H3S_STATE_ACTUATOR_FAULT:
-        default:
-            return APP_TASK_FAULT;
     }
+
+    /* 统一控制律：所有 ACTIVE 路径共享这一个调用点。 */
+    {
+        BALL_SCURVE_INPUT input = {
+            .x_mm = h3s_prediction.x_mm,
+            .velocity_mm_s = h3s_prediction.velocity_mm_s,
+            .vehicle_acceleration_mm_s2 = h3s_vehicle_acceleration_mm_s2,
+            .actual_angle_deg = H3S_ActualBeamAngleDeg(),
+            .velocity_trusted = h3s_prediction.velocity_trusted,
+            .moving = h3s_prediction.moving,
+            .measurement_age_ms = h3s_prediction.age_ms,
+            .dt_s = dt,
+        };
+        if (!BallScurve_Update(&h3s_controller, &H3S_SCURVE_CONFIG, &input,
+                               &h3s_output) ||
+            (H3S_CommandAngle(h3s_output.angle_deg) != BSP_STATUS_OK)){
+            h3s_state = H3S_STATE_FAULT;
+            return APP_TASK_FAULT;
+        }
+    }
+
+    /* SCURVE: 剖面结束 → 切下一航点（+50→−50 no-verify）或进验证（−50 末点）。 */
+    if ((h3s_mode == H3S_MODE_SCURVE) && h3s_challenge_started &&
+        (h3s_finish_ms == 0U) && !h3s_output.profile_active){
+        DebugUart_Printf("[SCV] arrive wp=%u target=%.1f x=%.2f err=%.2f\r\n",
+                         (unsigned)h3s_waypoint,
+                         (double)H3S_WAYPOINT_MM[h3s_waypoint],
+                         (double)h3s_prediction.x_mm,
+                         (double)(h3s_prediction.x_mm -
+                                  H3S_WAYPOINT_MM[h3s_waypoint]));
+        if (h3s_waypoint == 0U){
+            DebugUart_Printf("[H3] turn +5cm no-verify ms=%lu x=%.2f v=%.2f\r\n",
+                             (unsigned long)(now - h3s_start_ms),
+                             (double)h3s_prediction.x_mm,
+                             (double)h3s_prediction.velocity_mm_s);
+            h3s_waypoint++;
+            h3s_target_dwell_s = 0.0f;
+            H3S_PlanCurrentWaypoint();
+        } else{
+            h3s_target_dwell_s = 0.0f;
+        }
+    }
+
+    /* SCURVE: 末点（−50mm）稳定验证。 */
+    if ((h3s_mode == H3S_MODE_SCURVE) && h3s_challenge_started &&
+        (h3s_finish_ms == 0U) && (h3s_waypoint >= 1U) &&
+        !h3s_output.profile_active){
+        float target_error = H3S_TargetMm() - h3s_prediction.x_mm;
+        bool qualified = h3s_prediction.velocity_trusted &&
+            !h3s_prediction.moving &&
+            (fabsf(target_error) <= H3S_FINISH_POSITION_MM) &&
+            (fabsf(h3s_prediction.velocity_mm_s) <= H3S_FINISH_SPEED_MM_S);
+        h3s_target_dwell_s = qualified ? (h3s_target_dwell_s + dt) : 0.0f;
+        if (h3s_target_dwell_s >= H3S_FINISH_DWELL_S){
+            h3s_finish_ms = now;
+            DebugUart_Printf("[H3] done ms=%lu pass=%u x=%.2f v=%.2f\r\n",
+                             (unsigned long)(h3s_finish_ms - h3s_start_ms),
+                             (unsigned)(((h3s_finish_ms - h3s_start_ms) <=
+                                         H3S_CHALLENGE_LIMIT_MS) ? 1U : 0U),
+                             (double)h3s_prediction.x_mm,
+                             (double)h3s_prediction.velocity_mm_s);
+        }
+    }
+
+render_and_return:
 
     /* 组合模式由循迹任务独占调试串口，避免两路周期遥测挤满 115200 UART。 */
     if (h3s_standalone &&
@@ -1324,7 +1301,9 @@ bool AppBallHold_SetTargetMm(float target_mm){
     h3s_hold_target_mm = target_mm;
     h3s_controller.target_mm = target_mm;
     BallScurve_Reset(&h3s_controller, H3S_ActualBeamAngleDeg());
-    h3s_state = H3S_STATE_DONE;
+    if (h3s_state == H3S_STATE_IDLE){
+        h3s_state = H3S_STATE_ACTIVE;
+    }
     h3s_target_dwell_s = 0.0f;
     DebugUart_Printf("[SCV] hold target=%.2fmm beam=%.3f\r\n",
                      (double)target_mm, (double)H3S_ActualBeamAngleDeg());
