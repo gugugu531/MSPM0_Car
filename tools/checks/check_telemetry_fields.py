@@ -90,8 +90,7 @@ def main() -> int:
     src = TASK.read_text(encoding="utf-8")
     html = TUNE_HTML.read_text(encoding="utf-8")
 
-    # 周期取自任务里的 H3S_TELEMETRY_PERIOD_MS，别写死——拆分版是 60 ms，
-    # 纯 S 曲线基线是 50 ms，写死会把带宽算错 20%。
+    # 周期取自任务里的 H3S_TELEMETRY_PERIOD_MS，别写死；正式 H3 会按串口预算调整。
     period = re.search(r"H3S_TELEMETRY_PERIOD_MS\s+(\d+)U", src)
     scv_period = float(period.group(1)) if period else 60.0
 
@@ -139,10 +138,12 @@ def main() -> int:
 
     known = scv | scvd
     print()
-    if scvd_fmt is None:
-        print("  ball_tune.html：固件未启用热更/[SCVD]，该页当前无对应固件，跳过核对")
-    else:
-        for label, used in html_fields(html).items():
+    for label, used in html_fields(html).items():
+        # 单行遥测模式仍应核对画图和瓦片；诊断条兼容历史 [SCVD] 字段，
+        # 当前没有 [SCVD] 时只检查其中确实放进 [SCV] 的字段。
+        if (scvd_fmt is None) and (label == "诊断"):
+            used = used & known
+        if used:
             missing = sorted(f for f in used if f not in known)
             if missing:
                 print(f"★ ball_tune.html {label}用到固件没有的字段：{missing}")

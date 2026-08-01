@@ -19,6 +19,8 @@
 #include "bsp_time.h"
 #include "bsp_common.h"
 #include "debug_uart.h"
+#include "key.h"
+#include "rpi_uart.h"
 #include "yahboom_track.h"
 
 #include <stddef.h>
@@ -239,6 +241,8 @@ static LT_SEGMENT lt_segment;
 /* 入直道后的陀螺仪回正窗口：active 期间忽略灰度、按 gz 走直线，直到里程达 end。 */
 static bool lt_gyro_recover_active;
 static float lt_gyro_recover_end_m;
+static bool lt_h6_started;
+static float lt_h6_ball_target_mm;
 
 static float LineFollowTest_MmToM(uint16_t value_mm){
     return (float)value_mm * 0.001f;
@@ -1101,6 +1105,8 @@ static void LineFollowTask_EnterCommon(const LT_PROFILE *profile,
     lt_segment = LT_SEGMENT_S1;
     lt_gyro_recover_active = false;
     lt_gyro_recover_end_m = 0.0f;
+    lt_h6_started = false;
+    lt_h6_ball_target_mm = 0.0f;
 
     DebugUart_Printf(
         "[TRK] --- enter run=%lu req=%u measure=sensor rear->axle=%.3fm rear->sensor=%.3fm "
@@ -1152,6 +1158,8 @@ static void H5_Enter(void){
 static void H6_Enter(void){
     LineFollowTask_EnterCommon(
         &LT_PROFILE_LOADED_LAP, 6U, "H6 Loaded Any");
+    /* 第六题必须由任务内 ENTER 同时锁存球目标并发车，进入页时保持制动。 */
+    (void)Chassis_Brake();
 }
 
 static void LineFollowTest_Stop(uint32_t now, float distance_m){
@@ -1208,8 +1216,55 @@ static bool H5_IsRunoutSafetyReached(uint32_t now, float distance_m){
           LT_H5_RUNOUT_TIMEOUT_MS));
 }
 
+static bool H6_TryStart(uint32_t now){
+    RPI_UART_PREDICTION ball;
+    bool visible = RpiUart_Observe(&ball) && !ball.degraded && !ball.hold_output;
+
+    if (Key_GetEvent(KEY_ID_ENTER) == KEY_EVENT_SHORT_PRESS){
+        if (!visible){
+            DebugUart_Printf("[H6] start rejected: no fresh ball\r\n");
+        } else{
+            /* 锁存摄像头当拍的原始识别位置；不使用匀速外推值作为固定目标。 */
+            float target_mm = ball.measured_x_mm;
+            AppBallHold_Enter();
+            if (AppBallHold_SetTargetMm(target_mm)){
+                lt_h6_ball_target_mm = target_mm;
+                lt_h6_started = true;
+                lt_start_ms = now;
+                lt_last_telemetry = now;
+                Chassis_ResetDistance();
+                DebugUart_Printf(
+                    "[H6] start target=%.2fmm age=%.1fms q=%u\r\n",
+                    (double)target_mm, (double)ball.age_ms,
+                    (unsigned)ball.quality);
+                return true;
+            }
+            AppBallHold_Exit();
+            DebugUart_Printf("[H6] start rejected: ball out of range x=%.2f\r\n",
+                             (double)target_mm);
+        }
+    }
+
+    if (((now - lt_last_ui) >= LT_UI_PERIOD_MS) && !Ui_IsFlushBusy()){
+        char ball_line[20];
+        uint8_t n = LtPutStr(ball_line, visible ? "ball " : "ball NOT FOUND");
+        if (visible){ AppFmt_Fixed(&ball_line[n], ball.measured_x_mm, 1U); }
+        Ui_RenderLines("H6 Loaded Any", "WAIT START", ball_line,
+                       "target = current", "car BRAKED",
+                       "ENTER: capture+go", "BACK: exit");
+        lt_last_ui = now;
+    }
+    return false;
+}
+
 static APP_TASK_STATUS LineFollowTest_Tick(float dt){
-    if (((lt_requirement == 4U) || (lt_requirement == 5U)) &&
+    uint32_t now = BSP_Time_GetMs();
+    if ((lt_requirement == 6U) && !lt_h6_started && !H6_TryStart(now)){
+        return APP_TASK_RUNNING;
+    }
+
+    if (((lt_requirement == 4U) || (lt_requirement == 5U) ||
+         ((lt_requirement == 6U) && lt_h6_started)) &&
         (AppBallHold_Tick(dt) == APP_TASK_FAULT)){
         AppBallHold_Exit();
         (void)Chassis_Brake();
@@ -1218,7 +1273,6 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
 
     uint8_t detected_mask;
     bool sensor_ready = LineSensor_Tick(&detected_mask);
-    uint32_t now = BSP_Time_GetMs();
     float distance_m = Chassis_GetDistance();
 
     lt_curve_gyro_only = false;
@@ -1512,8 +1566,13 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
             display_error = observation.error;
         }
     }
-    n = LtPutStr(l2, "err ");
-    AppFmt_Fixed(&l2[n], display_error, 1);
+    if (lt_requirement == 6U){
+        n = LtPutStr(l2, "ball tgt ");
+        AppFmt_Fixed(&l2[n], lt_h6_ball_target_mm, 1U);
+    } else{
+        n = LtPutStr(l2, "err ");
+        AppFmt_Fixed(&l2[n], display_error, 1U);
+    }
     n = LtPutStr(l3, "v ");
     AppFmt_Fixed(&l3[n], lt_speed_command_mps, 3);
     n = LtPutStr(l4, "s ");
@@ -1574,6 +1633,10 @@ const APP_TASK_DESC APP_H2_LAP = {
 static void LoadedBallHold_Exit(void){
     AppBallHold_Exit();
 }
+static void H6_Exit(void){
+    if (lt_h6_started){ AppBallHold_Exit(); }
+    lt_h6_started = false;
+}
 const APP_TASK_DESC APP_H4_LOADED_STRAIGHT = {
     "H4 Loaded A-B", H4_Enter, LineFollowTest_Tick, LoadedBallHold_Exit
 };
@@ -1581,5 +1644,5 @@ const APP_TASK_DESC APP_H5_LOADED_LAP_CENTER = {
     "H5 Loaded Lap O", H5_Enter, LineFollowTest_Tick, LoadedBallHold_Exit
 };
 const APP_TASK_DESC APP_H6_LOADED_LAP_TARGET = {
-    "H6 Loaded Any", H6_Enter, LineFollowTest_Tick, NULL
+    "H6 Loaded Any", H6_Enter, LineFollowTest_Tick, H6_Exit
 };

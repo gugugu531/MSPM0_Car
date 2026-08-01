@@ -31,7 +31,7 @@ run-to-completion 任务。
 ```
 Main Menu
 ├── H2 Lap              (task)   要求 2：同一车辆装置高速整圈
-├── H3 Ball Static      (task)   要求 3 第一阶段：小车静止，闭环守住 0 cm
+├── H3 Challenge        (task)   要求 3：O→+5 cm→−5 cm，5 s 内稳定
 ├── H4 Loaded A-B       (task)   要求 4：载球 A→B，记录通过 B 的时间
 ├── H5 Loaded Lap O     (task)   要求 5：目标 O 点载球整圈循迹
 ├── H6 Loaded Any       (task)   要求 6：任意目标载球整圈，底盘管线与 H5 一致

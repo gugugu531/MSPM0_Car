@@ -12,6 +12,8 @@
 
 /* --- Device Check 子菜单：在用外设自检 --- */
 static const MENU_ITEM device_check_items[] = {
+    { .name = "H3 Static PID", .kind = MENU_ENTRY_TASK, .u.task = &APP_H3_BALL_STATIC },
+    { .name = "H3 Hold 0cm",   .kind = MENU_ENTRY_TASK, .u.task = &APP_H3_BALL_HOLD },
     { .name = "Gyro JY61P",   .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GYRO_JY61P },
     { .name = "Gray I2C",     .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GRAY_I2C },
     { .name = "TB6612",       .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_TB6612 },
@@ -32,9 +34,7 @@ static const MENU_NODE device_check_menu = {
 /* --- 根菜单 --- */
 static const MENU_ITEM root_items[] = {
     { .name = "H2 Lap",        .kind = MENU_ENTRY_TASK,    .u.task = &APP_H2_LAP },
-    { .name = "H3 Ball Static", .kind = MENU_ENTRY_TASK,   .u.task = &APP_H3_BALL_STATIC },
-    { .name = "H3 Ball SCurve", .kind = MENU_ENTRY_TASK,   .u.task = &APP_H3_BALL_SCURVE },
-    { .name = "H3 Hold 0mm",   .kind = MENU_ENTRY_TASK,    .u.task = &APP_H3_BALL_HOLD },
+    { .name = "H3 Challenge",  .kind = MENU_ENTRY_TASK,    .u.task = &APP_H3_CHALLENGE },
     { .name = "H4 Loaded A-B", .kind = MENU_ENTRY_TASK,    .u.task = &APP_H4_LOADED_STRAIGHT },
     { .name = "H5 Loaded Lap O", .kind = MENU_ENTRY_TASK,  .u.task = &APP_H5_LOADED_LAP_CENTER },
     { .name = "H6 Loaded Any", .kind = MENU_ENTRY_TASK,    .u.task = &APP_H6_LOADED_LAP_TARGET },

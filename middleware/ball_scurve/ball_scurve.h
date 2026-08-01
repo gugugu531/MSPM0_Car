@@ -48,6 +48,11 @@ typedef struct {
     /** 规划时长的下限/上限，s。上限同时兜住"目标极近时时长趋零"。 */
     float min_duration_s;
     float max_duration_s;
+    /**
+     * 加速度前馈预览时间，s。用已知轨迹在 t+preview 的 a_ref 提前驱动水管，
+     * 补偿步进位置环的一阶滞后；0 = 关闭预览，严格使用本拍 a_ref。
+     */
+    float acceleration_preview_s;
 
     /* ===== 剖面跟踪反馈 ===== */
     /** 位置反馈增益，deg/mm。由 wn²/K_G 换算。 */
@@ -91,6 +96,16 @@ typedef struct {
     float velocity_full_weight_age_ms;
     float velocity_floor_weight_age_ms;
     float velocity_untrusted_weight;
+    /** 剖面结束且 MOVING=0 时的速度反馈权重，抑制静止差分测速噪声。 */
+    float stationary_velocity_weight;
+
+    /* ===== 末端固定目标捕获 ===== */
+    /** 实际目标误差进入该范围后，开始把移动参考平滑拉向固定目标。0 = 关闭。 */
+    float capture_enter_error_mm;
+    /** 实际目标误差进入该范围后，固定目标参考完全接管。 */
+    float capture_full_error_mm;
+    /** 捕获混合权重的一阶时间常数，s。 */
+    float capture_blend_tau_s;
 
     /* ===== 前馈修正 ===== */
     /**
@@ -163,6 +178,22 @@ typedef struct {
     /** 上述条件需连续满足多久才起振，s。防止移动末段的瞬时低速误触发。 */
     float dither_dwell_s;
 
+    /* ===== 小误差静止积分：补偿水平零偏与微小静摩擦 ===== */
+    /** 积分增益，deg/(mm*s)。**0 = 关闭**。 */
+    float hold_integral_ki_deg_per_mm_s;
+    /** 小于等于该误差时不积分，mm。 */
+    float hold_integral_min_error_mm;
+    /** 仅在该误差范围内积分，mm；更大误差交给单向脱困。 */
+    float hold_integral_max_error_mm;
+    /** 允许开始/继续积分的最大球速，mm/s。 */
+    float hold_integral_max_speed_mm_s;
+    /** 达到该速度或 moving=true 后开始快速清零，mm/s。 */
+    float hold_integral_release_speed_mm_s;
+    /** 积分额外倾角的清零速率，deg/s。 */
+    float hold_integral_release_rate_deg_s;
+    /** 球运动后按速度追加的反向退积分增益，(deg/s)/(mm/s)=deg/mm。 */
+    float hold_integral_motion_comp_deg_per_mm;
+
     /* ===== 单向脱困：破静摩擦的另一条路线 =====
      *
      * 与抖动的根本区别在于**能量方向**：
@@ -177,9 +208,8 @@ typedef struct {
      * ⚠ 与抖动**互斥**。breakout_max_angle_deg > 0 时抖动被强制置 0，
      *   因为两者叠加会让脱困方向变得不确定，等于两个机制互相拆台。
      *
-     * ⚠ **不用积分器实现这件事**。积分在静摩擦期间持续蓄力，
-     *   突破瞬间已经累积了远超所需的角度 → 过冲 → 反向卡住 → 黏滑极限环。
-     *   单向脱困的斜坡是**有上限、可撤销**的，这是它与积分的本质差别。
+     * 大误差仍不用积分器处理；积分只服务于上面的有界小误差区间。
+     * 两者互斥，避免额外倾角叠加。
      */
     /** 脱困额外倾角上限，deg。**0 = 关闭单向脱困（回退到抖动）**。
      *  实测静摩擦脱离角 θ_stick ≈ 0.62°，取 1.0° 留 60% 余量。
@@ -211,11 +241,14 @@ typedef struct {
     float settled_speed_mm_s;
     float settled_time_s;
 
-    /**
-     * 跟踪误差超过本值时按当前实测状态重新规划，mm。
-     * **0 = 关闭 = 纯 S 曲线**，这是本模块的默认语义。
-     */
+    /** 跟踪位置误差阈值，mm。0 = 不按位置误差触发重规划。 */
     float replan_error_mm;
+    /** 跟踪速度误差阈值，mm/s。0 = 不按速度误差触发重规划。 */
+    float replan_velocity_error_mm_s;
+    /** 误差需连续超限多久才重规划，s。 */
+    float replan_dwell_s;
+    /** 两次重规划的最小间隔，s，防止每拍重启剖面。 */
+    float replan_cooldown_s;
 } BALL_SCURVE_CONFIG;
 
 typedef struct {
@@ -241,6 +274,10 @@ typedef struct {
     float dither_stuck_elapsed_s;
     bool  dither_on;
 
+    /* 小误差静止积分状态。 */
+    float hold_integral_deg;
+    bool  hold_integral_on;
+
     /* 单向脱困状态 */
     float breakout_angle_deg;           /**< 当前额外倾角，**带符号** */
     float breakout_stuck_elapsed_s;     /**< 卡住条件已持续多久 */
@@ -252,6 +289,11 @@ typedef struct {
     float hold_blend;
     float hold_enter_elapsed_s;
     bool  hold_mode;
+    float capture_blend;
+
+    /* 受控重规划状态。 */
+    float replan_error_elapsed_s;
+    float replan_cooldown_elapsed_s;
 } BALL_SCURVE_CONTROLLER;
 
 typedef struct {
@@ -261,6 +303,8 @@ typedef struct {
     float actual_angle_deg;
     /** 视觉速度是否通过 V_VALID 与连续帧恢复判据。 */
     bool  velocity_trusted;
+    /** 视觉预测器确认球正在移动；比单拍速度阈值更抗量化噪声。 */
+    bool  moving;
     /** 当前有效测量龄，ms。 */
     float measurement_age_ms;
     float dt_s;
@@ -280,12 +324,15 @@ typedef struct {
     float x_ref_mm;
     float v_ref_mm_s;
     float a_ref_mm_s2;
+    float acceleration_preview_mm_s2; /**< 用于前馈的 t+preview 加速度 */
 
     /* 指令分解，便于遥测中直接看清每一项的贡献。 */
-    float feedforward_deg;   /**< asin(a_ref/K_G) */
+    float feedforward_deg;   /**< asin(a_ref(t+preview)/K_G) */
+    float actuator_lead_deg; /**< 预览前馈相对本拍 a_ref 前馈的超前量 */
     float rolling_ff_deg;    /**< 滚阻前馈 */
     float feedback_deg;      /**< 限幅后的 PD 分量 */
     float dither_deg;        /**< 本拍注入的抖动量（已含符号） */
+    float hold_integral_deg; /**< 小误差静止积分产生的额外倾角 */
     float breakout_deg;      /**< 本拍的单向脱困倾角（已含符号，朝目标为正） */
     float breakout_stuck_s;  /**< 卡住条件已连续满足多久，s（遥测用，判误触发） */
     float breakout_release_s;/**< 释放条件已连续满足多久，s（遥测用，判释放是否太晚） */
@@ -296,6 +343,7 @@ typedef struct {
     float effective_kd_deg_per_mm_s;
     float brake_blend;
     float hold_blend;
+    float capture_blend;
     float stopping_distance_mm;
     float closing_velocity_mm_s;
     float velocity_weight;
@@ -307,7 +355,9 @@ typedef struct {
     bool  feedback_clipped;  /**< PD 分量被 feedback_limit_deg 夹住 */
     bool  rate_limited;      /**< 本拍被输出斜率限制削过 */
     bool  dither_on;         /**< 抖动正在注入 */
+    bool  hold_integral_on;  /**< 小误差积分本拍正在累积 */
     bool  breakout_on;       /**< 单向脱困正在介入（与 dither_on 互斥） */
+    bool  replanned;         /**< 本拍因跟踪误差执行了受控重规划 */
     bool  settled;
     BALL_SCURVE_GAIN_MODE gain_mode;
 } BALL_SCURVE_OUTPUT;

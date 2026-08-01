@@ -505,5 +505,5 @@ static void H3_Exit(void){
 }
 
 const APP_TASK_DESC APP_H3_BALL_STATIC = {
-    "H3 Ball Static", H3_Enter, H3_Tick, H3_Exit
+    "H3 Static PID", H3_Enter, H3_Tick, H3_Exit
 };
