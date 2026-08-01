@@ -175,9 +175,10 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     .rolling_ff_speed_deadband_mm_s = 3.0f,
     .level_bias_deg = H3S_LEVEL_BIAS_DEG,
 
-    /* 查表在软限位 20..430 cnt 上的角度范围是 −5.345°..+5.236°，两端各留 0.1°。 */
-    .angle_min_deg = -5.2f,
-    .angle_max_deg = 5.1f,
+    /* 角度限位已取消，完全交由 BSP 层 cnt 软限位（SOFT_MIN/MAX 20..430 cnt）。
+     * 此处的 min/max 设到物理不可达值，确保本层永不截断控制律输出。 */
+    .angle_min_deg = -15.0f,
+    .angle_max_deg = 15.0f,
     .angle_rate_limit_deg_s = 960.0f,
 
     /*
@@ -484,7 +485,7 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
         .name = "fblim",
         .value = &H3S_SCURVE_CONFIG.feedback_limit_deg,
         .min_value = 1.0f,    /* 最少留 1° 才有意义 */
-        .max_value = 5.0f,    /* 查表范围 ±5.2°，别顶到限位 */
+        .max_value = 5.0f,    /* 已对齐 BSP 软限位 ±5.345°/±5.236° */
         .unit = "deg",
     },
 
