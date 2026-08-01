@@ -1008,10 +1008,15 @@ static void LineFollowTest_Telemetry(uint32_t now, bool sensor_ready){
     CHASSIS_DUTY duty = Chassis_GetDuty();
     float distance_m = Chassis_GetDistance();
 
+    APP_BALL_HOLD_SNAPSHOT ball;
+    AppBallHold_GetSnapshot(&ball);
+
     DebugUart_Printf(
         "[TRK] t=%lu run=%lu req=%u seg=%s st=%s fs=%s gm=%u sen=%u mask=%02X n=%u err=%.1f cor=%.2f vc=%.3f ac=%.3f "
         "vs=%.3f wref=%.1f wz=%.1f yaw=%.1f href=%.1f herr=%.1f hs=%u vl=%.3f vr=%.3f dl=%.1f dr=%.1f sl=%.3f sr=%.3f s=%.3f "
-        "rem=%.3f drop=%lu\r\n",
+        "rem=%.3f "
+        "bx=%.1f be=%.1f ba=%.2f bvff=%.3f bfb=%.3f bbrk=%.3f bint=%.3f bfl=%u%u%u%u "
+        "drop=%lu\r\n",
         (unsigned long)(now - lt_start_ms),
         (unsigned long)lt_run_id, (unsigned int)lt_requirement,
         LineFollowTest_SegmentName(), LineFollowTest_StateName(),
@@ -1030,6 +1035,12 @@ static void LineFollowTest_Telemetry(uint32_t now, bool sensor_ready){
         Chassis_GetWheelDistance(HALL_ENCODER_LEFT),
         Chassis_GetWheelDistance(HALL_ENCODER_RIGHT), distance_m,
         LineFollowTest_FinishRemaining(distance_m),
+        (double)ball.ball_x_mm, (double)ball.error_mm,
+        (double)ball.angle_deg, (double)ball.veh_ff_deg,
+        (double)ball.feedback_deg, (double)ball.breakout_deg,
+        (double)ball.integral_deg,
+        (unsigned)ball.saturated, (unsigned)ball.feedback_clipped,
+        (unsigned)ball.breakout_on, (unsigned)ball.integral_on,
         (unsigned long)DebugUart_GetDroppedBytes());
 }
 
