@@ -897,9 +897,18 @@ static void H3S_UpdateAccelerationEstimate(float velocity_mm_s, float dt){
     h3s_prev_velocity_mm_s = velocity_mm_s;
 }
 
-/** 独立 H3 Hold：把 JY61P X 轴直线加速度转换成现有车辆加速度前馈输入。 */
+/**
+ * 把 JY61P X 轴直线加速度转换成滚球加速度前馈。
+ *
+ * 对独立 H3 Hold 与 H4/H5/H6 载球循迹同等生效：
+ *   - H3 Hold：补偿桌面扰动/手推等外部加速度；
+ *   - H4/H5/H6：实测车体加速度比规划值更准（含电机响应滞后、路面坡度），
+ *     会覆盖 AppBallHold_SetVehicleAcceleration 此前写入的规划值。
+ *
+ * ⚠ JY61P X 轴须与车体纵向对齐，符号由 H3S_IMU_FORWARD_AXIS_SIGN 统一反号。
+ */
 static void H3S_UpdateImuAcceleration(float dt){
-    if (!h3s_standalone || (h3s_mode != H3S_MODE_HOLD)){
+    if (h3s_mode != H3S_MODE_HOLD){
         return;
     }
 
