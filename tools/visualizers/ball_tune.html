@@ -291,6 +291,10 @@ const PLOTS = [
   { title:"水管角：指令 vs 实际", unit:"deg", h:130,
     series:[{k:"u",   n:"指令 u",   c:"--s4",w:1.7},
             {k:"beam",n:"实际 beam",c:"--s2",w:2}] },
+  { title:"水管角：名义前馈 vs 预览前馈 vs 最终指令", unit:"deg", h:140,
+    series:[{k:"ff_nom",n:"名义理论前馈 (ff-lead)",c:"--s4",w:1.5,dash:[4,3]},
+            {k:"ff_pv", n:"预览前馈 (ff)",         c:"--s2",w:1.8},
+            {k:"u",     n:"最终合成指令 u",         c:"--s1",w:2}] },
   { title:"控制分量", unit:"deg", h:120,
     series:[{k:"fb",  n:"PD fb",  c:"--s3",w:1.5},
             {k:"lead",n:"预览超前",c:"--s4",w:1.5},
@@ -445,6 +449,11 @@ function handleLine(line) {
   if (line.startsWith("[SCV]") && line.includes("drop=")) {
     const row = Object.assign({}, diag);
     for (const m of line.matchAll(RE_SCV)) row[m[1]] = parseFloat(m[2]);
+    /* 固件遥测 ff 已是预览前馈，lead = ff - 名义前馈。 */
+    if (Number.isFinite(row.ff) && Number.isFinite(row.lead)) {
+      row.ff_nom = row.ff - row.lead;
+      row.ff_pv = row.ff;
+    }
     if (Number.isFinite(row.iact)) {
       diag.iact = row.iact;
       renderDiag();
