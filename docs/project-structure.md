@@ -23,7 +23,7 @@
 
 1. `main.c` 调 `App_Init()`：SysConfig → BSP → 中间件 → 框架初始化并注册调度任务。
 2. `__enable_irq()` 后进入 `while(1) Scheduler_Run()` 超循环。
-3. `SysTick_Handler`(1ms) 递增时基并扫描按键；调度器按周期分派 `App_ControlTick`(20ms) 与
+3. `SysTick_Handler`(1ms) 递增时基并扫描按键；调度器按周期分派 `App_ControlTick`(~16.67ms/60fps) 与
    `App_UiTick`(50ms)。
 4. 状态机 INIT→MENU→RUN→FAULT：MENU 委派 `app_menu` 的嵌套菜单导航，短按选中任务进入 RUN
    委派任务 `on_tick`，任务返回 DONE/中止/故障后退回 MENU/FAULT。

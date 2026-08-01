@@ -58,7 +58,7 @@ distance_m = count / (PPR * reduction_ratio)
 
 > ⚠ `HALL_ENCODER_SAMPLE_PERIOD_S` **必须与 SysConfig 里采样定时器 `TIMER_0`(TIMA1)的实际周期一致**。
 > 二者不符时：距离不含时间仍准，但**速度会按比例算错**（曾出现定时器 100ms、常数 10ms → 速度偏大 10 倍，
-> 且速度仅 10Hz 刷新拖慢速度环）。当前统一为 **20ms**（与 `App_ControlTick` 控制周期对齐，50Hz 刷新）。
+> 且速度仅 10Hz 刷新拖慢速度环）。当前统一为 **≈16.67ms**（与视觉 60fps 对齐，`1/60 s`）。
 
 ## 方向符号宏
 
