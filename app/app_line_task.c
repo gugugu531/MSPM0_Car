@@ -1046,8 +1046,8 @@ static void LineFollowTask_EnterCommon(const LT_PROFILE *profile,
         lt_run_id = 1U;
     }
     LINE_FOLLOW_CONFIG line_config = LineFollow_GetDefaultConfig();
-    /* 当前灰度仅用于 A 点停车识别；需要恢复循迹转向时改回 LT_GYRO_LINE_KP。 */
-    line_config.gyro_line_kp = 0.00f;
+    /* 灰度正常时提供受限转向残差；全白时仍按模型/陀螺继续运行，不退出任务。 */
+    line_config.gyro_line_kp = LT_GYRO_LINE_KP;
     if (requirement == 2U){
         line_config.omega_line_limit = LT_GYRO_LINE_LIMIT_EMPTY_DEGPS;
         line_config.omega_ref_limit = LT_GYRO_REF_LIMIT_EMPTY_DEGPS;
