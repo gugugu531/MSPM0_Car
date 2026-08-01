@@ -631,8 +631,8 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
     {
         .name = "imu_gain",
         .value = &h3s_imu_gain,
-        .min_value = -1.5f,
-        .max_value = 1.5f,
+        .min_value = -0.5f,
+        .max_value = 3.0f,
         .unit = "ratio",
     },
 
