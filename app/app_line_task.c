@@ -244,6 +244,7 @@ static LT_SEGMENT lt_segment;
 static bool lt_gyro_recover_active;
 static float lt_gyro_recover_end_m;
 static bool lt_h6_started;
+static bool lt_h6_ball_captured;
 static float lt_h6_ball_target_mm;
 
 static float LineFollowTest_MmToM(uint16_t value_mm){
@@ -1108,6 +1109,7 @@ static void LineFollowTask_EnterCommon(const LT_PROFILE *profile,
     lt_gyro_recover_active = false;
     lt_gyro_recover_end_m = 0.0f;
     lt_h6_started = false;
+    lt_h6_ball_captured = false;
     lt_h6_ball_target_mm = 0.0f;
 
     DebugUart_Printf(
@@ -1160,7 +1162,7 @@ static void H5_Enter(void){
 static void H6_Enter(void){
     LineFollowTask_EnterCommon(
         &LT_PROFILE_LOADED_LAP, 6U, "H6 Loaded Any");
-    /* 第六题必须由任务内 ENTER 同时锁存球目标并发车，进入页时保持制动。 */
+    /* 第六题：第一下 ENTER 锁存球目标并启动稳定闭环；第二下 ENTER 发车。 */
     (void)Chassis_Brake();
 }
 
@@ -1223,37 +1225,61 @@ static bool H6_TryStart(uint32_t now){
     bool visible = RpiUart_Observe(&ball) && !ball.degraded && !ball.hold_output;
 
     if (Key_GetEvent(KEY_ID_ENTER) == KEY_EVENT_SHORT_PRESS){
-        if (!visible){
-            DebugUart_Printf("[H6] start rejected: no fresh ball\r\n");
-        } else{
-            /* 锁存摄像头当拍的原始识别位置；不使用匀速外推值作为固定目标。 */
-            float target_mm = ball.measured_x_mm;
-            AppBallHold_Enter();
-            if (AppBallHold_SetTargetMm(target_mm)){
-                lt_h6_ball_target_mm = target_mm;
-                lt_h6_started = true;
-                lt_start_ms = now;
-                lt_last_telemetry = now;
-                Chassis_ResetDistance();
-                DebugUart_Printf(
-                    "[H6] start target=%.2fmm age=%.1fms q=%u\r\n",
-                    (double)target_mm, (double)ball.age_ms,
-                    (unsigned)ball.quality);
-                return true;
+        if (!lt_h6_ball_captured){
+            /* 第一下 ENTER：锁存摄像头当拍原始识别位置，启动滚球稳定闭环。 */
+            if (!visible){
+                DebugUart_Printf("[H6] capture rejected: no fresh ball\r\n");
+            } else{
+                float target_mm = ball.measured_x_mm;
+                AppBallHold_Enter();
+                if (AppBallHold_SetTargetMm(target_mm)){
+                    lt_h6_ball_target_mm = target_mm;
+                    lt_h6_ball_captured = true;
+                    DebugUart_Printf(
+                        "[H6] captured target=%.2fmm age=%.1fms q=%u\r\n",
+                        (double)target_mm, (double)ball.age_ms,
+                        (unsigned)ball.quality);
+                } else{
+                    AppBallHold_Exit();
+                    DebugUart_Printf(
+                        "[H6] capture rejected: ball out of range x=%.2f\r\n",
+                        (double)target_mm);
+                }
             }
-            AppBallHold_Exit();
-            DebugUart_Printf("[H6] start rejected: ball out of range x=%.2f\r\n",
-                             (double)target_mm);
+        } else{
+            /* 第二下 ENTER：球已在稳定闭环中，发车。 */
+            lt_h6_started = true;
+            lt_start_ms = now;
+            lt_last_telemetry = now;
+            Chassis_ResetDistance();
+            DebugUart_Printf("[H6] go target=%.2fmm\r\n",
+                             (double)lt_h6_ball_target_mm);
+            return true;
         }
     }
 
     if (((now - lt_last_ui) >= LT_UI_PERIOD_MS) && !Ui_IsFlushBusy()){
-        char ball_line[20];
-        uint8_t n = LtPutStr(ball_line, visible ? "ball " : "ball NOT FOUND");
-        if (visible){ AppFmt_Fixed(&ball_line[n], ball.measured_x_mm, 1U); }
-        Ui_RenderLines("H6 Loaded Any", "WAIT START", ball_line,
-                       "target = current", "car BRAKED",
-                       "ENTER: capture+go", "BACK: exit");
+        if (lt_h6_ball_captured){
+            char ball_line[20];
+            uint8_t n = LtPutStr(ball_line, "tgt ");
+            AppFmt_Fixed(&ball_line[n], lt_h6_ball_target_mm, 1U);
+            char live_line[20];
+            n = LtPutStr(live_line, visible ? "x " : "x ?");
+            if (visible){ AppFmt_Fixed(&live_line[n], ball.measured_x_mm, 1U); }
+            Ui_RenderLines("H6 Loaded Any", "BALL STABILIZING", ball_line,
+                           live_line, "",
+                           "ENTER: go", "BACK: exit");
+        } else{
+            char ball_line[20];
+            uint8_t n = LtPutStr(ball_line, visible ? "ball " : "ball NOT FOUND");
+            if (visible){ AppFmt_Fixed(&ball_line[n], ball.measured_x_mm, 1U); }
+            char live_line[20];
+            n = LtPutStr(live_line, visible ? "x " : "x ?");
+            if (visible){ AppFmt_Fixed(&live_line[n], ball.measured_x_mm, 1U); }
+            Ui_RenderLines("H6 Loaded Any", "WAIT CAPTURE", ball_line,
+                           "target = current", live_line,
+                           "ENTER: capture", "BACK: exit");
+        }
         lt_last_ui = now;
     }
     return false;
@@ -1261,8 +1287,22 @@ static bool H6_TryStart(uint32_t now){
 
 static APP_TASK_STATUS LineFollowTest_Tick(float dt){
     uint32_t now = BSP_Time_GetMs();
-    if ((lt_requirement == 6U) && !lt_h6_started && !H6_TryStart(now)){
-        return APP_TASK_RUNNING;
+    if ((lt_requirement == 6U) && !lt_h6_started){
+        (void)H6_TryStart(now);
+        if (!lt_h6_started){
+            /* 球已锁存但尚未发车：只跑滚球稳定闭环，底盘保持制动。 */
+            if (lt_h6_ball_captured){
+                AppBallHold_SetVehicleAcceleration(0.0f);
+                if (AppBallHold_Tick(dt) == APP_TASK_FAULT){
+                    AppBallHold_Exit();
+                    (void)Chassis_Brake();
+                    return APP_TASK_FAULT;
+                }
+            }
+            (void)Chassis_Brake();
+            return APP_TASK_RUNNING;
+        }
+        /* 第二下 ENTER 已在本拍触发：lt_h6_started 变为 true，继续进入发车路径。 */
     }
 
     if ((lt_requirement == 4U) || (lt_requirement == 5U) ||
@@ -1643,8 +1683,9 @@ static void LoadedBallHold_Exit(void){
     AppBallHold_Exit();
 }
 static void H6_Exit(void){
-    if (lt_h6_started){ AppBallHold_Exit(); }
+    if (lt_h6_started || lt_h6_ball_captured){ AppBallHold_Exit(); }
     lt_h6_started = false;
+    lt_h6_ball_captured = false;
 }
 const APP_TASK_DESC APP_H4_LOADED_STRAIGHT = {
     "H4 Loaded A-B", H4_Enter, LineFollowTest_Tick, LoadedBallHold_Exit
