@@ -92,6 +92,9 @@
 #define LT_H5_RUNOUT_TIMEOUT_MS 2500U
 #define LT_H5_STOP_COMMAND_MPS 0.001f
 #define LT_H5_STOP_MEASURED_MPS 0.020f
+/** Loaded-ball IMU assistance is phase-gated; these thresholds only end a phase. */
+#define LT_BALL_IMU_CRUISE_SPEED_EPS_MPS 0.001f
+#define LT_BALL_IMU_ACCEL_SETTLED_MPS2 0.001f
 /** 对称限 jerk 减速所需距离：0.5*v*(v/a + a/j)。 */
 #define LT_H4_DECEL_DISTANCE_M \
     (0.5f * LT_H4_CRUISE_SPEED_MPS * \
@@ -183,6 +186,12 @@ typedef enum {
     LT_H4_PHASE_STOP,
 } LT_H4_PHASE;
 
+typedef enum {
+    LT_BALL_IMU_PHASE_OFF = 0,
+    LT_BALL_IMU_PHASE_START_ACCEL,
+    LT_BALL_IMU_PHASE_STOP_DECEL,
+} LT_BALL_IMU_PHASE;
+
 static uint32_t lt_last_ui;
 static uint32_t lt_last_telemetry;
 static uint32_t lt_start_ms;
@@ -230,6 +239,7 @@ static uint32_t lt_h5_pass_a_ms;
 static uint32_t lt_h5_runout_start_ms;
 static float lt_h5_runout_limit_m;
 static LT_H4_PHASE lt_h4_phase;
+static LT_BALL_IMU_PHASE lt_ball_imu_phase;
 static bool lt_h4_heading_reference_valid;
 static float lt_h4_heading_reference_deg;
 static float lt_h4_heading_error_deg;
@@ -419,6 +429,58 @@ static void LineFollowTest_UpdateSegment(uint32_t now, float distance_m){
             (unsigned int)lt_requirement,
             LineFollowTest_SegmentName(),
             (unsigned long)(now - lt_start_ms), distance_m);
+    }
+}
+
+static void LoadedBallImuGate_Set(LT_BALL_IMU_PHASE phase, uint32_t now,
+                                  float distance_m){
+    if (lt_ball_imu_phase == phase){
+        return;
+    }
+    lt_ball_imu_phase = phase;
+    DebugUart_Printf(
+        "[TRK] H%u ball imu phase=%u t=%lu s=%.3f\r\n",
+        (unsigned int)lt_requirement, (unsigned int)phase,
+        (unsigned long)(now - lt_start_ms), distance_m);
+}
+
+static bool LoadedBallImuGate_DecelRequested(float distance_m){
+    if (lt_requirement == 4U){
+        return (lt_state != LT_STATE_STOPPED) &&
+            ((lt_h4_phase >= LT_H4_PHASE_DECEL) ||
+             (distance_m >= LT_H4_DECEL_START_M));
+    }
+    if ((lt_requirement == 5U) || (lt_requirement == 6U)){
+        return (lt_state == LT_STATE_FINISH_RUNOUT) ||
+            ((lt_state == LT_STATE_FOLLOW) &&
+             LineFollowTest_InLapDecelApproach(distance_m));
+    }
+    return false;
+}
+
+static void LoadedBallImuGate_Update(uint32_t now, float distance_m){
+    if (LoadedBallImuGate_DecelRequested(distance_m)){
+        LoadedBallImuGate_Set(
+            LT_BALL_IMU_PHASE_STOP_DECEL, now, distance_m);
+        return;
+    }
+
+    bool h4_accel_done = (lt_requirement == 4U) &&
+        (lt_h4_phase != LT_H4_PHASE_ACCEL);
+    bool loaded_lap_accel_done =
+        ((lt_requirement == 5U) || (lt_requirement == 6U)) &&
+        (lt_profile != NULL) &&
+        (lt_speed_command_mps >=
+         (lt_profile->cruise_speed_mps -
+          LT_BALL_IMU_CRUISE_SPEED_EPS_MPS)) &&
+        (fabsf(lt_accel_command_mps2) <=
+         LT_BALL_IMU_ACCEL_SETTLED_MPS2);
+    if ((lt_ball_imu_phase == LT_BALL_IMU_PHASE_START_ACCEL) &&
+        (h4_accel_done || loaded_lap_accel_done)){
+        LoadedBallImuGate_Set(LT_BALL_IMU_PHASE_OFF, now, distance_m);
+    } else if ((lt_ball_imu_phase == LT_BALL_IMU_PHASE_STOP_DECEL) &&
+               (lt_state == LT_STATE_STOPPED)){
+        LoadedBallImuGate_Set(LT_BALL_IMU_PHASE_OFF, now, distance_m);
     }
 }
 
@@ -1009,7 +1071,7 @@ static void LineFollowTest_Telemetry(uint32_t now, bool sensor_ready){
     float distance_m = Chassis_GetDistance();
 
     DebugUart_Printf(
-        "[TRK] t=%lu run=%lu req=%u seg=%s st=%s fs=%s gm=%u sen=%u mask=%02X n=%u err=%.1f cor=%.2f vc=%.3f ac=%.3f "
+        "[TRK] t=%lu run=%lu req=%u seg=%s st=%s fs=%s gm=%u bph=%u sen=%u mask=%02X n=%u err=%.1f cor=%.2f vc=%.3f ac=%.3f "
         "vs=%.3f wref=%.1f wz=%.1f yaw=%.1f href=%.1f herr=%.1f hs=%u vl=%.3f vr=%.3f dl=%.1f dr=%.1f sl=%.3f sr=%.3f s=%.3f "
         "rem=%.3f drop=%lu\r\n",
         (unsigned long)(now - lt_start_ms),
@@ -1017,6 +1079,7 @@ static void LineFollowTest_Telemetry(uint32_t now, bool sensor_ready){
         LineFollowTest_SegmentName(), LineFollowTest_StateName(),
         LineFollowTest_FinishSourceName(),
         lt_curve_gyro_only ? 1U : 0U,
+        (unsigned int)lt_ball_imu_phase,
         sensor_ready ? 1U : 0U, (unsigned int)lt_detected_mask,
         (unsigned int)black_count, line_error, out.correction,
         lt_speed_command_mps, lt_accel_command_mps2,
@@ -1098,6 +1161,7 @@ static void LineFollowTask_EnterCommon(const LT_PROFILE *profile,
     lt_h5_runout_start_ms = 0U;
     lt_h5_runout_limit_m = 0.0f;
     lt_h4_phase = LT_H4_PHASE_ACCEL;
+    lt_ball_imu_phase = LT_BALL_IMU_PHASE_OFF;
     lt_h4_heading_reference_valid = false;
     lt_h4_heading_reference_deg = 0.0f;
     lt_h4_heading_error_deg = 0.0f;
@@ -1182,6 +1246,10 @@ static void LineFollowTest_Stop(uint32_t now, float distance_m){
     lt_curve_feedforward_mps = 0.0f;
     lt_stop_ms = now;
     lt_state = LT_STATE_STOPPED;
+    if ((lt_requirement >= 4U) && (lt_requirement <= 6U)){
+        LoadedBallImuGate_Set(LT_BALL_IMU_PHASE_OFF, now, distance_m);
+        AppBallHold_SetImuFeedforward(false);
+    }
     if (lt_requirement == 4U){
         lt_h4_phase = LT_H4_PHASE_STOP;
     }
@@ -1194,6 +1262,8 @@ static void LineFollowTest_Stop(uint32_t now, float distance_m){
 
 static void H5_EnterRunout(uint32_t now, float distance_m,
                            LT_FINISH_SOURCE source){
+    LoadedBallImuGate_Set(
+        LT_BALL_IMU_PHASE_STOP_DECEL, now, distance_m);
     lt_finish_source = source;
     lt_h5_pass_a_ms = now;
     lt_h5_runout_start_ms = now;
@@ -1241,6 +1311,8 @@ static bool LoadedBallHold_TryStart(uint32_t now){
         lt_start_ms = now;
         lt_last_telemetry = now;
         Chassis_ResetDistance();
+        LoadedBallImuGate_Set(
+            LT_BALL_IMU_PHASE_START_ACCEL, now, 0.0f);
         DebugUart_Printf("[H%u] go target=0.00mm\r\n",
                          (unsigned int)lt_requirement);
         return true;
@@ -1292,6 +1364,8 @@ static bool H6_TryStart(uint32_t now){
             lt_start_ms = now;
             lt_last_telemetry = now;
             Chassis_ResetDistance();
+            LoadedBallImuGate_Set(
+                LT_BALL_IMU_PHASE_START_ACCEL, now, 0.0f);
             DebugUart_Printf("[H6] go target=%.2fmm\r\n",
                              (double)lt_h6_ball_target_mm);
             return true;
@@ -1332,6 +1406,7 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
         if (!lt_h6_started){
             /* 球已锁存但尚未发车：只跑滚球稳定闭环，底盘保持制动。 */
             if (lt_h6_ball_captured){
+                AppBallHold_SetImuFeedforward(false);
                 AppBallHold_SetVehicleAcceleration(0.0f);
                 if (AppBallHold_Tick(dt) == APP_TASK_FAULT){
                     AppBallHold_Exit();
@@ -1349,6 +1424,7 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
     if ((lt_requirement == 4U) && !lt_h4_started){
         (void)LoadedBallHold_TryStart(now);
         if (!lt_h4_started){
+            AppBallHold_SetImuFeedforward(false);
             AppBallHold_SetVehicleAcceleration(0.0f);
             if (AppBallHold_Tick(dt) == APP_TASK_FAULT){
                 AppBallHold_Exit();
@@ -1364,6 +1440,7 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
     if ((lt_requirement == 5U) && !lt_h5_started){
         (void)LoadedBallHold_TryStart(now);
         if (!lt_h5_started){
+            AppBallHold_SetImuFeedforward(false);
             AppBallHold_SetVehicleAcceleration(0.0f);
             if (AppBallHold_Tick(dt) == APP_TASK_FAULT){
                 AppBallHold_Exit();
@@ -1379,13 +1456,16 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
         ((lt_requirement == 5U) && lt_h5_started) ||
         ((lt_requirement == 6U) && lt_h6_started)){
         /*
-         * 纵向规划量已经限 jerk：启动/停车时自然给出补偿，巡航时严格回零。
-         * 本拍使用上拍规划状态，20 ms 延迟远小于机械与视觉时标，且避免重排底盘状态机。
+         * 门控只由独立阶段状态机决定：发车到巡航建立，以及终点减速到车轮停稳。
+         * 普通巡航速度修正、转弯和静止 HOLD 均不能仅因 ac 非零而启用辅助。
          */
+        float ball_gate_distance_m = Chassis_GetDistance();
+        LineFollowTest_UpdateSegment(now, ball_gate_distance_m);
+        LoadedBallImuGate_Update(now, ball_gate_distance_m);
         AppBallHold_SetVehicleAcceleration(
             LT_BALL_AXIS_FORWARD_SIGN * lt_accel_command_mps2);
         AppBallHold_SetImuFeedforward(
-            fabsf(lt_accel_command_mps2) > 0.001f);
+            lt_ball_imu_phase != LT_BALL_IMU_PHASE_OFF);
         if (AppBallHold_Tick(dt) == APP_TASK_FAULT){
             AppBallHold_Exit();
             (void)Chassis_Brake();
@@ -1753,9 +1833,13 @@ const APP_TASK_DESC APP_H2_LAP = {
     "H2 Lap", H2_Enter, LineFollowTest_Tick, NULL
 };
 static void LoadedBallHold_Exit(void){
+    AppBallHold_SetImuFeedforward(false);
+    lt_ball_imu_phase = LT_BALL_IMU_PHASE_OFF;
     AppBallHold_Exit();
 }
 static void H6_Exit(void){
+    AppBallHold_SetImuFeedforward(false);
+    lt_ball_imu_phase = LT_BALL_IMU_PHASE_OFF;
     if (lt_h6_started || lt_h6_ball_captured){ AppBallHold_Exit(); }
     lt_h6_started = false;
     lt_h6_ball_captured = false;

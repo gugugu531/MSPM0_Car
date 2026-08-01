@@ -75,7 +75,7 @@
  * 标定方法见文件头：跑一趟本任务，对遥测的 (beam, aest) 做线性回归，
  * 零交点即真实水平角，填到这里。1 cnt ≈ 0.03°，15 cnt ≈ 0.45°。
  */
-#define H3S_LEVEL_BIAS_DEG -0.26f
+#define H3S_LEVEL_BIAS_DEG 0.0f
 #define H3S_LEVEL_BIAS_MIN_DEG (-2.0f)
 #define H3S_LEVEL_BIAS_MAX_DEG (+2.0f)
 
@@ -86,7 +86,7 @@
  * 用户确认传感器读数稳定，因此不做进入任务时的零偏标定，只保留轻量低通和限幅。
  */
 #define H3S_IMU_FORWARD_AXIS_SIGN          (+1.0f)
-#define H3S_IMU_ACCEL_GAIN_DEFAULT           0.0f
+#define H3S_IMU_ACCEL_GAIN_DEFAULT           2.0f
 #define H3S_IMU_ACCEL_FILTER_TAU_S            0.05f
 #define H3S_IMU_ACCEL_LIMIT_M_S2              4.0f
 #define H3S_IMU_DATA_MAX_AGE_MS             100U
@@ -204,13 +204,13 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     .dither_max_speed_mm_s = 8.0f,
     .dither_dwell_s = 0.5f,
 
-    /* 5..10 mm 小误差：球静止时积分蓄力，一动即快速清零。 */
-    .hold_integral_ki_deg_per_mm_s = 0.0925f,
-    .hold_integral_min_error_mm = 5.0f,
-    .hold_integral_max_error_mm = 10.0f,
-    .hold_integral_max_speed_mm_s = 1.2f,
-    .hold_integral_release_speed_mm_s = 0.0f,
-    .hold_integral_release_rate_deg_s = 7.045f,
+    /* 稳定至 0：3..8 mm 小误差缓慢积分，球速超过 15.45 mm/s 后以 0.3 deg/s 释放。 */
+    .hold_integral_ki_deg_per_mm_s = 0.0025f,
+    .hold_integral_min_error_mm = 3.0f,
+    .hold_integral_max_error_mm = 8.0f,
+    .hold_integral_max_speed_mm_s = 1.0f,
+    .hold_integral_release_speed_mm_s = 15.45f,
+    .hold_integral_release_rate_deg_s = 0.3f,
     .hold_integral_motion_comp_deg_per_mm = 0.40f,
 
     /*
@@ -538,7 +538,7 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
     { .name = "i_relspd", .value = &H3S_SCURVE_CONFIG.hold_integral_release_speed_mm_s,
       .min_value = 0.0f, .max_value = 30.0f, .unit = "mm/s" },
     { .name = "i_relrate", .value = &H3S_SCURVE_CONFIG.hold_integral_release_rate_deg_s,
-      .min_value = 0.5f, .max_value = 60.0f, .unit = "deg/s" },
+      .min_value = 0.0f, .max_value = 60.0f, .unit = "deg/s" },
     { .name = "i_mcomp", .value = &H3S_SCURVE_CONFIG.hold_integral_motion_comp_deg_per_mm,
       .min_value = 0.0f, .max_value = 1.0f, .unit = "deg/mm" },
 
