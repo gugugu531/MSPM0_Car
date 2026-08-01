@@ -9,7 +9,9 @@
         err=<...> cor=<...> vc=<m/s> ac=<m/s2> vs=<m/s>
         wref=<deg/s> wz=<deg/s> yaw=<deg> href=<deg> herr=<deg> hs=<0|1>
         vl=<m/s> vr=<m/s>
-        dl=<%> dr=<%> sl=<m> sr=<m> s=<m> rem=<m> drop=<bytes>
+        dl=<%> dr=<%> sl=<m> sr=<m> s=<m> rem=<m>
+        bx=<mm> be=<mm> ba=<deg> bvff=<deg> bfb=<deg> bbrk=<deg> bint=<deg> bfl=<flags>
+        drop=<bytes>
 
 窗口从上到下显示八路灰度、目标/实测轮速、航向角、指令/实测纵向加速度、
 左右轮占空比、双轮里程与终点余量。默认以 0.12 m/s^2 为指令加速度告警线。
@@ -20,7 +22,7 @@
   python tools/visualizers/track_follow_viz.py --port COM7 --csv track.csv --log track_raw.txt
 
 依赖：pip install pyserial matplotlib
-热键：空格=暂停/继续，c=清空，q=退出。
+热键：空格=暂停/继续，c=清空，f=满屏，q=退出。
 """
 from __future__ import annotations
 
@@ -49,9 +51,13 @@ FLOAT_FIELDS = (
     "sl", "sr", "s", "rem",
 )
 OPTIONAL_FLOAT_FIELDS = ("cff", "vs", "wref", "wz", "yaw", "href", "herr", "turn")
+BALL_FLOAT_FIELDS = (
+    "bx", "be", "ba", "bvff", "bfb", "bbrk", "bint",
+)
+BALL_INT_FIELDS = ("bfl",)
 CSV_COLUMNS = (
     "pc_time", "t", "run", "req", "seg", "ph", "st", "fs", "gm", "hs", "sen", "mask", "n",
-    *FLOAT_FIELDS, "drop",
+    *FLOAT_FIELDS, *BALL_FLOAT_FIELDS, *BALL_INT_FIELDS, "drop",
 )
 
 _CJK_CANDIDATES = (
@@ -104,6 +110,14 @@ def parse_track_line(line: str):
                 key: float(fields.get(key, "0.0"))
                 if key in OPTIONAL_FLOAT_FIELDS else float(fields[key])
                 for key in FLOAT_FIELDS
+            },
+            **{
+                key: float(fields.get(key, "0.0"))
+                for key in BALL_FLOAT_FIELDS
+            },
+            **{
+                key: int(fields.get(key, "0"))
+                for key in BALL_INT_FIELDS
             },
             "drop": int(fields["drop"]),
         }
