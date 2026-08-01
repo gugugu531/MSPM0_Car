@@ -253,6 +253,11 @@ static const float h3s_imu_gain_h4_start = -1.4f;
 static const float h3s_imu_gain_h4_stop = -1.4f;
 static const float h3s_imu_gain_h56_start = -1.5f;
 static const float h3s_imu_gain_h56_stop = -1.5f;
+/* 阶段切入首拍的同步步进预置角；四项由实车试验独立填写。 */
+static float h3s_imu_initial_angle_h4_start_deg = 0.0f;
+static float h3s_imu_initial_angle_h4_stop_deg = 0.0f;
+static float h3s_imu_initial_angle_h56_start_deg = 0.0f;
+static float h3s_imu_initial_angle_h56_stop_deg = 0.0f;
 static APP_BALL_IMU_GAIN_PROFILE h3s_imu_gain_profile = APP_BALL_IMU_GAIN_H3;
 
 /* 抖动的角速率需求必须留在输出斜率限制之内，否则会被削顶成三角波。 */
@@ -693,6 +698,7 @@ static float h3s_imu_accel_filtered_m_s2;
 static float h3s_imu_ff_deg;
 static bool  h3s_imu_valid;
 static bool  h3s_imu_filter_initialized;
+static bool  h3s_imu_initial_angle_pending;
 static APP_BALL_IMU_ASSIST_PHASE h3s_imu_assist_phase;
 
 /* 球加速度估计：只用于遥测与离线辨识，**不进入控制律**。 */
@@ -903,6 +909,40 @@ static void H3S_UpdateAccelerationEstimate(float velocity_mm_s, float dt){
     h3s_prev_velocity_mm_s = velocity_mm_s;
 }
 
+static float H3S_ActiveImuGain(void){
+    if (h3s_standalone){
+        return h3s_imu_gain;
+    }
+    if (h3s_imu_gain_profile == APP_BALL_IMU_GAIN_H4){
+        return (h3s_imu_assist_phase == APP_BALL_IMU_ASSIST_STOP_DECEL)
+                   ? h3s_imu_gain_h4_stop
+                   : h3s_imu_gain_h4_start;
+    }
+    if (h3s_imu_gain_profile == APP_BALL_IMU_GAIN_H56){
+        return (h3s_imu_assist_phase == APP_BALL_IMU_ASSIST_STOP_DECEL)
+                   ? h3s_imu_gain_h56_stop
+                   : h3s_imu_gain_h56_start;
+    }
+    return h3s_imu_gain;
+}
+
+static float H3S_InitialImuAngleDeg(void){
+    if (h3s_standalone){
+        return 0.0f;
+    }
+    if (h3s_imu_gain_profile == APP_BALL_IMU_GAIN_H4){
+        return (h3s_imu_assist_phase == APP_BALL_IMU_ASSIST_STOP_DECEL)
+                   ? h3s_imu_initial_angle_h4_stop_deg
+                   : h3s_imu_initial_angle_h4_start_deg;
+    }
+    if (h3s_imu_gain_profile == APP_BALL_IMU_GAIN_H56){
+        return (h3s_imu_assist_phase == APP_BALL_IMU_ASSIST_STOP_DECEL)
+                   ? h3s_imu_initial_angle_h56_stop_deg
+                   : h3s_imu_initial_angle_h56_start_deg;
+    }
+    return 0.0f;
+}
+
 /**
  * 把 JY61P Y 轴车体纵向加速度转换成滚球加速度前馈。
  *
@@ -921,6 +961,43 @@ static void H3S_UpdateImuAcceleration(float dt){
     if (!h3s_standalone &&
         (h3s_imu_assist_phase == APP_BALL_IMU_ASSIST_OFF)){
         h3s_vehicle_acceleration_mm_s2 = 0.0f;
+        return;
+    }
+
+    /*
+     * 阶段切入首拍先发送预置角，使步进目标与底盘加速/减速同步开始；
+     * 再把等效物理加速度播种给低通，后续实测 IMU 从该初值平滑接管。
+     */
+    if (h3s_imu_initial_angle_pending){
+        h3s_imu_initial_angle_pending = false;
+        float initial_deg = H3S_InitialImuAngleDeg();
+        if (!isfinite(initial_deg)){
+            initial_deg = 0.0f;
+        }
+        if (initial_deg > H3S_SCURVE_CONFIG.angle_max_deg){
+            initial_deg = H3S_SCURVE_CONFIG.angle_max_deg;
+        } else if (initial_deg < -H3S_SCURVE_CONFIG.angle_max_deg){
+            initial_deg = -H3S_SCURVE_CONFIG.angle_max_deg;
+        }
+
+        float initial_accel_m_s2 =
+            tanf(initial_deg / H3S_RAD_TO_DEG) * H3S_GRAVITY_M_S2;
+        h3s_vehicle_acceleration_mm_s2 = initial_accel_m_s2 * 1000.0f;
+        h3s_imu_ff_deg = initial_deg;
+        h3s_imu_accel_raw_m_s2 = 0.0f;
+        h3s_imu_valid = false;
+
+        float active_gain = H3S_ActiveImuGain();
+        if (fabsf(active_gain) > 0.0001f){
+            float filter_seed_m_s2 = initial_accel_m_s2 / active_gain;
+            if (filter_seed_m_s2 > H3S_IMU_ACCEL_LIMIT_M_S2){
+                filter_seed_m_s2 = H3S_IMU_ACCEL_LIMIT_M_S2;
+            } else if (filter_seed_m_s2 < -H3S_IMU_ACCEL_LIMIT_M_S2){
+                filter_seed_m_s2 = -H3S_IMU_ACCEL_LIMIT_M_S2;
+            }
+            h3s_imu_accel_filtered_m_s2 = filter_seed_m_s2;
+            h3s_imu_filter_initialized = true;
+        }
         return;
     }
 
@@ -974,20 +1051,7 @@ static void H3S_UpdateImuAcceleration(float dt){
             phase_accel_m_s2 = 0.0f;
         }
     }
-    float active_gain = h3s_imu_gain;
-    if (!h3s_standalone){
-        if (h3s_imu_gain_profile == APP_BALL_IMU_GAIN_H4){
-            active_gain =
-                (h3s_imu_assist_phase == APP_BALL_IMU_ASSIST_STOP_DECEL)
-                    ? h3s_imu_gain_h4_stop
-                    : h3s_imu_gain_h4_start;
-        } else if (h3s_imu_gain_profile == APP_BALL_IMU_GAIN_H56){
-            active_gain =
-                (h3s_imu_assist_phase == APP_BALL_IMU_ASSIST_STOP_DECEL)
-                    ? h3s_imu_gain_h56_stop
-                    : h3s_imu_gain_h56_start;
-        }
-    }
+    float active_gain = H3S_ActiveImuGain();
     float assisted_accel_m_s2 = active_gain * phase_accel_m_s2;
     h3s_vehicle_acceleration_mm_s2 = assisted_accel_m_s2 * 1000.0f;
     h3s_imu_ff_deg = atanf(h3s_vehicle_acceleration_mm_s2 /
@@ -1043,6 +1107,7 @@ static void H3S_Enter(bool standalone){
     h3s_imu_ff_deg = 0.0f;
     h3s_imu_valid = false;
     h3s_imu_filter_initialized = false;
+    h3s_imu_initial_angle_pending = false;
     h3s_imu_assist_phase = APP_BALL_IMU_ASSIST_OFF;
     if ((h3s_mode == H3S_MODE_HOLD) && h3s_standalone){
         JY61P_I2C_Init();
@@ -1525,6 +1590,11 @@ void AppBallHold_SetImuAssistPhase(APP_BALL_IMU_ASSIST_PHASE phase){
     h3s_imu_ff_deg = 0.0f;
     h3s_imu_valid = false;
     h3s_imu_filter_initialized = false;
+    h3s_imu_initial_angle_pending =
+        !h3s_standalone &&
+        ((phase == APP_BALL_IMU_ASSIST_START_ACCEL) ||
+         (phase == APP_BALL_IMU_ASSIST_STOP_DECEL)) &&
+        (fabsf(H3S_InitialImuAngleDeg()) > 0.0001f);
 }
 
 void AppBallHold_SelectImuGainProfile(APP_BALL_IMU_GAIN_PROFILE profile){
