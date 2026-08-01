@@ -1,5 +1,16 @@
 # 变更记录
 
+## 2026-08-01：定时器周期改为 60fps 对齐视觉通路
+
+- **`TIMER_0`(TIMA1) 采样周期由 20ms(50Hz) 改为 ~16.67ms(60fps)**，与树莓派视觉通路 60fps
+  帧率对齐。SysConfig `timerPeriod` 由 `"20ms"` 改为 `"16667us"`，生成的
+  `TIMER_0_INST_LOAD_VALUE` 由 `799U` 改为 `666U`（实际 40000÷667 ≈ 59.97 Hz）。
+- `bsp/motor/hall_encoder.h`：`HALL_ENCODER_SAMPLE_PERIOD_S` 由 `0.02f` 改为 `(1.0f/60.0f)`，
+  与硬件定时器实际周期保持一致。
+- `docs/` 同步更新：`architecture.md`、`app-design.md`、`project-structure.md`、
+  `control-plan.md`、`interfaces/bsp_hall_encoder.md`、`interfaces/middleware_chassis.md`、
+  `interfaces/bsp_wit_sdk.md` 中的定时器/控制周期描述。
+
 ## 2026-07-31：滚球 MOVE/BRAKE/HOLD 连续增益调度
 
 - `ball_scurve` 增加基于停止距离的 BRAKE 权重、带滞回的 HOLD 状态和连续增益混合；

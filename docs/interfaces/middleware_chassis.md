@@ -41,7 +41,7 @@
 
 调用 `Chassis_SetWheelSpeed/SetSpeed` 进入闭环（从开环切入时复位 PID）；`Chassis_SetDuty/Stop/
 Brake/Coast` 切回开环、清目标并复位 PID。实际出力由 `Chassis_UpdateSpeedControl(dt_s)` 周期
-驱动——当前接在 `App_ControlTick`（RUN 态、20ms）：任务每拍设目标速度，速度环随后跑一步。
+驱动——当前接在 `App_ControlTick`（RUN 态、~16.67ms/60fps）：任务每拍设目标速度，速度环随后跑一步。
 退出 RUN 时 `App_ExitRun` 会 `Chassis_Brake` 自动停环。
 
 参数（`chassis.h`，可用 Device Check「Speed PID」自检）：
