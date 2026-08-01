@@ -86,8 +86,14 @@ void AppBallTune_Init(const APP_BALL_TUNE_ENTRY *table, uint8_t count);
  */
 void AppBallTune_Poll(void);
 
-/** 主动列出全部参数（进入任务时打一遍，上位机据此建面板）。 */
+/**
+ * @brief 启动完整参数表回显，上位机据此建立面板。
+ * @note 非阻塞：实际回显由后续 AppBallTune_Poll() 每拍发送一项，避免挤爆 UART TX 缓冲。
+ */
 void AppBallTune_PrintAll(void);
+
+/** 参数表是否仍在分拍回显；调用方可据此暂缓大带宽遥测。 */
+bool AppBallTune_IsListing(void);
 
 #ifdef __cplusplus
 }

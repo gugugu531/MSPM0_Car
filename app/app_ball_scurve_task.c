@@ -1384,7 +1384,7 @@ static APP_TASK_STATUS H3S_Tick(float dt){
 render_and_return:
 
     /* 组合模式由循迹任务独占调试串口，避免两路周期遥测挤满 115200 UART。 */
-    if (h3s_standalone &&
+    if (h3s_standalone && !AppBallTune_IsListing() &&
         ((now - h3s_last_telemetry) >= H3S_TELEMETRY_PERIOD_MS)){
         h3s_last_telemetry = now;
         H3S_Telemetry(now, usable, guard);
