@@ -45,7 +45,17 @@ typedef enum {
 #define HALL_ENCODER_PPR                13.0f
 #define HALL_ENCODER_REDUCTION_RATIO    28.0f
 #define HALL_ENCODER_WHEEL_DIAMETER_M   0.065f
-#define HALL_ENCODER_SAMPLE_PERIOD_S     (1.0f/60.0f)  /* ≈16.667ms, 与 TIMER_0 硬件周期对齐 */
+/*
+ * 测速窗口，秒。**必须与 SysConfig 里 TIMER_0(TIMA1) 的实际周期一致**。
+ *
+ * ⚠ 本值刻意**不跟随控制周期**：控制环为对齐视觉已过采样到 10ms，而测速窗每缩短
+ *   一半，速度量化台阶就翻一倍（20ms 窗 0.0295 m/s，10ms 窗 0.0590 m/s）。
+ *   在 0.26 m/s 巡航点前者是 11% 噪声、后者 23%，后者会把速度环推回整改前的状态。
+ *   编码器测速与控制拍因此解耦：控制环 100Hz 读，测速窗保持 50Hz 更新，
+ *   每个速度值被连读两拍。底盘速度环是纯 PI(KD=0)，阶梯输入不会激发微分尖峰。
+ *   要真正提高速度分辨率应做 A 相双边沿或 AB 四倍频，而不是缩短窗口。
+ */
+#define HALL_ENCODER_SAMPLE_PERIOD_S    0.02f
 #define HALL_ENCODER_DISTANCE_SCALE     1.05f
 
 /*

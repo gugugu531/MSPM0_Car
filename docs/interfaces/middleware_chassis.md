@@ -41,7 +41,7 @@
 
 调用 `Chassis_SetWheelSpeed/SetSpeed` 进入闭环（从开环切入时复位 PID）；`Chassis_SetDuty/Stop/
 Brake/Coast` 切回开环、清目标并复位 PID。实际出力由 `Chassis_UpdateSpeedControl(dt_s)` 周期
-驱动——当前接在 `App_ControlTick`（RUN 态、~16.67ms/60fps）：任务每拍设目标速度，速度环随后跑一步。
+驱动——当前接在 `App_ControlTick`（RUN 态、10ms/100Hz）：任务每拍设目标速度，速度环随后跑一步。
 退出 RUN 时 `App_ExitRun` 会 `Chassis_Brake` 自动停环。
 
 参数（`chassis.h`，可用 Device Check「Speed PID」自检）：
@@ -58,7 +58,7 @@ Brake/Coast` 切回开环、清目标并复位 PID。实际出力由 `Chassis_Up
 #define CHASSIS_SPEED_KD             0.0f
 #define CHASSIS_SPEED_OUTPUT_LIMIT   40.0f    /* PI 修正量限幅 */
 #define CHASSIS_SPEED_INTEGRAL_LIMIT (CHASSIS_SPEED_OUTPUT_LIMIT / CHASSIS_SPEED_KI)
-#define CHASSIS_SPEED_FEEDBACK_ALPHA  0.53f   /* fc≈6Hz @20ms; 取 1.0 即直通 */
+#define CHASSIS_SPEED_FEEDBACK_ALPHA  0.31f   /* fc≈6Hz @10ms; 取 1.0 即直通 */
 #define CHASSIS_SPEED_ZERO_TARGET_MPS 0.01f
 ```
 
@@ -144,7 +144,7 @@ Chassis_SetDuty(-30.0f, 30.0f);
 
 ### `BSP_STATUS Chassis_UpdateSpeedControl(float dt_s)`
 
-速度闭环单步更新：闭环模式下跑两轮 PID 并出力；开环模式为空操作（恒返回 `BSP_STATUS_OK`）。须由控制周期任务周期调用（当前接在 `App_ControlTick`，20ms）。
+速度闭环单步更新：闭环模式下跑两轮 PID 并出力；开环模式为空操作（恒返回 `BSP_STATUS_OK`）。须由控制周期任务周期调用（当前接在 `App_ControlTick`，10ms）。
 
 ### `CHASSIS_CONTROL_MODE Chassis_GetControlMode(void)`
 

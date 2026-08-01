@@ -1,15 +1,30 @@
 # 变更记录
 
-## 2026-08-01：定时器周期改为 60fps 对齐视觉通路
+## 2026-08-01：控制环过采样到 100Hz，编码器测速与控制拍解耦
 
-- **`TIMER_0`(TIMA1) 采样周期由 20ms(50Hz) 改为 ~16.67ms(60fps)**，与树莓派视觉通路 60fps
-  帧率对齐。SysConfig `timerPeriod` 由 `"20ms"` 改为 `"16667us"`，生成的
-  `TIMER_0_INST_LOAD_VALUE` 由 `799U` 改为 `666U`（实际 40000÷667 ≈ 59.97 Hz）。
-- `bsp/motor/hall_encoder.h`：`HALL_ENCODER_SAMPLE_PERIOD_S` 由 `0.02f` 改为 `(1.0f/60.0f)`，
-  与硬件定时器实际周期保持一致。
-- `docs/` 同步更新：`architecture.md`、`app-design.md`、`project-structure.md`、
-  `control-plan.md`、`interfaces/bsp_hall_encoder.md`、`interfaces/middleware_chassis.md`、
-  `interfaces/bsp_wit_sdk.md` 中的定时器/控制周期描述。
+**控制环 20ms(50Hz) → 10ms(100Hz)**，对视觉 60fps 做过采样而非速率对齐。
+
+- `app_init.c`：`APP_CONTROL_PERIOD_MS` `20U → 10U`；`app_mode.c`：`APP_CONTROL_DT`
+  `0.02f → 0.01f`。帧龄上界由约 22ms 降到约 12ms（Rpi_UART 已按 2ms 收帧）。
+- **为什么不对齐到 60Hz**：MCU 与相机是独立时钟，40kHz 定时器基频（4MHz 无因子 3）
+  除不出精确 60Hz，最接近的 59.97Hz 与相机产生约 0.03Hz 拍频——测量龄期缓慢扫过整个
+  帧周期并周期性丢帧/重帧，而该拍频正落在滚球闭环 `wn=2.4rad/s`(0.38Hz) 带宽内。
+  过采样则保证每帧必在 1 拍内被消费，龄期上界等于控制周期。
+- **编码器测速刻意不跟随**：`TIMER_0` 保持 20ms（`LOAD=799`），
+  `HALL_ENCODER_SAMPLE_PERIOD_S` 保持 `0.02f`。测速窗减半会让速度量化台阶从
+  0.0295 m/s 翻倍到 0.0590 m/s（0.26 m/s 巡航点 11.3% → 22.7% 噪声）。
+  控制环 100Hz 读、测速值 50Hz 更新，每值连读两拍；底盘速度环为纯 PI（`KD=0`），
+  阶梯输入不激发微分尖峰。提升分辨率应走 A 相双边沿或 AB 四倍频。
+- **按拍生效的一阶低通系数同步重算**（否则等效截止频率翻倍）：
+  `CHASSIS_SPEED_FEEDBACK_ALPHA` `0.53f → 0.31f`（保持 fc≈6Hz）、
+  `LINE_FOLLOW_ERROR_LPF_ALPHA` `0.5f → 0.29f`（保持 fc≈5.5Hz）。
+- `STEP_MOTOR_TICK_PERIOD_MS` 保持 10ms——该值由驱动侧 QEI 防环绕与越界守护响应距离
+  独立约束，不随控制周期变化（`app_init.c` 中「比控制周期快一倍」的注释已失效并更正）。
+- **待上板验证**：`todo.md` 记录 20ms 标称下已有 10% 控制拍跑到 28~32ms（OLED 渲染仍在
+  控制拍内）。10ms 预算下须实测超时占比，必要时把渲染移出控制拍。
+- `docs/` 同步：`architecture.md`、`app-design.md`、`project-structure.md`、
+  `interfaces/bsp_hall_encoder.md`、`interfaces/middleware_chassis.md`、
+  `interfaces/bsp_wit_sdk.md`。
 
 ## 2026-07-31：滚球 MOVE/BRAKE/HOLD 连续增益调度
 

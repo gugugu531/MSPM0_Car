@@ -18,14 +18,30 @@
 #include "system_fault.h"
 
 /* 控制/UI 两个调度任务的周期，单位 ms。 */
-#define APP_CONTROL_PERIOD_MS 20U
+/*
+ * 控制周期 10ms(100Hz)：对视觉 60fps 做**过采样**，而不是去对齐它。
+ *
+ * 对齐（控制环也跑 ~60Hz）看似省事，实际是错的：MCU 与相机是两套独立时钟，
+ * 40kHz 定时器基频（4MHz 无因子 3）根本除不出精确 60Hz，最接近的 59.97Hz 与
+ * 相机之间会产生 0.03Hz 拍频——测量龄期缓慢扫过整个帧周期并周期性丢帧/重帧，
+ * 而这个拍频正落在滚球闭环 wn=2.4rad/s(0.38Hz) 的带宽内，控制器会去追它。
+ * 过采样没有这个问题：每帧必在 1 拍内被消费，龄期上界 = 控制周期。
+ *
+ * 帧龄：Rpi_UART 每 2ms 收干净 + 最多 10ms 等到下一控制拍 ≈ 12ms 上界
+ *       （20ms 控制周期时是 22ms）。
+ *
+ * ⚠ 改本值必须同步：app_mode.c 的 APP_CONTROL_DT，以及所有按拍生效的一阶
+ *   低通系数（chassis 的 SPEED_FEEDBACK_ALPHA、line_follow 的 ERROR_LPF_ALPHA）。
+ *   编码器测速窗**不跟随**，理由见 hall_encoder.h。
+ */
+#define APP_CONTROL_PERIOD_MS 10U
 #define APP_UI_PERIOD_MS      50U
 #define APP_RPI_POLL_PERIOD_MS 2U
 
 /*
- * 步进电机的调度周期，取自驱动给出的值。
- * 比控制周期快一倍：判越界晚一拍，摆杆就多冲一拍的距离，而那段距离要由
- * STEP_MOTOR_ENC_LIMIT_MARGIN_COUNTS 兜住。
+ * 步进电机的调度周期，取自驱动给出的值，与控制周期同为 10ms。
+ * 该值由驱动侧独立约束决定（QEI 16 位防环绕 + 越界守护的响应距离，
+ * 见 step_motor.h），不随控制周期变化。
  */
 #define APP_STEP_TICK_PERIOD_MS STEP_MOTOR_TICK_PERIOD_MS
 

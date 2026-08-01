@@ -56,12 +56,17 @@ extern "C" {
 
 /*
  * 速度环反馈的一阶低通(EMA)平滑系数，alpha = 1 - exp(-2*pi*fc*dt)。
- * 取 fc ≈ 6 Hz、dt = 20 ms → alpha ≈ 0.53（`control-plan.md` §2.4 要求 5~8 Hz）。
+ * 取 fc ≈ 6 Hz、dt = 10 ms → alpha ≈ 0.31（`control-plan.md` §2.4 要求 5~8 Hz）。
  * 目的：压制编码器 20ms 窗的量化跳变（台阶 0.0295 m/s，在 0.26 m/s 工作点即 11% 噪声）。
  * 只作用于**速度环反馈**；`HallEncoder_GetSpeed()` 与 `[SPD]` 遥测的 l/r 仍是原始值，
  * 便于诊断。取 1.0f 即直通（做滤波前后 A/B 时改这一个值即可）。
+ *
+ * ⚠ 本系数**按拍生效**，改控制周期必须重算，否则截止频率按比例漂移：
+ *   dt=20ms → 0.53（历史值）、dt=10ms → 0.31（当前）。
+ *   反馈源仍是 50Hz 更新的测速窗，本滤波在 100Hz 控制拍上跑，等效连续时间
+ *   截止频率不变，同时顺带平滑了阶梯输入。
  */
-#define CHASSIS_SPEED_FEEDBACK_ALPHA 0.53f
+#define CHASSIS_SPEED_FEEDBACK_ALPHA 0.31f
 
 /*
  * 目标速度绝对值低于该阈值即视为**停止指令**：速度环在起转死区（实测 10% 占空比）内无法

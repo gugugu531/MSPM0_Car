@@ -14,8 +14,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-/* 控制周期，单位 s，须与调度器注册 App_ControlTick 的周期一致（20ms）。 */
-#define APP_CONTROL_DT 0.02f
+/* 控制周期，单位 s，须与调度器注册 App_ControlTick 的周期一致（APP_CONTROL_PERIOD_MS=10ms）。 */
+#define APP_CONTROL_DT 0.01f
 
 static APP_MODE app_mode;
 static const APP_TASK_DESC *current_task;

@@ -19,7 +19,7 @@ run-to-completion 任务。
 
 - **INIT**：`App_Init()` 期间；完成后置 MENU。
 - **MENU**：委派 `app_menu` 的嵌套菜单导航（见下）；选中任务时返回给 app_mode 进入 RUN。
-- **RUN**：调度器每 ~16.67ms（60fps）调 `App_ControlTick` 委派 `current_task->on_tick`；短按 BACK 中止。
+- **RUN**：调度器每 10ms（100Hz）调 `App_ControlTick` 委派 `current_task->on_tick`；短按 BACK 中止。
 - **FAULT**：可恢复故障；显示错误页，短按 ENTER 复位回 MENU。
 
 ## 嵌套菜单（app_menu）
@@ -96,7 +96,7 @@ H2/H5/H6 的灰度全白或灰度数据超时不再触发中途退出：控制�
 ## 调度器
 
 `app_scheduler`：任务表 `{cb, period_ms, last_ms}`，`Scheduler_Run()` 按 `BSP_Time_GetMs()`
-分派到期任务。注册：`App_ControlTick`(~16.67ms/60fps)、`App_UiTick`(50ms)。
+分派到期任务。注册：`App_ControlTick`(10ms/100Hz)、`App_UiTick`(50ms)。
 
 `SysTick_Handler`(1ms，app 自持)：`BSP_Time_TickInc()` + `Key_Scan()`；`tick_active` 门控
 避免初始化完成前误触发。
@@ -107,7 +107,7 @@ H2/H5/H6 的灰度全白或灰度数据超时不再触发中途退出：控制�
 |---|---|---|
 | `SysTick_Handler` (1ms) | app/app_scheduler | 时基递增 + 按键扫描 |
 | `GROUP1_IRQHandler` | bsp/hall_encoder | 编码器边沿 |
-| `TIMER_0_INST_IRQHandler` (~16.67ms) | bsp/hall_encoder | 编码器测速 |
+| `TIMER_0_INST_IRQHandler` (20ms) | bsp/hall_encoder | 编码器测速（不跟随控制拍）|
 | `I2C0_IRQHandler` | bsp/imu | JY61P I2C 状态机 |
 
 ## 按键交互（仅短按）

@@ -48,7 +48,7 @@ app ─► middleware ─► bsp
 
 - **BSP 驱动自持其专属外设中断**：
   - `bsp/motor/hall_encoder.c` → `GROUP1_IRQHandler`（编码器 A 相 GPIOA，分派左右两轮）、
-    `TIMER_0_INST_IRQHandler`（编码器采样定时器，≈16.67ms / 60fps）
+    `TIMER_0_INST_IRQHandler`（编码器采样定时器，20ms；刻意不跟随 10ms 控制拍，见下）
   - `bsp/imu/wit_sdk.c` → `I2C0_IRQHandler`（JY61P I2C 中断驱动状态机）
   - `bsp/debug_uart/debug_uart.c` → `Debug_Ex_INST_IRQHandler`（UART1，TX 环形缓冲排空 + RX 入环形缓冲）
   - `bsp/rpi_uart/rpi_uart.c` → `Rpi_UART_INST_IRQHandler`（UART2，树莓派视觉帧入环形缓冲并记录到达时刻）

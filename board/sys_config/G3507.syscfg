@@ -220,7 +220,7 @@ TIMER1.interrupts         = ["ZERO"];
 TIMER1.timerClkDiv        = 8;
 TIMER1.timerStartTimer    = true;
 TIMER1.interruptPriority  = "3";
-TIMER1.timerPeriod        = "16667us";
+TIMER1.timerPeriod        = "20ms";
 TIMER1.peripheral.$assign = "TIMA1";
 
 UART1.$name                            = "Debug_Ex";
