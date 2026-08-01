@@ -34,6 +34,8 @@
 #define LT_TELEMETRY_PERIOD_MS 50U
 /** 灰度最近一次成功读数的最大允许年龄。 */
 #define LT_LINE_SENSOR_MAX_AGE_MS 60U
+/** 车辆前进方向与视觉钢球正坐标同向；机械/相机反装时只改此符号。 */
+#define LT_BALL_AXIS_FORWARD_SIGN 1.0f
 /** 实测平行通过 A 点横线可稳定命中至少 3 路；末段首帧命中即制动。 */
 #define LT_FINISH_ENTER_MIN_COUNT 3U
 /** line_follow 默认 correction 的最终半幅（DIFFERENTIAL_LIMIT/2）。 */
@@ -1263,12 +1265,19 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
         return APP_TASK_RUNNING;
     }
 
-    if (((lt_requirement == 4U) || (lt_requirement == 5U) ||
-         ((lt_requirement == 6U) && lt_h6_started)) &&
-        (AppBallHold_Tick(dt) == APP_TASK_FAULT)){
-        AppBallHold_Exit();
-        (void)Chassis_Brake();
-        return APP_TASK_FAULT;
+    if ((lt_requirement == 4U) || (lt_requirement == 5U) ||
+        ((lt_requirement == 6U) && lt_h6_started)){
+        /*
+         * 纵向规划量已经限 jerk：启动/停车时自然给出补偿，巡航时严格回零。
+         * 本拍使用上拍规划状态，20 ms 延迟远小于机械与视觉时标，且避免重排底盘状态机。
+         */
+        AppBallHold_SetVehicleAcceleration(
+            LT_BALL_AXIS_FORWARD_SIGN * lt_accel_command_mps2);
+        if (AppBallHold_Tick(dt) == APP_TASK_FAULT){
+            AppBallHold_Exit();
+            (void)Chassis_Brake();
+            return APP_TASK_FAULT;
+        }
     }
 
     uint8_t detected_mask;

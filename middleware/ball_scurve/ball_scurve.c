@@ -7,6 +7,7 @@
 #include <math.h>
 
 #define BALL_SCURVE_RAD_TO_DEG 57.29577951308232f
+#define BALL_SCURVE_GRAVITY_MM_S2 9806.65f
 
 /*
  * 静止到静止的五次剖面峰值加速度 = PEAK_ACC_FACTOR·Δx/T²。
@@ -669,9 +670,20 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
         controller->breakout_on = false;
     }
 
-    /* --- 7. 合成、限幅、斜率限制 --- */
+    /*
+     * --- 7. 车辆纵向加速度前馈 ---
+     * 车体系内 (7/5)x_ddot = g*sin(theta) - a_vehicle*cos(theta)。
+     * 令相对加速度为 0 得 tan(theta_ff)=a_vehicle/g；滚动系数在等式两侧约掉，
+     * 因而这里必须除以 g，而不是滚球增益 (5/7)g。
+     */
+    float vehicle_acceleration_ff_deg =
+        atanf(input->vehicle_acceleration_mm_s2 / BALL_SCURVE_GRAVITY_MM_S2) *
+        BALL_SCURVE_RAD_TO_DEG;
+
+    /* --- 8. 合成、限幅、斜率限制 --- */
     float command = config->level_bias_deg + feedforward_deg + rolling_ff_deg +
-                    feedback_deg + hold_integral_deg + dither_deg + breakout_deg;
+                    feedback_deg + vehicle_acceleration_ff_deg +
+                    hold_integral_deg + dither_deg + breakout_deg;
     /*
      * 积分器自身不设角度上限，但总指令若已撞物理限位，就撤回本拍继续朝
      * 饱和方向的积分增量。它是抗饱和回算，不是额外倾角钳位：离开饱和后
@@ -714,7 +726,7 @@ bool BallScurve_Update(BALL_SCURVE_CONTROLLER *controller,
     controller->last_angle_deg = limited;
     controller->have_last_angle = true;
 
-    /* --- 8. 稳定判据（纯遥测）--- */
+    /* --- 9. 稳定判据（纯遥测）--- */
     float target_error = target_error_now;
     if (!controller->active &&
         (BallScurve_Abs(target_error) <= config->settled_position_mm) &&

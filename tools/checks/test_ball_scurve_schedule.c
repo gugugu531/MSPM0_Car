@@ -50,6 +50,7 @@ static BALL_SCURVE_INPUT Input(float x_mm, float velocity_mm_s){
     BALL_SCURVE_INPUT input = {
         .x_mm = x_mm,
         .velocity_mm_s = velocity_mm_s,
+        .vehicle_acceleration_mm_s2 = 0.0f,
         .actual_angle_deg = 0.0f,
         .velocity_trusted = true,
         .moving = false,
@@ -57,6 +58,29 @@ static BALL_SCURVE_INPUT Input(float x_mm, float velocity_mm_s){
         .dt_s = 0.02f,
     };
     return input;
+}
+
+static void TestVehicleAccelerationFeedforward(void){
+    BALL_SCURVE_CONFIG config = Config();
+    BALL_SCURVE_CONTROLLER controller;
+    BALL_SCURVE_OUTPUT output;
+    BALL_SCURVE_INPUT input = Input(0.0f, 0.0f);
+    const float gravity_mm_s2 = 9806.65f;
+    const float rad_to_deg = 57.29577951308232f;
+
+    BallScurve_Init(&controller);
+    input.vehicle_acceleration_mm_s2 = 120.0f;
+    assert(BallScurve_Update(&controller, &config, &input, &output));
+    AssertNear(output.angle_deg,
+               atanf(input.vehicle_acceleration_mm_s2 / gravity_mm_s2) * rad_to_deg,
+               1e-5f);
+
+    BallScurve_Init(&controller);
+    input.vehicle_acceleration_mm_s2 = -90.0f;
+    assert(BallScurve_Update(&controller, &config, &input, &output));
+    AssertNear(output.angle_deg,
+               atanf(input.vehicle_acceleration_mm_s2 / gravity_mm_s2) * rad_to_deg,
+               1e-5f);
 }
 
 static void TestSmallErrorIntegralAccumulatesAndClearsOnMotion(void){
@@ -291,6 +315,7 @@ static void TestNewSegmentClearsBreakout(void){
 }
 
 int main(void){
+    TestVehicleAccelerationFeedforward();
     TestAccelerationPreviewLeadsNominalFeedforward();
     TestReplanRequiresDwellAndCooldown();
     TestCaptureBlendsToFixedTarget();

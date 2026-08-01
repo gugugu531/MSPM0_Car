@@ -23,12 +23,14 @@ extern const APP_TASK_DESC APP_H3_CHALLENGE;
 extern const APP_TASK_DESC APP_H3_BALL_HOLD;
 
 /**
- * H4/H5 组合任务使用的 0mm 保持生命周期。
+ * H4/H5/H6 组合任务使用的固定位置保持生命周期。
  * 与 APP_H3_BALL_HOLD 共用同一控制器和参数，但不会刹停底盘或刷新 OLED。
  */
 void AppBallHold_Enter(void);
 /** 设置组合任务的固定保持目标；调用前须先 AppBallHold_Enter()。 */
 bool AppBallHold_SetTargetMm(float target_mm);
+/** 设置车辆沿钢球正坐标方向的规划加速度；静止/匀速传 0。 */
+void AppBallHold_SetVehicleAcceleration(float acceleration_mps2);
 APP_TASK_STATUS AppBallHold_Tick(float dt);
 void AppBallHold_Exit(void);
 

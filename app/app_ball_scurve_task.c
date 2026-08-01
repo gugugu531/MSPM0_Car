@@ -653,6 +653,8 @@ static H3S_STATE h3s_rendered_state;
 static float h3s_target_dwell_s;
 static bool h3s_challenge_started;
 static float h3s_hold_target_mm;
+/* 组合任务提供的车辆规划加速度；H3 独立任务始终保持为 0。 */
+static float h3s_vehicle_acceleration_mm_s2;
 
 /* 球加速度估计：只用于遥测与离线辨识，**不进入控制律**。 */
 static float h3s_prev_velocity_mm_s;
@@ -882,6 +884,7 @@ static void H3S_Enter(bool standalone){
     h3s_target_dwell_s = 0.0f;
     h3s_challenge_started = false;
     h3s_hold_target_mm = 0.0f;
+    h3s_vehicle_acceleration_mm_s2 = 0.0f;
     RpiUart_ResetStats();
 
     /* Hold 调试入口打印完整整定上下文；正式比赛入口避免启动突发占满串口。 */
@@ -1187,6 +1190,7 @@ static APP_TASK_STATUS H3S_Tick(float dt){
             BALL_SCURVE_INPUT input = {
                 .x_mm = h3s_prediction.x_mm,
                 .velocity_mm_s = h3s_prediction.velocity_mm_s,
+                .vehicle_acceleration_mm_s2 = h3s_vehicle_acceleration_mm_s2,
                 .actual_angle_deg = H3S_ActualBeamAngleDeg(),
                 .velocity_trusted = h3s_prediction.velocity_trusted,
                 .moving = h3s_prediction.moving,
@@ -1290,6 +1294,7 @@ static APP_TASK_STATUS H3S_Tick(float dt){
 }
 
 static void H3S_Exit(void){
+    h3s_vehicle_acceleration_mm_s2 = 0.0f;
     (void)StepMotor_Stop();
     (void)StepMotor_SetServoGain(STEP_MOTOR_SERVO_KP);
     h3s_target_count = StepMotor_GetEncoderCount();
@@ -1324,6 +1329,11 @@ bool AppBallHold_SetTargetMm(float target_mm){
     DebugUart_Printf("[SCV] hold target=%.2fmm beam=%.3f\r\n",
                      (double)target_mm, (double)H3S_ActualBeamAngleDeg());
     return true;
+}
+
+void AppBallHold_SetVehicleAcceleration(float acceleration_mps2){
+    h3s_vehicle_acceleration_mm_s2 = isfinite(acceleration_mps2)
+        ? acceleration_mps2 * 1000.0f : 0.0f;
 }
 
 APP_TASK_STATUS AppBallHold_Tick(float dt){

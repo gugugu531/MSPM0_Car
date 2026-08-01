@@ -299,6 +299,12 @@ typedef struct {
 typedef struct {
     float x_mm;
     float velocity_mm_s;
+    /**
+     * 车辆沿钢球正坐标方向的规划加速度，mm/s²。
+     * 正值产生正倾角 atan(a/g)，用于抵消车体加速造成的反向惯性力；
+     * 静止、匀速以及不需要运动补偿的任务传 0。
+     */
+    float vehicle_acceleration_mm_s2;
     /** 由编码器经查表得到的**实际**水管角，用于斜率限制的续接。 */
     float actual_angle_deg;
     /** 视觉速度是否通过 V_VALID 与连续帧恢复判据。 */
