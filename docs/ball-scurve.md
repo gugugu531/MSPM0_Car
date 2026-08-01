@@ -267,7 +267,7 @@ HOLD 仅在剖面结束、`|e|<=15 mm`、`|v|<=20 mm/s` 连续 `0.30 s` 后进�
 
 ## 遥测
 
-`[SCV]` 每 80 ms 一行，key=value，按数据流方向分组；当前约占 115200 UART 有效带宽的 76%：
+`[SCV]` 每 80 ms 一行，key=value，按数据流方向分组；当前约占 115200 UART 有效带宽的 81%：
 
 | 组 | 字段 |
 |---|---|
@@ -276,6 +276,7 @@ HOLD 仅在剖面结束、`|e|<=15 mm`、`|v|<=20 mm/s` 连续 `0.30 s` 后进�
 | 剖面层 | `tgt xref vref aref apv tp tpd act` |
 | MOVE/BRAKE/HOLD/CAPTURE | `gm bb hb cb kpe kde ds vc vw` |
 | 控制分量 | `bias ff lead rff fb iacc dith brka u` |
+| JY61P 纵向加速度辅助 | `araw aflt aff imuok` |
 | 跟踪误差 | `ex ev etgt` |
 | 执行器层 | `beam lag cnt cmd perr spd frq at` |
 | 标志与链路 | `sat fbc rl rp iact dth brk set mv vv px edge deg hold guard fps gap inv crc drop` |
@@ -287,6 +288,11 @@ HOLD 仅在剖面结束、`|e|<=15 mm`、`|v|<=20 mm/s` 连续 `0.30 s` 后进�
 `kpe`/`kde` 是本拍生效增益；`ds`/`vc` 是停止距离与朝目标速度，`vw` 是速度权重。
 `apv` 是预览加速度，`lead` 是预览相对本拍加速度前馈增加的超前倾角，`rp=1`
 表示本拍执行了受控重规划。
+
+独立 `H3 Hold 0cm` 还会读取 JY61P X 轴车体纵向加速度：`araw`/`aflt` 分别是原始值和
+固定 50 ms 一阶低通后的值（m/s²），`aff` 是实际加入水管指令的补偿角，`imuok` 表示样本
+年龄未超过 100 ms。该通道不做进入任务时零偏标定，`imu_gain=0` 时严格关闭；负增益可用于
+上板确认传感器安装方向。正式 H3 Challenge 与 H4/H5/H6 的原有加速度输入不受影响。
 
 ### 判读顺序
 
@@ -497,4 +503,4 @@ O→+5cm→−5cm 序列，末端相对 −50 mm 的落点误差：
 - 蠕进捕获、单向逼近与俘获偏置补偿；
 - 弯曲图 `θ_bow(x)` 前馈（保持角随位置变化 0.88°，说明它存在）；
 - 时延补偿观测器（当前直接用树莓派的差分速度）；
-- 车加速度前馈（要求 4/5/6 才需要）。
+- H4/H5/H6 仍使用底盘规划加速度；独立 `H3 Hold 0cm` 已接入 JY61P 实测纵向加速度前馈。

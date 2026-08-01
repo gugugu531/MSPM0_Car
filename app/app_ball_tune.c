@@ -8,8 +8,8 @@
 
 #include <stddef.h>
 
-/* 参数表上限。当前 ball_scurve 可调项约 40 个，保留少量扩展余量。 */
-#define APP_BALL_TUNE_MAX_ENTRIES 48U
+/* 参数表上限。当前 ball_scurve 可调项已超过 56 个，保留后续扩展余量。 */
+#define APP_BALL_TUNE_MAX_ENTRIES 64U
 /* 单条命令的最大长度。超长直接丢弃整行，不做截断执行——半条命令比不执行危险。 */
 #define APP_BALL_TUNE_LINE_MAX 64U
 /* 单拍最多从 RX 取多少字节。限制它是为了不让粘贴的大段文本撑爆控制回调。 */

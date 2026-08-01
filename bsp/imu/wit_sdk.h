@@ -137,6 +137,7 @@ void JY61P_Init(UART_Regs *uart);
 /* ── JY61P I2C 地址与协议常量 ── */
 #define JY61P_I2C_ADDR_7BIT          0x50U
 #define JY61P_I2C_POLL_PERIOD_TICK   5U
+#define JY61P_I2C_REG_ACCEL          0x34U
 #define JY61P_I2C_REG_ANGLE          0x3DU
 #define JY61P_I2C_REG_GYRO           0x37U
 #define JY61P_I2C_REG_UNLOCK         0x69U
@@ -153,7 +154,7 @@ uint32_t JY61P_I2C_GetPollCount(void);
 uint32_t JY61P_I2C_GetErrorCount(void);
 uint32_t JY61P_I2C_GetNackCount(void);
 uint32_t JY61P_I2C_GetTimeoutCount(void);
-/** 获取完整发布的 angle + gyro 样本数。 */
+/** 获取完整发布的 acc + angle + gyro 样本数。 */
 uint32_t JY61P_I2C_GetSampleCount(void);
 /** 最近一次完整样本是否存在且未超过 max_age_ms。 */
 bool JY61P_I2C_IsDataFresh(uint32_t max_age_ms);
@@ -177,7 +178,7 @@ typedef struct {
     float temperature_c;
 } WIT_IMU_DATA;
 
-/** I2C ISR 完整发布的一致 angle + gyro 样本及其元数据。 */
+/** I2C ISR 完整发布的一致 acc + angle + gyro 样本及其元数据。 */
 typedef struct {
     WIT_IMU_DATA data;
     uint32_t sample_count;
