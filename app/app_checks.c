@@ -3,6 +3,7 @@
  * @brief 外设自检任务实现：姿态、灰度、驱动与编码器诊断。
  */
 #include "app_checks.h"
+#include "app_ball_scurve_task.h"
 #include "app_fmt.h"
 
 #include "ui.h"
@@ -227,30 +228,33 @@ static void ChkTb_Exit(void){
 
 /* ======================= 摆杆步进电机（主动） ======================= */
 /*
- * 六个模式，ENTER 长按循环切换，BACK 退出整页。**进入本页落在 JOG**——点动是最常用
- * 的操作；其余五个是标定模式，每个只覆盖 docs/step-motor-calibration.md 里的一到两项，
+ * 七个模式，ENTER 长按循环切换，BACK 退出整页。**进入本页落在 JOG**——点动是最常用
+ * 的操作；LEVEL 用于本次上电的动力学水平点捕获，其余五个是驱动标定模式，
+ * 每个只覆盖 docs/step-motor-calibration.md 里的一到两项，
  * 并把该填回 step_motor.h 的那个数直接算好显示出来，免得在现场心算。
  *
- *  1/6 JOG    点动对位。UP/DOWN **单击**各走一步，**长按**调步长（四档 1/5/10/20 计数）；
+ *  1/7 JOG    点动对位。UP/DOWN **单击**各走一步，**长按**调步长（四档 1/5/10/20 计数）；
  *             屏上给编码器计数、步长（计数）与步长对应的轴角。
  *             用来精确找位置，例如实测 STEP_MOTOR_ENC_LEVEL_COUNTS（水管水平位）。
- *  2/6 RUN    持续正/反转（目标设到远处，被限位夹在边界上），ENTER 暂停。
+ *  2/7 LEVEL  与 JOG 相同方式点动水管；ENTER 短按把当前位置经 H3 连杆查表换算为
+ *             level_bias_deg，长按跳过/离开标定并进入 RUN。只改 RAM，不清编码器、不写 Flash。
+ *  3/7 RUN    持续正/反转（目标设到远处，被限位夹在边界上），ENTER 暂停。
  *             看 cnt 的增减方向、err 是否收敛、g 行的守护状态。
  *             → DIR 极性 STEP_MOTOR_BEAM_POSITIVE_DIR_HIGH（按 UP 看摆杆倒向）
  *             → 编码器方向 STEP_MOTOR_ENCODER_INVERT（按 UP 时 cnt 应增大）
- *  3/6 TURN   走 N 整圈后自动停。走完看轴上标记实际转过几圈：
+ *  4/7 TURN   走 N 整圈后自动停。走完看轴上标记实际转过几圈：
  *             → 细分数 STEP_MOTOR_MICROSTEP = 当前值 / 实际圈数
  *             ⚠ 装机后行程通常不足一圈，目标会被限位夹住（l4 显示 CLAMPED），
  *               这项标定得先拆下摆杆，或临时把 ENC_LIMIT_ENABLED 设 0 重编译。
- *  4/6 HAND   进入即断电，轴可手转；手转 N 圈后 cpr 栏就是实测每转计数。
+ *  5/7 HAND   进入即断电，轴可手转；手转 N 圈后 cpr 栏就是实测每转计数。
  *             → STEP_MOTOR_ENCODER_COUNTS_PER_REV
  *             进本模式轴应能拧动、回 RUN/TURN 应拧不动，据此定
  *             → STEP_MOTOR_BEAM_ENABLE_HIGH
- *  5/6 SWEEP  在软限位内**往复**跑，转速逐档上扫并记录 |err| 峰值。
+ *  6/7 SWEEP  在软限位内**往复**跑，转速逐档上扫并记录 |err| 峰值。
  *             不丢步时 err 稳定在跟踪误差附近，峰值明显跳高即已丢步，退一档：
  *             → STEP_MOTOR_MAX_STEP_FREQ_HZ 取 f 栏的值
  *             ⚠ 必须装上摆杆带真实负载测，空载能跑的频率挂上摆杆通常要打对折。
- *  6/6 SPAN   进入即断电，**用手**把摆杆推到两端机械极限，ENTER 交替打 A/B 点。
+ *  7/7 SPAN   进入即断电，**用手**把摆杆推到两端机械极限，ENTER 交替打 A/B 点。
  *             A/B 显示原始计数，直接抄进
  *             → STEP_MOTOR_ENC_HARD_MIN/MAX_COUNTS
  *             d 栏给出两点间的电机轴角，配合量角器读到的摆杆角 θ 得减速比 k = d/θ。
@@ -332,6 +336,7 @@ static const int32_t sm_jog_step[] = { SM_JOG_STEP_MIN, 5, 10, 20 };
 
 typedef enum {
     SM_MODE_JOG = 0,     /* 进页默认落在这里：点动对位比标定常用得多。 */
+    SM_MODE_LEVEL,       /* 捕获当前位置为本次上电的 H3 动力学水平点。 */
     SM_MODE_RUN,
     SM_MODE_TURN,
     SM_MODE_HAND,
@@ -341,8 +346,8 @@ typedef enum {
 } SM_MODE;
 
 static const char *const sm_mode_tag[SM_MODE_MAX] = {
-    "SM 1/6 JOG",   "SM 2/6 RUN",   "SM 3/6 TURN",
-    "SM 4/6 HAND",  "SM 5/6 SWEEP", "SM 6/6 SPAN"
+    "SM 1/7 JOG",   "SM 2/7 LEVEL", "SM 3/7 RUN",  "SM 4/7 TURN",
+    "SM 5/7 HAND",  "SM 6/7 SWEEP", "SM 7/7 SPAN"
 };
 
 static SM_MODE  sm_mode;
@@ -359,6 +364,7 @@ static int32_t  sm_span_b;           /* SPAN：B 点编码器计数。 */
 static bool     sm_span_next_is_b;   /* SPAN：下次打点记 B 而非 A。 */
 static bool     sm_span_has_a;
 static bool     sm_span_has_b;
+static bool     sm_level_saved;      /* 本次上电已有设备页捕获的动力学水平点。 */
 
 /*
  * 各模式的计数基准。
@@ -486,6 +492,18 @@ static void ChkStepMotor_Render(const char *action){
         break;
     }
 
+    case SM_MODE_LEVEL:
+        SmLineI(l1, "cnt ", cnt);
+        SmLineI(l2, "step ", sm_jog_step[sm_jog_idx]);
+        SmLineF(l3, "bias ", AppBallLevel_GetBiasDeg(), 2U);
+        if (sm_level_saved){
+            SmLineS(l4, "LEVEL SAVED");
+        } else {
+            SmLineS(l4, SmGuardText());
+        }
+        hint = "UP/DN jog ENT:set LNG:next";
+        break;
+
     case SM_MODE_TURN: {
         int32_t rel = SmRelCount();
         SmLineI(l1, "N ", (int32_t)sm_turn_target);
@@ -608,6 +626,7 @@ static void ChkStepMotor_Enter(void){
     sm_span_has_a     = false;
     sm_span_has_b     = false;
     sm_span_next_is_b = false;
+    sm_level_saved    = AppBallLevel_IsRuntimeCalibrated();
     sm_last_ui        = 0U;
     sm_last_telemetry = 0U;
 
@@ -622,64 +641,80 @@ static void ChkStepMotor_Enter(void){
     ChkStepMotor_Render("idle");
 }
 
+/* JOG / LEVEL 共用的点动键：UP/DOWN 短按走位置，长按只调整步长。 */
+static const char *ChkStepMotor_HandleJogKeys(KEY_EVENT ev_up, KEY_EVENT ev_dn){
+    if (ev_up == KEY_EVENT_LONG_PRESS){
+        if (sm_jog_idx + 1U < SM_JOG_STEP_COUNT){
+            sm_jog_idx++;
+            return "step+";
+        }
+        return NULL;
+    }
+    if (ev_dn == KEY_EVENT_LONG_PRESS){
+        if (sm_jog_idx > 0U){
+            sm_jog_idx--;
+            return "step-";
+        }
+        return NULL;
+    }
+
+    int32_t n = 0;
+    if      (ev_up == KEY_EVENT_SHORT_PRESS) { n =  1; }
+    else if (ev_up == KEY_EVENT_DOUBLE_CLICK){ n =  2; }
+    else if (ev_dn == KEY_EVENT_SHORT_PRESS) { n = -1; }
+    else if (ev_dn == KEY_EVENT_DOUBLE_CLICK){ n = -2; }
+
+    if (n == 0){ return NULL; }
+
+    /* 以目标为基准累加，连点时不会吃掉上一步尚未完成的行程。 */
+    int32_t want = StepMotor_GetTargetCount() + (n * sm_jog_step[sm_jog_idx]);
+    (void)StepMotor_SetSpeedLimit(SM_JOG_SPEED_DEG_S);
+    (void)StepMotor_MoveToCount(want);
+    sm_running = true;
+    if (StepMotor_GetTargetCount() != want){ return "CLAMPED"; }
+    return (n > 0) ? "jog +" : "jog -";
+}
+
 /* 各模式的 UP/DOWN/ENTER 短按语义；返回要显示的动作名，NULL 表示本拍无操作。 */
 static const char *ChkStepMotor_HandleKeys(KEY_EVENT ev_up,
                                            KEY_EVENT ev_dn,
                                            KEY_EVENT ev_en){
     switch (sm_mode){
     case SM_MODE_JOG: {
-        /*
-         * 长按调步长：UP 变粗、DOWN 变细。到头**不回绕**——回绕的话一按过头就从最细
-         * 直接跳到最粗，下一次点动会把摆杆甩出去一大截。
-         */
-        if (ev_up == KEY_EVENT_LONG_PRESS){
-            if (sm_jog_idx + 1U < SM_JOG_STEP_COUNT){
-                sm_jog_idx++;
-                return "step+";
-            }
-            return NULL;
-        }
-        if (ev_dn == KEY_EVENT_LONG_PRESS){
-            if (sm_jog_idx > 0U){
-                sm_jog_idx--;
-                return "step-";
-            }
-            return NULL;
-        }
-
-        /*
-         * 走几步：单击 1 步，双击 2 步。
-         *
-         * 双击也认，是因为按键驱动的短按要等过双击窗口（KEY_DOUBLE_CLICK_MS）才上报——
-         * 手快连点两下只会得到一个 DOUBLE_CLICK，不认的话第二下就白按了。
-         */
-        int32_t n = 0;
-        if      (ev_up == KEY_EVENT_SHORT_PRESS) { n =  1; }
-        else if (ev_up == KEY_EVENT_DOUBLE_CLICK){ n =  2; }
-        else if (ev_dn == KEY_EVENT_SHORT_PRESS) { n = -1; }
-        else if (ev_dn == KEY_EVENT_DOUBLE_CLICK){ n = -2; }
-
-        if (n != 0){
-            /*
-             * 以**目标**为基准累加，不是以实测计数：连点时上一步往往还没走完，
-             * 按实测算会把没走完的那段吃掉，点 n 次走不满 n 步。
-             */
-            int32_t want = StepMotor_GetTargetCount() + (n * sm_jog_step[sm_jog_idx]);
-            (void)StepMotor_SetSpeedLimit(SM_JOG_SPEED_DEG_S);
-            (void)StepMotor_MoveToCount(want);
-            sm_running = true;
-            /* 目标被限幅夹掉要直说，否则看着像按键没响应。 */
-            if (StepMotor_GetTargetCount() != want){
-                return "CLAMPED";
-            }
-            return (n > 0) ? "jog +" : "jog -";
-        }
+        const char *jog_action = ChkStepMotor_HandleJogKeys(ev_up, ev_dn);
+        if (jog_action != NULL){ return jog_action; }
 
         if (ev_en == KEY_EVENT_SHORT_PRESS){
             /* 连点攒下的目标一次撤掉：就地停住，目标钉回当前实测位置。 */
             (void)StepMotor_Stop();
             sm_running = false;
             return "STOP";
+        }
+        break;
+    }
+
+    case SM_MODE_LEVEL: {
+        const char *jog_action = ChkStepMotor_HandleJogKeys(ev_up, ev_dn);
+        if (jog_action != NULL){ return jog_action; }
+
+        if (ev_en == KEY_EVENT_SHORT_PRESS){
+            if (sm_running || !StepMotor_IsAtTarget()){
+                return "WAIT TARGET";
+            }
+            if (!StepMotor_IsEnabled() ||
+                (StepMotor_GetGuardState() != STEP_MOTOR_GUARD_OK)){
+                return "GUARD ERR";
+            }
+
+            int32_t count = StepMotor_GetEncoderCount();
+            if (!AppBallLevel_SetFromEncoderCount(count)){
+                return "LEVEL RANGE ERR";
+            }
+            sm_level_saved = true;
+            DebugUart_Printf("[SM] level saved cnt=%ld bias=%.3fdeg\r\n",
+                             (long)count,
+                             (double)AppBallLevel_GetBiasDeg());
+            return "LEVEL SAVED";
         }
         break;
     }
@@ -831,7 +866,11 @@ static APP_TASK_STATUS ChkStepMotor_Tick(float dt){
     const char *action;
 
     if (ev_en == KEY_EVENT_LONG_PRESS){
-        ChkStepMotor_SetMode((SM_MODE)((sm_mode + 1U) % (uint8_t)SM_MODE_MAX));
+        /* LEVEL 长按只跳出标定，不捕获当前位置；其余模式仍按顺序循环。 */
+        SM_MODE next_mode = (sm_mode == SM_MODE_LEVEL)
+            ? SM_MODE_RUN
+            : (SM_MODE)((sm_mode + 1U) % (uint8_t)SM_MODE_MAX);
+        ChkStepMotor_SetMode(next_mode);
         /* 用模式名当动作名：遥测里能看出切到了哪一模式，屏上也确认了这次长按被识别。 */
         action = sm_mode_tag[sm_mode];
     } else {
@@ -842,7 +881,7 @@ static APP_TASK_STATUS ChkStepMotor_Tick(float dt){
      * JOG：走到位就落回 idle。点动只有几度，不清这个标志遥测会一直按运动期的
      * 20ms 高频打，串口刷得看不清；这里不报 DONE，一步一条太吵。
      */
-    if ((sm_mode == SM_MODE_JOG) && sm_running){
+    if (((sm_mode == SM_MODE_JOG) || (sm_mode == SM_MODE_LEVEL)) && sm_running){
         if (StepMotor_IsAtTarget()){
             sm_running = false;
         }

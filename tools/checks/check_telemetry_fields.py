@@ -42,6 +42,9 @@ ANALYSIS_NEEDS = {
     "extrap.py": {"t", "xr", "x", "v", "age"},
 }
 
+# ball_tune.html 在解析一行 [SCV] 后生成的前端派生字段，不要求固件直接发送。
+HTML_DERIVED_FIELDS = {"ff_nom", "ff_pv"}
+
 
 def format_string(src: str, anchor: str) -> str | None:
     """把 printf 里连续的字符串字面量拼起来，直到以 \\r\\n 结尾的那一段。
@@ -144,7 +147,8 @@ def main() -> int:
         if (scvd_fmt is None) and (label == "诊断"):
             used = used & known
         if used:
-            missing = sorted(f for f in used if f not in known)
+            missing = sorted(f for f in used
+                             if (f not in known) and (f not in HTML_DERIVED_FIELDS))
             if missing:
                 print(f"★ ball_tune.html {label}用到固件没有的字段：{missing}")
                 ok = False

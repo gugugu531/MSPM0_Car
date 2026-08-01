@@ -7,6 +7,7 @@
 
 #include "app_task.h"
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,6 +22,16 @@ extern const APP_TASK_DESC APP_H3_CHALLENGE;
  * 配套上位机：tools/visualizers/ball_hold_monitor.html
  */
 extern const APP_TASK_DESC APP_H3_BALL_HOLD;
+
+/**
+ * 将编码器当前位置按 H3 连杆查表换算为动力学水平偏置，并保存到本次上电的 RAM 配置。
+ * 不清零编码器、不改 180 cnt 几何查表；超出软限位或 ±2° 标定范围时拒绝。
+ */
+bool AppBallLevel_SetFromEncoderCount(int32_t encoder_count);
+/** 查询当前 H3 动力学水平偏置，单位 deg。 */
+float AppBallLevel_GetBiasDeg(void);
+/** 本次上电后是否已由设备检查页捕获过水平点。 */
+bool AppBallLevel_IsRuntimeCalibrated(void);
 
 /**
  * H4/H5/H6 组合任务使用的固定位置保持生命周期。
