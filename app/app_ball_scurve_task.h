@@ -47,6 +47,12 @@ void AppBallHold_Enter(void);
 bool AppBallHold_SetTargetMm(float target_mm);
 /** 设置车辆沿钢球正坐标方向的规划加速度；静止/匀速传 0。 */
 void AppBallHold_SetVehicleAcceleration(float acceleration_mps2);
+/**
+ * 组合任务中启用/关闭 IMU 加速度前馈。
+ * 仅应在车体加速或减速时启用（巡航、制动等匀速段关闭），避免 IMU 噪声扰动滚球。
+ * 独立 H3 Hold 忽略此设置（始终启用）。
+ */
+void AppBallHold_SetImuFeedforward(bool enable);
 APP_TASK_STATUS AppBallHold_Tick(float dt);
 void AppBallHold_Exit(void);
 

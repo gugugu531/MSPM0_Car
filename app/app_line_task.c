@@ -1384,6 +1384,8 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
          */
         AppBallHold_SetVehicleAcceleration(
             LT_BALL_AXIS_FORWARD_SIGN * lt_accel_command_mps2);
+        AppBallHold_SetImuFeedforward(
+            fabsf(lt_accel_command_mps2) > 0.001f);
         if (AppBallHold_Tick(dt) == APP_TASK_FAULT){
             AppBallHold_Exit();
             (void)Chassis_Brake();

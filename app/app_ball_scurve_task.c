@@ -686,8 +686,9 @@ static float h3s_vehicle_acceleration_mm_s2;
 static float h3s_imu_accel_raw_m_s2;
 static float h3s_imu_accel_filtered_m_s2;
 static float h3s_imu_ff_deg;
-static bool h3s_imu_valid;
-static bool h3s_imu_filter_initialized;
+static bool  h3s_imu_valid;
+static bool  h3s_imu_filter_initialized;
+static bool  h3s_imu_ff_enabled;   /* 组合任务（H4/H5/H6）只在加速/减速时启用 */
 
 /* 球加速度估计：只用于遥测与离线辨识，**不进入控制律**。 */
 static float h3s_prev_velocity_mm_s;
@@ -911,6 +912,12 @@ static void H3S_UpdateImuAcceleration(float dt){
     if (h3s_mode != H3S_MODE_HOLD){
         return;
     }
+    /* 组合任务（H4/H5/H6）只在车体加速/减速时启用，巡航/制动/静止时关闭，
+     * 避免 IMU 噪声经微分放大后推动滚球。独立 Hold 忽略此门控。 */
+    if (!h3s_standalone && !h3s_imu_ff_enabled){
+        h3s_vehicle_acceleration_mm_s2 = 0.0f;
+        return;
+    }
 
     JY61P_I2C_Poll();
 
@@ -1002,6 +1009,7 @@ static void H3S_Enter(bool standalone){
     h3s_imu_ff_deg = 0.0f;
     h3s_imu_valid = false;
     h3s_imu_filter_initialized = false;
+    h3s_imu_ff_enabled = false;
     if ((h3s_mode == H3S_MODE_HOLD) && h3s_standalone){
         JY61P_I2C_Init();
     }
@@ -1460,6 +1468,10 @@ bool AppBallHold_SetTargetMm(float target_mm){
 void AppBallHold_SetVehicleAcceleration(float acceleration_mps2){
     h3s_vehicle_acceleration_mm_s2 = isfinite(acceleration_mps2)
         ? acceleration_mps2 * 1000.0f : 0.0f;
+}
+
+void AppBallHold_SetImuFeedforward(bool enable){
+    h3s_imu_ff_enabled = enable;
 }
 
 APP_TASK_STATUS AppBallHold_Tick(float dt){
