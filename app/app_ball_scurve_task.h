@@ -56,6 +56,26 @@ void AppBallHold_SetImuFeedforward(bool enable);
 APP_TASK_STATUS AppBallHold_Tick(float dt);
 void AppBallHold_Exit(void);
 
+/** H4/H5/H6 遥测用滚球状态快照。 */
+typedef struct {
+    float ball_x_mm;       /**< 球位置 (视觉外推值) */
+    float ball_v_mm_s;     /**< 球速度 */
+    float target_mm;       /**< 当前保持目标 */
+    float error_mm;        /**< 位置误差 (target - actual) */
+    float angle_deg;       /**< 水管指令角 */
+    float veh_ff_deg;      /**< 车辆加速度前馈分量 */
+    float feedback_deg;    /**< PD 反馈分量 */
+    float breakout_deg;    /**< 单向脱困分量 */
+    float integral_deg;    /**< 小误差积分分量 */
+    bool  breakout_on;     /**< 脱困是否正在介入 */
+    bool  integral_on;     /**< 积分是否正在累积 */
+    bool  saturated;       /**< 总指令被限位夹住 */
+    bool  feedback_clipped;/**< PD 被 feedback_limit 夹住 */
+} APP_BALL_HOLD_SNAPSHOT;
+
+/** 读取最近一拍的滚球控制状态快照。H3/H4/H5/H6 通用。 */
+void AppBallHold_GetSnapshot(APP_BALL_HOLD_SNAPSHOT *out);
+
 #ifdef __cplusplus
 }
 #endif

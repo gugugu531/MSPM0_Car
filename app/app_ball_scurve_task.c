@@ -1483,6 +1483,23 @@ void AppBallHold_Exit(void){
     H3S_Exit();
 }
 
+void AppBallHold_GetSnapshot(APP_BALL_HOLD_SNAPSHOT *out){
+    if (out == NULL){ return; }
+    out->ball_x_mm    = h3s_prediction.x_mm;
+    out->ball_v_mm_s  = h3s_prediction.velocity_mm_s;
+    out->target_mm    = H3S_TargetMm();
+    out->error_mm     = h3s_output.position_error_mm;
+    out->angle_deg    = h3s_output.angle_deg;
+    out->veh_ff_deg   = h3s_imu_ff_deg;
+    out->feedback_deg = h3s_output.feedback_deg;
+    out->breakout_deg = h3s_output.breakout_deg;
+    out->integral_deg = h3s_output.hold_integral_deg;
+    out->breakout_on  = h3s_output.breakout_on;
+    out->integral_on  = h3s_output.hold_integral_on;
+    out->saturated    = h3s_output.saturated;
+    out->feedback_clipped = h3s_output.feedback_clipped;
+}
+
 /** 第三题正式业务：O → +50 → −50 mm，完成后持续守住末点并显示用时。 */
 const APP_TASK_DESC APP_H3_CHALLENGE = {
     "H3 Challenge", H3S_EnterChallenge, H3S_Tick, H3S_Exit
