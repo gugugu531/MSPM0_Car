@@ -86,7 +86,7 @@
  * 用户确认传感器读数稳定，因此不做进入任务时的零偏标定，只保留轻量低通和限幅。
  */
 #define H3S_IMU_FORWARD_AXIS_SIGN          (+1.0f)
-#define H3S_IMU_ACCEL_GAIN_DEFAULT           0.0f
+#define H3S_IMU_ACCEL_GAIN_DEFAULT           1.1625f
 #define H3S_IMU_ACCEL_FILTER_TAU_S            0.05f
 #define H3S_IMU_ACCEL_LIMIT_M_S2              4.0f
 #define H3S_IMU_DATA_MAX_AGE_MS             100U
