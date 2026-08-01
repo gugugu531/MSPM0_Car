@@ -42,6 +42,7 @@
 #include "rpi_uart.h"
 #include "step_motor.h"
 #include "ui.h"
+#include "wit_sdk.h"
 
 #include <math.h>
 #include <stdbool.h>
@@ -77,6 +78,20 @@
 #define H3S_LEVEL_BIAS_DEG 0.0f
 #define H3S_LEVEL_BIAS_MIN_DEG (-2.0f)
 #define H3S_LEVEL_BIAS_MAX_DEG (+2.0f)
+
+/*
+ * 独立 H3 Hold 的车体直线加速度前馈。
+ * 当前按 JY61P X 轴为车体纵向、正值对应滚球正方向；若实车安装方向相反，
+ * 可先在网页把 imu_gain 调成负值验证，再把这里的符号固化。
+ * 用户确认传感器读数稳定，因此不做进入任务时的零偏标定，只保留轻量低通和限幅。
+ */
+#define H3S_IMU_FORWARD_AXIS_SIGN          (+1.0f)
+#define H3S_IMU_ACCEL_GAIN_DEFAULT           0.0f
+#define H3S_IMU_ACCEL_FILTER_TAU_S            0.05f
+#define H3S_IMU_ACCEL_LIMIT_M_S2              4.0f
+#define H3S_IMU_DATA_MAX_AGE_MS             100U
+#define H3S_GRAVITY_M_S2                      9.80665f
+#define H3S_RAD_TO_DEG                       57.2957795f
 
 /* O 是按键前的放球起点，不是一次运动航点；计时后只执行 +5cm → −5cm。 */
 static const float H3S_WAYPOINT_MM[] = { 50.0f, -50.0f };
@@ -230,6 +245,9 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     .replan_dwell_s = 0.12f,
     .replan_cooldown_s = 0.50f,
 };
+
+/* 0 = 关闭并严格回退原 H3 Hold；允许负值用于上板确认 JY61P 安装方向。 */
+static float h3s_imu_gain = H3S_IMU_ACCEL_GAIN_DEFAULT;
 
 /* 抖动的角速率需求必须留在输出斜率限制之内，否则会被削顶成三角波。 */
 #if 0 /* 编译期无法算 2πfA，这里以注释留下判据 */
@@ -609,6 +627,15 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
         .unit = "deg",
     },
 
+    /* 独立 H3 Hold 的 JY61P 车体纵向加速度辅助。 */
+    {
+        .name = "imu_gain",
+        .value = &h3s_imu_gain,
+        .min_value = -1.5f,
+        .max_value = 1.5f,
+        .unit = "ratio",
+    },
+
     /* 轨迹参数 */
     {
         .name = "amax",
@@ -654,8 +681,13 @@ static bool h3s_armed;
 static float h3s_hold_target_mm;
 /* Device Check 捕获状态只在本次上电的 RAM 中保留，不改编码器坐标或写 Flash。 */
 static bool h3s_level_runtime_calibrated;
-/* 组合任务提供的车辆规划加速度；H3 独立任务始终保持为 0。 */
+/* 组合任务提供规划加速度；独立 H3 Hold 改由 JY61P 实测纵向加速度提供。 */
 static float h3s_vehicle_acceleration_mm_s2;
+static float h3s_imu_accel_raw_m_s2;
+static float h3s_imu_accel_filtered_m_s2;
+static float h3s_imu_ff_deg;
+static bool h3s_imu_valid;
+static bool h3s_imu_filter_initialized;
 
 /* 球加速度估计：只用于遥测与离线辨识，**不进入控制律**。 */
 static float h3s_prev_velocity_mm_s;
@@ -865,6 +897,53 @@ static void H3S_UpdateAccelerationEstimate(float velocity_mm_s, float dt){
     h3s_prev_velocity_mm_s = velocity_mm_s;
 }
 
+/** 独立 H3 Hold：把 JY61P X 轴直线加速度转换成现有车辆加速度前馈输入。 */
+static void H3S_UpdateImuAcceleration(float dt){
+    if (!h3s_standalone || (h3s_mode != H3S_MODE_HOLD)){
+        return;
+    }
+
+    JY61P_I2C_Poll();
+
+    JY61P_I2C_SAMPLE sample;
+    bool valid = JY61P_I2C_IsDataFresh(H3S_IMU_DATA_MAX_AGE_MS) &&
+                 JY61P_I2C_GetSnapshot(&sample);
+    float raw_m_s2 = 0.0f;
+    if (valid){
+        raw_m_s2 = H3S_IMU_FORWARD_AXIS_SIGN * sample.data.acc_g.x *
+                   H3S_GRAVITY_M_S2;
+        valid = isfinite(raw_m_s2);
+    }
+
+    if (valid){
+        if (raw_m_s2 > H3S_IMU_ACCEL_LIMIT_M_S2){
+            raw_m_s2 = H3S_IMU_ACCEL_LIMIT_M_S2;
+        } else if (raw_m_s2 < -H3S_IMU_ACCEL_LIMIT_M_S2){
+            raw_m_s2 = -H3S_IMU_ACCEL_LIMIT_M_S2;
+        }
+        h3s_imu_accel_raw_m_s2 = raw_m_s2;
+    } else{
+        /* 数据失效时把辅助平滑退回 0，避免水管指令阶跃。 */
+        h3s_imu_accel_raw_m_s2 = 0.0f;
+    }
+
+    float safe_dt = (dt > 0.0f) ? dt : 0.02f;
+    float alpha = safe_dt / (H3S_IMU_ACCEL_FILTER_TAU_S + safe_dt);
+    if (!h3s_imu_filter_initialized && valid){
+        h3s_imu_accel_filtered_m_s2 = h3s_imu_accel_raw_m_s2;
+        h3s_imu_filter_initialized = true;
+    } else{
+        h3s_imu_accel_filtered_m_s2 += alpha *
+            (h3s_imu_accel_raw_m_s2 - h3s_imu_accel_filtered_m_s2);
+    }
+
+    h3s_imu_valid = valid;
+    h3s_vehicle_acceleration_mm_s2 =
+        h3s_imu_gain * h3s_imu_accel_filtered_m_s2 * 1000.0f;
+    h3s_imu_ff_deg = atanf(h3s_vehicle_acceleration_mm_s2 /
+                           (H3S_GRAVITY_M_S2 * 1000.0f)) * H3S_RAD_TO_DEG;
+}
+
 static void H3S_PlanCurrentWaypoint(void){
     BallScurve_PlanTo(&h3s_controller, &H3S_SCURVE_CONFIG,
                       h3s_prediction.x_mm, h3s_prediction.velocity_mm_s,
@@ -909,6 +988,14 @@ static void H3S_Enter(bool standalone){
     h3s_armed = false;
     h3s_hold_target_mm = 0.0f;
     h3s_vehicle_acceleration_mm_s2 = 0.0f;
+    h3s_imu_accel_raw_m_s2 = 0.0f;
+    h3s_imu_accel_filtered_m_s2 = 0.0f;
+    h3s_imu_ff_deg = 0.0f;
+    h3s_imu_valid = false;
+    h3s_imu_filter_initialized = false;
+    if ((h3s_mode == H3S_MODE_HOLD) && h3s_standalone){
+        JY61P_I2C_Init();
+    }
     RpiUart_ResetStats();
 
     /* Hold 调试入口打印完整整定上下文；正式比赛入口避免启动突发占满串口。 */
@@ -934,6 +1021,12 @@ static void H3S_Enter(bool standalone){
         (double)H3S_SCURVE_CONFIG.rolling_resistance_deg,
         (double)H3S_SCURVE_CONFIG.rolling_ff_speed_deadband_mm_s,
         (double)H3S_SCURVE_CONFIG.replan_error_mm);
+    DebugUart_Printf(
+        "[SCVCFG] imu axis=x sign=%.0f gain=%.2f tau=%.3fs limit=%.1fmps2 age=%ums\r\n",
+        (double)H3S_IMU_FORWARD_AXIS_SIGN, (double)h3s_imu_gain,
+        (double)H3S_IMU_ACCEL_FILTER_TAU_S,
+        (double)H3S_IMU_ACCEL_LIMIT_M_S2,
+        (unsigned)H3S_IMU_DATA_MAX_AGE_MS);
     DebugUart_Printf(
         "[SCVCFG] sched=%.0f move=%.5f/%.5f brake=%.5f/%.5f hold=%.5f/%.5f "
         "bd=%.2f ba=%.1f br=%.2f..%.2f bt=%.2f ht=%.2f\r\n",
@@ -1057,6 +1150,8 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         "gm=%u bb=%.2f hb=%.2f cb=%.2f kpe=%.4f kde=%.4f ds=%.1f vc=%.1f vw=%.2f "
         /* --- 控制分量：合成前每一项 --- */
         "bias=%.3f ff=%.3f lead=%.3f rff=%.3f fb=%.3f iacc=%.3f dith=%.3f brka=%.3f u=%.3f "
+        /* --- JY61P 车体纵向加速度辅助（仅独立 H3 Hold 生效）--- */
+        "araw=%.3f aflt=%.3f aff=%.3f imuok=%u "
         /* --- 跟踪误差 + 单向脱困计时（判误触发 / 判释放是否太晚）--- */
         "ex=%.2f ev=%.2f etgt=%.2f brkst=%.2f brkrel=%.2f "
         /* --- 执行器层：指令角 vs 实际角是滞后的直接指标 --- */
@@ -1103,6 +1198,11 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         (double)h3s_output.breakout_deg,
         (double)h3s_output.angle_deg,
 
+        (double)h3s_imu_accel_raw_m_s2,
+        (double)h3s_imu_accel_filtered_m_s2,
+        (double)h3s_imu_ff_deg,
+        (unsigned)(h3s_imu_valid ? 1U : 0U),
+
         (double)h3s_output.position_error_mm, (double)h3s_output.velocity_error_mm_s,
         (double)(target_mm - (h3s_have_prediction ? h3s_prediction.x_mm : 0.0f)),
         (double)h3s_output.breakout_stuck_s, (double)h3s_output.breakout_release_s,
@@ -1141,6 +1241,9 @@ static APP_TASK_STATUS H3S_Tick(float dt){
 
     /* 热更轮询：收串口命令并执行（非阻塞，单拍最多一行）。 */
     AppBallTune_Poll();
+
+    /* 独立 H3 Hold 使用实测纵向加速度；其他模式继续沿用原有输入来源。 */
+    H3S_UpdateImuAcceleration(dt);
 
     if (guard == STEP_MOTOR_GUARD_FAULT){
         h3s_state = H3S_STATE_FAULT;

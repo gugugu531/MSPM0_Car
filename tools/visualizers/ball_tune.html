@@ -163,6 +163,7 @@
   <button id="defaults" disabled>恢复默认</button>
   <button id="record" disabled>● 录制</button>
   <button id="export" disabled>导出为 C</button>
+  <button id="export-json" disabled>导出配置 JSON</button>
 </header>
 
 <main>
@@ -175,7 +176,7 @@
     </div>
     <div class="help-note">
       <b>使用说明：</b>连接串口后面板自动读取参数；拖动滑块或输入数值后<b>立即生效</b>（节流 10 Hz）；
-      <b>掉电恢复默认</b>——整定完用「导出为 C」粘回源码并提交。
+      <b>掉电恢复默认</b>——整定完可用「导出为 C」粘回源码，或用「导出配置 JSON」保存本次全部参数值。
       <br><b>协议：</b>手动命令 <code>?</code> 列表，<code>g kp</code> 读取，<code>s kp 0.05</code> 写入，<code>d</code> 恢复默认。
     </div>
     <div id="params"></div>
@@ -227,7 +228,7 @@
 </dialog>
 
 <dialog id="expdlg">
-  <div class="phead"><span class="ptitle">粘回 app_ball_scurve_task.c 的 H3S_SCURVE_CONFIG</span></div>
+  <div class="phead"><span class="ptitle">粘回 app_ball_scurve_task.c 的对应配置</span></div>
   <textarea id="exptext" readonly></textarea>
   <div class="dfoot">
     <button id="expcopy">复制</button>
@@ -252,6 +253,7 @@ const GROUPS = [
   ["单向脱困 · 推荐", ["brk_amp","brk_ramp","brk_rel","brk_minerr",
                       "brk_maxspd","brk_dwell","brk_relspd","brk_reldw"]],
   ["抖动 · 备用",     ["dith_amp","dith_freq","dith_minerr","dith_maxspd","dith_dwell"]],
+  ["JY61P 直线加速度辅助", ["imu_gain"]],
   ["前馈与补偿",     ["roll_ff","roll_db","lvl_bias"]],
   ["轨迹限制",       ["amax","vmax"]],
 ];
@@ -276,6 +278,7 @@ const LABEL = {
   brk_minerr:"触发误差", brk_maxspd:"触发速度", brk_dwell:"触发驻留",
   brk_relspd:"释放速度", brk_reldw:"释放驻留",
   dith_amp:"抖动振幅", dith_freq:"抖动频率", dith_minerr:"触发误差", dith_maxspd:"触发速度", dith_dwell:"触发驻留",
+  imu_gain:"纵向加速度辅助增益（负值反向）",
   roll_ff:"滚阻前馈", roll_db:"滚阻死区", lvl_bias:"水平点偏置",
   amax:"最大加速度", vmax:"最大速度",
 };
@@ -298,8 +301,12 @@ const PLOTS = [
   { title:"控制分量", unit:"deg", h:120,
     series:[{k:"fb",  n:"PD fb",  c:"--s3",w:1.5},
             {k:"lead",n:"预览超前",c:"--s4",w:1.5},
+            {k:"aff", n:"加速度辅助",c:"--s2",w:1.8},
             {k:"brka",n:"脱困角",  c:"--s5",w:2},
              {k:"dith",n:"抖动",    c:"--s1",w:1,alpha:.6}] },
+  { title:"JY61P 车体纵向加速度", unit:"m/s²", h:110,
+    series:[{k:"araw",n:"原始",c:"--s4",w:1.2,alpha:.65},
+            {k:"aflt",n:"滤波",c:"--s2",w:2}] },
   { title:"小误差积分量（独立监视）", unit:"deg", h:110,
     series:[{k:"iacc",n:"积分额外倾角",c:"--s2",w:2}] },
   { title:"生效反馈增益", unit:"", h:110,
@@ -370,7 +377,7 @@ async function connect() {
   writer = port.writable.getWriter();
   keepReading = true;
   setStatus("已连接 115200 8N1", "on");
-  for (const id of ["reload","defaults","export","record"]) $(id).disabled = false;
+  for (const id of ["reload","defaults","export","export-json","record"]) $(id).disabled = false;
   $("connect").textContent = "断开";
   readLoop();
   setTimeout(() => send("?"), 250);      // 让固件把参数表打一遍
@@ -384,7 +391,7 @@ async function disconnect() {
   try { if (port) await port.close(); } catch {}
   port = null;
   setStatus("未连接");
-  for (const id of ["reload","defaults","export","record"]) $(id).disabled = true;
+  for (const id of ["reload","defaults","export","export-json","record"]) $(id).disabled = true;
   $("connect").textContent = "连接串口";
 }
 
@@ -733,6 +740,7 @@ function tiles() {
     ["执行器滞后峰值", pk(seg.map(r => r.lag ?? 0)).toFixed(2), "°"],
     ["脱困",          last.brk ? `${(last.brka ?? 0).toFixed(2)}°` : (last.dth ? "抖动" : "关"), ""],
     ["小误差积分",    `${(last.iacc ?? 0).toFixed(3)}°${last.iact ? " 累积" : ""}`, ""],
+    ["加速度辅助",    last.imuok ? `${(last.aff ?? 0).toFixed(3)}°` : "无数据", ""],
     ["末端捕获",      `${((last.cb ?? 0) * 100).toFixed(0)}%${last.rp ? " · 重规划" : ""}`, ""],
     /* 卡住计时：脱困未介入时它在涨，说明触发判据太严；一直是 0 说明球没卡。 */
     ["卡住计时",      (last.brkst ?? 0).toFixed(2), "s"],
@@ -827,8 +835,8 @@ function stamp() {
          `_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
-function download(name, text) {
-  const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+function download(name, text, mime = "text/plain;charset=utf-8") {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
   const a = document.createElement("a");
   a.href = url; a.download = name;
   a.click();
@@ -865,12 +873,18 @@ function showRecordDialog(seconds) {
 /* ===== 导出 ===== */
 function exportC() {
   const stamp = new Date().toISOString().slice(0, 16).replace("T", " ");
-  const out = [`/* 由 ball_tune.html 导出 ${stamp}，粘回 H3S_SCURVE_CONFIG */`];
+  const out = [`/* 由 ball_tune.html 导出 ${stamp} */`];
+  const imu = rows.get("imu_gain");
+  if (imu) {
+    out.push(`static float h3s_imu_gain = ${fmt(imu.value)}f;   /* H3 Hold 纵向加速度辅助增益 */`);
+    out.push("", "/* 以下各项粘回 H3S_SCURVE_CONFIG */");
+  }
   for (const [title, names] of GROUPS) {
     out.push(`    /* --- ${title} --- */`);
     for (const name of names) {
       const row = rows.get(name);
       if (!row) continue;
+      if (name === "imu_gain") continue;  // 独立变量已在配置块前导出
       const field = name === "kp" ? "kp_deg_per_mm"
                   : name === "kd" ? "kd_deg_per_mm_s"
                   : name === "fblim" ? "feedback_limit_deg"
@@ -934,6 +948,36 @@ function exportC() {
   $("expdlg").showModal();
 }
 
+/** 下载当前面板的全部参数值，包括尚在串口发送队列中的最新滑块值。 */
+function exportConfigJson() {
+  if (!rows.size) {
+    log("尚未读取到参数，无法导出配置 JSON", "bad");
+    return;
+  }
+  const parameters = {};
+  const emitted = new Set();
+  for (const [, names] of GROUPS) {
+    for (const name of names) {
+      const row = rows.get(name);
+      if (!row) continue;
+      parameters[name] = row.value;
+      emitted.add(name);
+    }
+  }
+  /* 固件新增但网页尚未分组的参数也不能静默漏掉。 */
+  for (const [name, row] of rows) {
+    if (!emitted.has(name)) parameters[name] = row.value;
+  }
+  const config = {
+    schema: "mspm0-car/ball-tune-config",
+    version: 1,
+    exported_at: new Date().toISOString(),
+    parameters,
+  };
+  download(`ball_tune_${stamp()}.json`, JSON.stringify(config, null, 2) + "\n",
+           "application/json;charset=utf-8");
+}
+
 /* ===== 绑定 ===== */
 $("connect").addEventListener("click", () => port ? disconnect() : connect());
 $("record").addEventListener("click", () => recording ? stopRecord() : startRecord());
@@ -947,6 +991,7 @@ $("recraw").addEventListener("click", () => {
 $("reload").addEventListener("click", () => send("?"));
 $("defaults").addEventListener("click", async () => { await send("d"); setTimeout(() => send("?"), 200); });
 $("export").addEventListener("click", exportC);
+$("export-json").addEventListener("click", exportConfigJson);
 $("expclose").addEventListener("click", () => $("expdlg").close());
 $("expcopy").addEventListener("click", () => {
   navigator.clipboard.writeText($("exptext").value).then(() => log("已复制到剪贴板", "ok"));

@@ -203,6 +203,11 @@ armasm 语法，因此 MDK 6 有一条 `A1950W` 弃用警告；这是兼容性�
   `STEP_MOTOR_ENCODER_COUNTS_PER_REV` 的实测值。完整流程见
   `docs/step-motor-calibration.md`
 - `Encoder` 自检整车前进时两轮 `spd` 应同为正（方向符号见 `bsp/motor/hall_encoder.h`）
+- `Gyro JY61P` 自检页的 `Ax m/s2` 是车体纵向（JY61P X 轴）原始加速度；静止时应接近 0，
+  前后推动小车时应随直线加速方向改变符号。
+- `H3 Hold 0cm` 中连接 `ball_tune.html`，确认 `imuok=1`；前后推动小车时 `araw/aflt` 应随
+  纵向加速度变化。先保持 `imu_gain=0` 验证原闭环，再从小增益开始确认 `aff` 补偿方向。
+- `ball_tune.html` 的“导出配置 JSON”应下载包含当前全部固件回显参数的独立 `.json` 文件。
 - `Speed PID` / `Duty Sweep` 须**抬起车轮**运行；可配合
   `tools/visualizers/speed_pid_viz.py` 看曲线
 - `SysTick_Handler` 可按周期扫描按键（菜单响应正常即证明）

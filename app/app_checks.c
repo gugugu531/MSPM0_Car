@@ -25,6 +25,7 @@
 
 /* 自检刷屏节流周期。 */
 #define CHK_UI_PERIOD_MS 200U
+#define JY61P_G_TO_M_S2  9.80665f
 
 /* 把字符串拷入 buf，返回长度（不终止），便于随后接 AppFmt_* 拼数字。 */
 static uint8_t PutStr(char *buf, const char *s){
@@ -139,6 +140,7 @@ static APP_TASK_STATUS ChkGyroJy_Tick(float dt){
     char l1[20];
     char l2[20];
     char l3[20];
+    char l4[20];
     uint8_t n;
 
     WIT_IMU_DATA imu;
@@ -147,14 +149,18 @@ static APP_TASK_STATUS ChkGyroJy_Tick(float dt){
         AppFmt_Fixed(&l1[n], imu.gyro_deg_s.z, 1);
         n = PutStr(l2, "Yaw ");
         AppFmt_Fixed(&l2[n], imu.attitude_deg.yaw, 1);
+        /* H3 longitudinal direction: JY61P X axis, reported in m/s^2. */
+        n = PutStr(l3, "Ax m/s2 ");
+        AppFmt_Fixed(&l3[n], imu.acc_g.x * JY61P_G_TO_M_S2, 2);
     } else {
         (void)PutStr(l1, "Gz --"); l1[5] = '\0';
         (void)PutStr(l2, "Yaw --"); l2[6] = '\0';
+        (void)PutStr(l3, "Ax m/s2 --"); l3[10] = '\0';
     }
-    n = PutStr(l3, "err ");
-    AppFmt_I32(&l3[n], (int32_t)JY61P_I2C_GetErrorCount());
+    n = PutStr(l4, "err ");
+    AppFmt_I32(&l4[n], (int32_t)JY61P_I2C_GetErrorCount());
 
-    Ui_RenderLines("Chk Gyro JY61P", l1, l2, l3, "BACK: exit", NULL, NULL);
+    Ui_RenderLines("Chk Gyro JY61P", l1, l2, l3, l4, "BACK: exit", NULL);
     return APP_TASK_RUNNING;
 }
 
