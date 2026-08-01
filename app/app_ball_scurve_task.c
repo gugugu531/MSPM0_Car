@@ -86,7 +86,7 @@
  * 用户确认传感器读数稳定，因此不做进入任务时的零偏标定，只保留轻量低通和限幅。
  */
 #define H3S_IMU_FORWARD_AXIS_SIGN          (+1.0f)
-#define H3S_IMU_ACCEL_GAIN_DEFAULT           1.1625f
+#define H3S_IMU_ACCEL_GAIN_DEFAULT           0.0f
 #define H3S_IMU_ACCEL_FILTER_TAU_S            0.05f
 #define H3S_IMU_ACCEL_LIMIT_M_S2              4.0f
 #define H3S_IMU_DATA_MAX_AGE_MS             100U
@@ -142,13 +142,13 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
 
     /* MOVE/BRAKE/HOLD 连续增益调度。sched=0 可严格回退到上面的固定增益。 */
     .gain_schedule_enabled = 1.0f,
-    .brake_kp_deg_per_mm = 0.03000f,
+    .brake_kp_deg_per_mm = 0.00500f,
     .brake_kd_deg_per_mm_s = 0.03533f,
     .hold_kp_deg_per_mm = 0.04711f,
-    .hold_kd_deg_per_mm_s = 0.02000f,
+    .hold_kd_deg_per_mm_s = 0.01550f,
     .brake_delay_s = 0.22f,
     .brake_acceleration_mm_s2 = 120.0f,
-    .brake_blend_start_ratio = 0.60f,
+    .brake_blend_start_ratio = 0.793f,
     .brake_blend_full_ratio = 1.00f,
     .brake_blend_tau_s = 0.08f,
     .hold_enter_error_mm = 15.0f,
@@ -204,13 +204,13 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     .dither_max_speed_mm_s = 8.0f,
     .dither_dwell_s = 0.5f,
 
-    /* 2..15 mm 小误差：球静止时按误差积分，球一动便以 8 deg/s 快速清零。 */
-    .hold_integral_ki_deg_per_mm_s = 0.08f,
-    .hold_integral_min_error_mm = 2.0f,
-    .hold_integral_max_error_mm = 15.0f,
-    .hold_integral_max_speed_mm_s = 3.0f,
-    .hold_integral_release_speed_mm_s = 5.0f,
-    .hold_integral_release_rate_deg_s = 8.0f,
+    /* 3..8 mm 小误差：球静止时缓慢积分，球一动便以 0.3 deg/s 极缓清零。 */
+    .hold_integral_ki_deg_per_mm_s = 0.0025f,
+    .hold_integral_min_error_mm = 3.0f,
+    .hold_integral_max_error_mm = 8.0f,
+    .hold_integral_max_speed_mm_s = 1.0f,
+    .hold_integral_release_speed_mm_s = 15.45f,
+    .hold_integral_release_rate_deg_s = 0.3f,
     .hold_integral_motion_comp_deg_per_mm = 0.40f,
 
     /*
@@ -230,7 +230,7 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     .breakout_ramp_rate_deg_s = 1.2f,    /* 0.62° 阈值约 0.52 s 爬到 */
     .breakout_release_rate_deg_s = 8.0f, /* 撤销比建立快约 6.7 倍：动了就立刻松手 */
     /* 误差仍大于 2 mm 且球持续低速时即可介入；进入 2 mm 内后快速撤销。 */
-    .breakout_min_error_mm = 2.0f,
+    .breakout_min_error_mm = 8.0f,
     .breakout_max_speed_mm_s = 5.0f,
     .breakout_dwell_s = 0.25f,
     .breakout_release_speed_mm_s = 6.0f, /* 须高于视觉速度量化噪声 */
