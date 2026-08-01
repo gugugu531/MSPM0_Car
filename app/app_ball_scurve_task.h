@@ -22,6 +22,11 @@ extern const APP_TASK_DESC APP_H3_CHALLENGE;
  * 配套上位机：tools/visualizers/ball_hold_monitor.html
  */
 extern const APP_TASK_DESC APP_H3_BALL_HOLD;
+/**
+ * 单点保持 −50mm(−5cm)。与 APP_H3_BALL_HOLD 共用同一控制律，仅目标不同。
+ * 供设备检查页直接观测末点保持行为。
+ */
+extern const APP_TASK_DESC APP_H3_BALL_HOLD_M5;
 
 /**
  * 将编码器当前位置按 H3 连杆查表换算为动力学水平偏置，并保存到本次上电的 RAM 配置。

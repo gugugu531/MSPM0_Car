@@ -1420,6 +1420,12 @@ static void H3S_Exit(void){
  */
 static void H3S_EnterChallenge(void){ h3s_mode = H3S_MODE_SCURVE; H3S_Enter(true); }
 static void H3S_EnterHold(void)  { h3s_mode = H3S_MODE_HOLD;   H3S_Enter(true); }
+/* Hold -5cm：进入后自动以 -50mm 为稳定目标，供设备检查页直接观测末点行为。 */
+static void H3S_EnterHold_m5(void){
+    h3s_mode = H3S_MODE_HOLD;
+    H3S_Enter(true);
+    AppBallHold_SetTargetMm(-50.0f);
+}
 
 void AppBallHold_Enter(void){
     h3s_mode = H3S_MODE_HOLD;
@@ -1469,4 +1475,11 @@ const APP_TASK_DESC APP_H3_CHALLENGE = {
  */
 const APP_TASK_DESC APP_H3_BALL_HOLD = {
     "H3 Hold 0cm", H3S_EnterHold, H3S_Tick, H3S_Exit
+};
+/**
+ * 单点保持 −50mm(−5cm)。与 APP_H3_BALL_HOLD 共用控制律，仅目标不同。
+ * 供设备检查页直接观测末点保持行为（脱困、积分、扰动恢复）。
+ */
+const APP_TASK_DESC APP_H3_BALL_HOLD_M5 = {
+    "H3 Hold -5cm", H3S_EnterHold_m5, H3S_Tick, H3S_Exit
 };

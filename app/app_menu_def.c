@@ -6,14 +6,13 @@
  */
 #include "app_menu.h"
 #include "app_checks.h"
-#include "app_ball_task.h"
 #include "app_ball_scurve_task.h"
 #include "app_line_task.h"
 
 /* --- Device Check 子菜单：在用外设自检 --- */
 static const MENU_ITEM device_check_items[] = {
-    { .name = "H3 Static PID", .kind = MENU_ENTRY_TASK, .u.task = &APP_H3_BALL_STATIC },
     { .name = "H3 Hold 0cm",   .kind = MENU_ENTRY_TASK, .u.task = &APP_H3_BALL_HOLD },
+    { .name = "H3 Hold -5cm",  .kind = MENU_ENTRY_TASK, .u.task = &APP_H3_BALL_HOLD_M5 },
     { .name = "Gyro JY61P",   .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GYRO_JY61P },
     { .name = "Acc Calib",    .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_ACCEL_CALIB },
     { .name = "Gray I2C",     .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GRAY_I2C },
