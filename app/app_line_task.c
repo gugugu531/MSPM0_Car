@@ -243,6 +243,8 @@ static LT_SEGMENT lt_segment;
 /* 入直道后的陀螺仪回正窗口：active 期间忽略灰度、按 gz 走直线，直到里程达 end。 */
 static bool lt_gyro_recover_active;
 static float lt_gyro_recover_end_m;
+static bool lt_h4_started;
+static bool lt_h5_started;
 static bool lt_h6_started;
 static bool lt_h6_ball_captured;
 static float lt_h6_ball_target_mm;
@@ -1108,6 +1110,8 @@ static void LineFollowTask_EnterCommon(const LT_PROFILE *profile,
     lt_segment = LT_SEGMENT_S1;
     lt_gyro_recover_active = false;
     lt_gyro_recover_end_m = 0.0f;
+    lt_h4_started = false;
+    lt_h5_started = false;
     lt_h6_started = false;
     lt_h6_ball_captured = false;
     lt_h6_ball_target_mm = 0.0f;
@@ -1153,11 +1157,15 @@ static void H2_Enter(void){
 static void H4_Enter(void){
     LineFollowTask_EnterCommon(&LT_PROFILE_H4, 4U, "H4 Loaded A-B");
     AppBallHold_Enter();
+    AppBallHold_SetTargetMm(0.0f);
+    (void)Chassis_Brake();
 }
 static void H5_Enter(void){
     LineFollowTask_EnterCommon(
         &LT_PROFILE_LOADED_LAP, 5U, "H5 Loaded Lap O");
     AppBallHold_Enter();
+    AppBallHold_SetTargetMm(0.0f);
+    (void)Chassis_Brake();
 }
 static void H6_Enter(void){
     LineFollowTask_EnterCommon(
@@ -1218,6 +1226,38 @@ static bool H5_IsRunoutSafetyReached(uint32_t now, float distance_m){
         ((distance_m >= lt_h5_runout_limit_m) ||
          ((uint32_t)(now - lt_h5_runout_start_ms) >=
           LT_H5_RUNOUT_TIMEOUT_MS));
+}
+
+static bool LoadedBallHold_TryStart(uint32_t now){
+    RPI_UART_PREDICTION ball;
+    bool visible = RpiUart_Observe(&ball) && !ball.degraded && !ball.hold_output;
+
+    if (Key_GetEvent(KEY_ID_ENTER) == KEY_EVENT_SHORT_PRESS){
+        if (lt_requirement == 4U){
+            lt_h4_started = true;
+        } else{
+            lt_h5_started = true;
+        }
+        lt_start_ms = now;
+        lt_last_telemetry = now;
+        Chassis_ResetDistance();
+        DebugUart_Printf("[H%u] go target=0.00mm\r\n",
+                         (unsigned int)lt_requirement);
+        return true;
+    }
+
+    if (((now - lt_last_ui) >= LT_UI_PERIOD_MS) && !Ui_IsFlushBusy()){
+        char ball_line[20];
+        uint8_t n = LtPutStr(ball_line, visible ? "x " : "x ?");
+        if (visible){ AppFmt_Fixed(&ball_line[n], ball.measured_x_mm, 1U); }
+        const char *title = (lt_requirement == 4U)
+                                ? "H4 Loaded A-B" : "H5 Loaded Lap O";
+        Ui_RenderLines(title, "BALL STABILIZING", "tgt 0.0",
+                       ball_line, "",
+                       "ENTER: go", "BACK: exit");
+        lt_last_ui = now;
+    }
+    return false;
 }
 
 static bool H6_TryStart(uint32_t now){
@@ -1305,7 +1345,38 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
         /* 第二下 ENTER 已在本拍触发：lt_h6_started 变为 true，继续进入发车路径。 */
     }
 
-    if ((lt_requirement == 4U) || (lt_requirement == 5U) ||
+    /* H4 预启动：球已在 0mm 稳定闭环中，底盘制动，等待 ENTER 发车。 */
+    if ((lt_requirement == 4U) && !lt_h4_started){
+        (void)LoadedBallHold_TryStart(now);
+        if (!lt_h4_started){
+            AppBallHold_SetVehicleAcceleration(0.0f);
+            if (AppBallHold_Tick(dt) == APP_TASK_FAULT){
+                AppBallHold_Exit();
+                (void)Chassis_Brake();
+                return APP_TASK_FAULT;
+            }
+            (void)Chassis_Brake();
+            return APP_TASK_RUNNING;
+        }
+    }
+
+    /* H5 预启动：球已在 0mm 稳定闭环中，底盘制动，等待 ENTER 发车。 */
+    if ((lt_requirement == 5U) && !lt_h5_started){
+        (void)LoadedBallHold_TryStart(now);
+        if (!lt_h5_started){
+            AppBallHold_SetVehicleAcceleration(0.0f);
+            if (AppBallHold_Tick(dt) == APP_TASK_FAULT){
+                AppBallHold_Exit();
+                (void)Chassis_Brake();
+                return APP_TASK_FAULT;
+            }
+            (void)Chassis_Brake();
+            return APP_TASK_RUNNING;
+        }
+    }
+
+    if (((lt_requirement == 4U) && lt_h4_started) ||
+        ((lt_requirement == 5U) && lt_h5_started) ||
         ((lt_requirement == 6U) && lt_h6_started)){
         /*
          * 纵向规划量已经限 jerk：启动/停车时自然给出补偿，巡航时严格回零。

@@ -19,9 +19,9 @@ extern "C" {
 
 /** 赛题要求 2：同一车辆装置高速整圈。 */
 extern const APP_TASK_DESC APP_H2_LAP;
-/** 赛题要求 4：载球 A→B 直线。 */
+/** 赛题要求 4：载球 A→B 直线；进入任务后自动稳定球于中心，ENTER 确认后发车。 */
 extern const APP_TASK_DESC APP_H4_LOADED_STRAIGHT;
-/** 赛题要求 5：载球、目标 O 点整圈底盘循迹。 */
+/** 赛题要求 5：载球、目标 O 点整圈底盘循迹；进入任务后自动稳定球于中心，ENTER 确认后发车。 */
 extern const APP_TASK_DESC APP_H5_LOADED_LAP_CENTER;
 /** 赛题要求 6：载球、任意目标整圈；底盘循迹与 H5 完全一致。 */
 /** 要求 6：第一下 ENTER 锁存当前球位置并启动稳定闭环；第二下 ENTER 发车。 */
