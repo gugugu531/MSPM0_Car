@@ -4,6 +4,7 @@
  */
 #include "app_ball_tune.h"
 
+#include "bsp_time.h"
 #include "debug_uart.h"
 
 #include <stddef.h>
@@ -14,6 +15,8 @@
 #define APP_BALL_TUNE_LINE_MAX 64U
 /* 单拍最多从 RX 取多少字节。限制它是为了不让粘贴的大段文本撑爆控制回调。 */
 #define APP_BALL_TUNE_RX_CHUNK 32U
+/* 2KB TX 缓冲在 115200 baud 下约 180ms 排空；开始列表前留出完整排空窗口。 */
+#define APP_BALL_TUNE_LIST_START_DELAY_MS 200U
 
 static const APP_BALL_TUNE_ENTRY *tune_table;
 static uint8_t tune_count;
@@ -24,6 +27,10 @@ static char tune_line[APP_BALL_TUNE_LINE_MAX];
 static uint8_t tune_len;
 /* 本行已超长：继续吃字节直到换行，但整行作废。 */
 static bool tune_overflow;
+/* 完整列表必须分拍回显；56 行约 4KB，不能一次塞进 2KB Debug UART TX 环形缓冲。 */
+static bool tune_list_active;
+static uint8_t tune_list_index;
+static uint32_t tune_list_start_ms;
 
 /* ===== 小工具：不依赖 sscanf(%f)，省代码空间也更可控 ===== */
 
@@ -153,10 +160,31 @@ static void PrintEntry(const APP_BALL_TUNE_ENTRY *entry){
 }
 
 void AppBallTune_PrintAll(void){
-    for (uint8_t i = 0U; i < tune_count; i++){
-        PrintEntry(&tune_table[i]);
+    tune_list_index = 0U;
+    tune_list_start_ms = BSP_Time_GetMs();
+    tune_list_active = (tune_table != NULL) && (tune_count > 0U);
+}
+
+bool AppBallTune_IsListing(void){
+    return tune_list_active;
+}
+
+/** 每个控制拍最多回显一项；列表期间 H3 会暂停大行遥测。 */
+static void ServiceList(void){
+    if (!tune_list_active){ return; }
+    if ((uint32_t)(BSP_Time_GetMs() - tune_list_start_ms) <
+        APP_BALL_TUNE_LIST_START_DELAY_MS){
+        return;
     }
+
+    if (tune_list_index < tune_count){
+        PrintEntry(&tune_table[tune_list_index]);
+        tune_list_index++;
+        return;
+    }
+
     DebugUart_Printf("[TUNE] end n=%u\r\n", (unsigned)tune_count);
+    tune_list_active = false;
 }
 
 void AppBallTune_Init(const APP_BALL_TUNE_ENTRY *table, uint8_t count){
@@ -168,6 +196,9 @@ void AppBallTune_Init(const APP_BALL_TUNE_ENTRY *table, uint8_t count){
     }
     tune_len = 0U;
     tune_overflow = false;
+    tune_list_active = false;
+    tune_list_index = 0U;
+    tune_list_start_ms = 0U;
 }
 
 /* ===== 命令执行 ===== */
@@ -279,4 +310,6 @@ void AppBallTune_Poll(void){
             tune_overflow = true;
         }
     }
+
+    ServiceList();
 }
