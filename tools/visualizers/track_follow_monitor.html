@@ -95,6 +95,13 @@
            color:var(--ink); max-width:min(680px,92vw); padding:0; box-shadow:var(--shadow); }
   dialog::backdrop { background:rgba(0,0,0,.4); }
   dialog .dfoot { display:flex; gap:8px; justify-content:flex-end; padding:9px 13px; }
+  #csvfile { display:none; }
+  #dropzone { position:fixed; inset:12px; z-index:1000; display:none;
+              place-items:center; border:2px dashed var(--c2); border-radius:14px;
+              background:color-mix(in srgb, var(--surface) 88%, transparent);
+              color:var(--ink); font-size:18px; font-weight:650;
+              pointer-events:none; }
+  body.is-dragging #dropzone { display:grid; }
 </style>
 </head>
 <body>
@@ -107,13 +114,17 @@
   <div class="grow"></div>
   <span id="status"><span class="dot" id="dot"></span>未连接</span>
   <button id="connect" class="primary">连接串口</button>
+  <button id="import">导入 CSV</button>
+  <input id="csvfile" type="file" accept=".csv,text/csv">
   <button id="record" disabled>● 录制</button>
   <button id="clear" disabled>清空</button>
 </header>
 
+<div id="dropzone">松开鼠标，导入 CSV 并显示波形</div>
+
 <main>
   <section class="panel">
-    <div class="phead"><span class="ptitle">会话概览</span><span class="punit">最近 20 s</span></div>
+    <div class="phead"><span class="ptitle">会话概览</span><span class="punit" id="viewrange">最近 20 s</span></div>
     <div class="tiles" id="tiles"></div>
     <div id="log"></div>
   </section>
@@ -187,6 +198,8 @@ let port = null, writer = null, keepReading = false;
 let history = [];
 let recording = false, recordLines = [], recordStartMs = 0;
 let t0 = null;
+let importedView = false;
+let renderDirty = true;
 
 function log(text, cls) {
   const el = $("log");
@@ -200,6 +213,11 @@ function log(text, cls) {
 function setStatus(text, state) {
   $("status").innerHTML = `<span class="dot ${state||""}" id="dot"></span>${text}`;
 }
+function updateControls() {
+  $("record").disabled = !port;
+  $("clear").disabled = !history.length;
+}
+function invalidate() { renderDirty = true; }
 
 async function connect() {
   if (!("serial" in navigator)) {
@@ -213,7 +231,7 @@ async function connect() {
   writer = port.writable.getWriter();
   keepReading = true;
   setStatus("已连接 115200 8N1","on");
-  for (let id of ["record","clear"]) $(id).disabled = false;
+  updateControls();
   $("connect").textContent = "断开";
   readLoop();
 }
@@ -225,7 +243,7 @@ async function disconnect() {
   try { if (port) await port.close(); } catch {}
   port = null;
   setStatus("未连接");
-  for (let id of ["record","clear"]) $(id).disabled = true;
+  updateControls();
   $("connect").textContent = "连接串口";
 }
 
@@ -270,6 +288,13 @@ function handleLine(line) {
   }
   if (row.t === undefined) return;
 
+  if (importedView) {
+    history = [];
+    t0 = null;
+    importedView = false;
+    $("viewrange").textContent = `最近 ${WINDOW_S} s`;
+  }
+
   /* --- 补齐可选字段 --- */
   for (const k of OPT_FLOAT)  if (!(k in row)) row[k] = 0;
   for (const k of BALL_FLOAT) if (!(k in row)) row[k] = 0;
@@ -279,6 +304,81 @@ function handleLine(line) {
   row._t = (row.t - t0) / 1000;
   history.push(row);
   if (history.length > MAX_SAMPLES) history.splice(0, history.length - MAX_SAMPLES);
+  updateControls();
+  invalidate();
+}
+
+/* ===== CSV 导入 ===== */
+function parseCSV(text) {
+  text = text.replace(/^\uFEFF/, "");
+  const rows = []; let row = [], cell = "", quoted = false;
+  for (let i=0; i<text.length; i++) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"' && text[i+1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') quoted = false;
+      else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") { row.push(cell.trim()); cell = ""; }
+    else if (ch === "\n") {
+      row.push(cell.trim());
+      if (row.some(v => v !== "")) rows.push(row);
+      row = []; cell = "";
+    } else if (ch !== "\r") cell += ch;
+  }
+  row.push(cell.trim());
+  if (row.some(v => v !== "")) rows.push(row);
+  return rows;
+}
+
+async function importCSV(file) {
+  if (!file) return;
+  if (!/\.csv$/i.test(file.name) && file.type !== "text/csv") {
+    log(`✕ ${file.name} 不是 CSV 文件`, "bad");
+    return;
+  }
+  try {
+    const table = parseCSV(await file.text());
+    if (table.length < 2) throw new Error("文件中没有数据行");
+    const header = table[0].map(v => v.trim());
+    if (!header.includes("t")) throw new Error("缺少必需的 t 时间字段");
+
+    const loaded = []; let skipped = 0;
+    for (const cells of table.slice(1)) {
+      const row = {};
+      for (let i=0; i<header.length; i++) {
+        const k = header[i], raw = cells[i] ?? "";
+        if (!k || raw === "") continue;
+        if (STR_FIELDS.includes(k)) row[k] = raw;
+        else {
+          const value = Number(raw);
+          if (Number.isFinite(value)) row[k] = value;
+        }
+      }
+      if (!Number.isFinite(row.t)) { skipped++; continue; }
+      for (const k of OPT_FLOAT)  if (!(k in row)) row[k] = 0;
+      for (const k of BALL_FLOAT) if (!(k in row)) row[k] = 0;
+      for (const k of INT_FIELDS) if (!(k in row)) row[k] = 0;
+      loaded.push(row);
+      if (loaded.length >= RECORD_MAX_LINES) break;
+    }
+    if (!loaded.length) throw new Error("没有可解析的数据行");
+
+    const base = loaded[0].t;
+    for (const row of loaded) row._t = (row.t-base)/1000;
+    history = loaded;
+    t0 = base;
+    importedView = true;
+    const duration = Math.max(0, history[history.length-1]._t-history[0]._t);
+    $("viewrange").textContent = `CSV 全部 ${duration.toFixed(1)} s`;
+    updateControls();
+    invalidate();
+    log(`✓ 已导入 ${file.name}：${loaded.length} 行，${duration.toFixed(1)} s${skipped ? `，跳过 ${skipped} 行` : ""}`, "ok");
+  } catch (err) {
+    log(`✕ CSV 导入失败：${err.message}`, "bad");
+  } finally {
+    $("csvfile").value = "";
+  }
 }
 
 /* ===== 绘图 ===== */
@@ -308,7 +408,8 @@ function draw(chart) {
   const PL=50, PR=12, PT=8, PB=18, iw=W-PL-PR, ih=H-PT-PB;
   if (!history.length) return;
   const now = history[history.length-1]._t;
-  const x0 = Math.max(0, now-WINDOW_S), x1 = now+0.4;
+  const x0 = importedView ? history[0]._t : Math.max(0, now-WINDOW_S);
+  const x1 = now + Math.max(.4, importedView ? (now-x0)*.01 : 0);
   const rowsIn = history.filter(r => r._t >= x0);
   if (rowsIn.length < 2) return;
 
@@ -350,7 +451,7 @@ function draw(chart) {
 function tiles() {
   if (!history.length) return;
   const now = history[history.length-1]._t;
-  const seg = history.filter(r => r._t >= now-WINDOW_S);
+  const seg = importedView ? history : history.filter(r => r._t >= now-WINDOW_S);
   const last = seg[seg.length-1];
   const set = [
     ["赛题 req", last.req||"?", ""],
@@ -374,7 +475,14 @@ function tiles() {
   ).join("");
 }
 
-function frame() { for (const c of charts) draw(c); tiles(); requestAnimationFrame(frame); }
+function frame() {
+  if (renderDirty) {
+    renderDirty = false;
+    for (const c of charts) draw(c);
+    tiles();
+  }
+  requestAnimationFrame(frame);
+}
 
 /* ===== 录制 / 导出 ===== */
 function startRecord() {
@@ -437,11 +545,42 @@ function showRecDlg(s) {
 
 /* ===== 绑定 ===== */
 $("connect").addEventListener("click", () => port ? disconnect() : connect());
+$("import").addEventListener("click", () => $("csvfile").click());
+$("csvfile").addEventListener("change", e => importCSV(e.target.files[0]));
 $("record").addEventListener("click", ()=> recording ? stopRecord() : startRecord());
-$("clear").addEventListener("click", ()=>{ history=[]; t0=null; });
+$("clear").addEventListener("click", ()=>{
+  history=[]; t0=null; importedView=false;
+  $("tiles").innerHTML = "";
+  $("viewrange").textContent = `最近 ${WINDOW_S} s`;
+  updateControls();
+  invalidate();
+});
 $("recdlg-close").addEventListener("click", ()=> $("recdlg").close());
 $("reccsv").addEventListener("click", ()=> download(`trk_${stamp()}.csv`, recResult.csv));
 $("recraw").addEventListener("click", ()=> download(`trk_${stamp()}.txt`, recordLines.join("\r\n")+"\r\n"));
+
+let dragDepth = 0;
+document.addEventListener("dragenter", e => {
+  if ([...e.dataTransfer.types].includes("Files")) {
+    e.preventDefault(); dragDepth++; document.body.classList.add("is-dragging");
+  }
+});
+document.addEventListener("dragover", e => {
+  if ([...e.dataTransfer.types].includes("Files")) e.preventDefault();
+});
+document.addEventListener("dragleave", e => {
+  if (document.body.classList.contains("is-dragging")) {
+    dragDepth = Math.max(0, dragDepth-1);
+    if (!dragDepth) document.body.classList.remove("is-dragging");
+  }
+});
+document.addEventListener("drop", e => {
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove("is-dragging");
+  const files = [...e.dataTransfer.files];
+  if (files.length !== 1) log("✕ 请一次拖入一个 CSV 文件", "bad");
+  else importCSV(files[0]);
+});
+window.addEventListener("resize", invalidate);
 
 buildPlots();
 requestAnimationFrame(frame);

@@ -1231,6 +1231,7 @@ static void H2_Enter(void){
 }
 static void H4_Enter(void){
     LineFollowTask_EnterCommon(&LT_PROFILE_H4, 4U, "H4 Loaded A-B");
+    AppBallHold_SelectImuGainProfile(APP_BALL_IMU_GAIN_H4);
     AppBallHold_Enter();
     AppBallHold_SetTargetMm(0.0f);
     (void)Chassis_Brake();
@@ -1238,6 +1239,7 @@ static void H4_Enter(void){
 static void H5_Enter(void){
     LineFollowTask_EnterCommon(
         &LT_PROFILE_LOADED_LAP, 5U, "H5 Loaded Lap O");
+    AppBallHold_SelectImuGainProfile(APP_BALL_IMU_GAIN_H56);
     AppBallHold_Enter();
     AppBallHold_SetTargetMm(0.0f);
     (void)Chassis_Brake();
@@ -1245,6 +1247,7 @@ static void H5_Enter(void){
 static void H6_Enter(void){
     LineFollowTask_EnterCommon(
         &LT_PROFILE_LOADED_LAP, 6U, "H6 Loaded Any");
+    AppBallHold_SelectImuGainProfile(APP_BALL_IMU_GAIN_H56);
     /* 第六题：第一下 ENTER 锁存球目标并启动稳定闭环；第二下 ENTER 发车。 */
     (void)Chassis_Brake();
 }
@@ -1259,7 +1262,7 @@ static void LineFollowTest_Stop(uint32_t now, float distance_m){
     lt_state = LT_STATE_STOPPED;
     if ((lt_requirement >= 4U) && (lt_requirement <= 6U)){
         LoadedBallImuGate_Set(LT_BALL_IMU_PHASE_OFF, now, distance_m);
-        AppBallHold_SetImuFeedforward(false);
+        AppBallHold_SetImuAssistPhase(APP_BALL_IMU_ASSIST_OFF);
     }
     if (lt_requirement == 4U){
         lt_h4_phase = LT_H4_PHASE_STOP;
@@ -1417,7 +1420,7 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
         if (!lt_h6_started){
             /* 球已锁存但尚未发车：只跑滚球稳定闭环，底盘保持制动。 */
             if (lt_h6_ball_captured){
-                AppBallHold_SetImuFeedforward(false);
+                AppBallHold_SetImuAssistPhase(APP_BALL_IMU_ASSIST_OFF);
                 AppBallHold_SetVehicleAcceleration(0.0f);
                 if (AppBallHold_Tick(dt) == APP_TASK_FAULT){
                     AppBallHold_Exit();
@@ -1435,7 +1438,7 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
     if ((lt_requirement == 4U) && !lt_h4_started){
         (void)LoadedBallHold_TryStart(now);
         if (!lt_h4_started){
-            AppBallHold_SetImuFeedforward(false);
+            AppBallHold_SetImuAssistPhase(APP_BALL_IMU_ASSIST_OFF);
             AppBallHold_SetVehicleAcceleration(0.0f);
             if (AppBallHold_Tick(dt) == APP_TASK_FAULT){
                 AppBallHold_Exit();
@@ -1451,7 +1454,7 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
     if ((lt_requirement == 5U) && !lt_h5_started){
         (void)LoadedBallHold_TryStart(now);
         if (!lt_h5_started){
-            AppBallHold_SetImuFeedforward(false);
+            AppBallHold_SetImuAssistPhase(APP_BALL_IMU_ASSIST_OFF);
             AppBallHold_SetVehicleAcceleration(0.0f);
             if (AppBallHold_Tick(dt) == APP_TASK_FAULT){
                 AppBallHold_Exit();
@@ -1475,8 +1478,13 @@ static APP_TASK_STATUS LineFollowTest_Tick(float dt){
         LoadedBallImuGate_Update(now, ball_gate_distance_m);
         AppBallHold_SetVehicleAcceleration(
             LT_BALL_AXIS_FORWARD_SIGN * lt_accel_command_mps2);
-        AppBallHold_SetImuFeedforward(
-            lt_ball_imu_phase != LT_BALL_IMU_PHASE_OFF);
+        APP_BALL_IMU_ASSIST_PHASE assist_phase = APP_BALL_IMU_ASSIST_OFF;
+        if (lt_ball_imu_phase == LT_BALL_IMU_PHASE_START_ACCEL){
+            assist_phase = APP_BALL_IMU_ASSIST_START_ACCEL;
+        } else if (lt_ball_imu_phase == LT_BALL_IMU_PHASE_STOP_DECEL){
+            assist_phase = APP_BALL_IMU_ASSIST_STOP_DECEL;
+        }
+        AppBallHold_SetImuAssistPhase(assist_phase);
         if (AppBallHold_Tick(dt) == APP_TASK_FAULT){
             AppBallHold_Exit();
             (void)Chassis_Brake();
@@ -1844,12 +1852,12 @@ const APP_TASK_DESC APP_H2_LAP = {
     "H2 Lap", H2_Enter, LineFollowTest_Tick, NULL
 };
 static void LoadedBallHold_Exit(void){
-    AppBallHold_SetImuFeedforward(false);
+    AppBallHold_SetImuAssistPhase(APP_BALL_IMU_ASSIST_OFF);
     lt_ball_imu_phase = LT_BALL_IMU_PHASE_OFF;
     AppBallHold_Exit();
 }
 static void H6_Exit(void){
-    AppBallHold_SetImuFeedforward(false);
+    AppBallHold_SetImuAssistPhase(APP_BALL_IMU_ASSIST_OFF);
     lt_ball_imu_phase = LT_BALL_IMU_PHASE_OFF;
     if (lt_h6_started || lt_h6_ball_captured){ AppBallHold_Exit(); }
     lt_h6_started = false;

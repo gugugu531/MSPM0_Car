@@ -283,6 +283,11 @@ const LABEL = {
   amax:"最大加速度", vmax:"最大速度",
 };
 
+/* 关键参数在网页侧也限定安全整定范围，避免旧回显或导入值扩展滑块边界。 */
+const RANGE_OVERRIDE = {
+  imu_gain: [-2, 0],
+};
+
 const PLOTS = [
   { title:"球位置", unit:"mm", h:150,
     series:[{k:"xref",n:"参考 xref",c:"--s4",w:1.5,dash:[5,4]},
@@ -523,6 +528,12 @@ function ensureGroup(title) {
 }
 
 function upsertRow(name, value, min, max, unit) {
+  const override = RANGE_OVERRIDE[name];
+  if (override) {
+    min = override[0];
+    max = override[1];
+    value = Math.min(max, Math.max(min, value));
+  }
   let row = rows.get(name);
   if (!row) {
     const el = document.createElement("div");

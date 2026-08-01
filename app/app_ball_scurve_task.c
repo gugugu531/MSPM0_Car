@@ -81,12 +81,12 @@
 
 /*
  * 独立 H3 Hold 的车体直线加速度前馈。
- * 当前按 JY61P X 轴为车体纵向、正值对应滚球正方向；若实车安装方向相反，
- * 可先在网页把 imu_gain 调成负值验证，再把这里的符号固化。
+ * 实车遥测确认 JY61P X 轴对应弯道横向加速度，车体纵向使用 Y 轴。
+ * 当前安装下 Y 正向朝车尾，因此统一取反，使“车体向前加速”为控制正方向。
  * 用户确认传感器读数稳定，因此不做进入任务时的零偏标定，只保留轻量低通和限幅。
  */
-#define H3S_IMU_FORWARD_AXIS_SIGN          (+1.0f)
-#define H3S_IMU_ACCEL_GAIN_DEFAULT           2.0f
+#define H3S_IMU_FORWARD_AXIS_SIGN          (-1.0f)
+#define H3S_IMU_ACCEL_GAIN_DEFAULT          (-1.0f)
 #define H3S_IMU_ACCEL_FILTER_TAU_S            0.05f
 #define H3S_IMU_ACCEL_LIMIT_M_S2              4.0f
 #define H3S_IMU_DATA_MAX_AGE_MS             100U
@@ -249,6 +249,11 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
 
 /* 0 = 关闭并严格回退原 H3 Hold；允许负值用于上板确认 JY61P 安装方向。 */
 static float h3s_imu_gain = H3S_IMU_ACCEL_GAIN_DEFAULT;
+static const float h3s_imu_gain_h4_start = -1.4f;
+static const float h3s_imu_gain_h4_stop = -1.4f;
+static const float h3s_imu_gain_h56_start = -1.5f;
+static const float h3s_imu_gain_h56_stop = -1.5f;
+static APP_BALL_IMU_GAIN_PROFILE h3s_imu_gain_profile = APP_BALL_IMU_GAIN_H3;
 
 /* 抖动的角速率需求必须留在输出斜率限制之内，否则会被削顶成三角波。 */
 #if 0 /* 编译期无法算 2πfA，这里以注释留下判据 */
@@ -628,15 +633,14 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
         .unit = "deg",
     },
 
-    /* 独立 H3 Hold 的 JY61P 车体纵向加速度辅助。 */
+    /* 独立 H3 Hold 的网页调参项；H4/H5-H6 使用上方固件常量。 */
     {
         .name = "imu_gain",
         .value = &h3s_imu_gain,
-        .min_value = -0.5f,
-        .max_value = 3.0f,
+        .min_value = -2.0f,
+        .max_value = 0.0f,
         .unit = "ratio",
     },
-
     /* 轨迹参数 */
     {
         .name = "amax",
@@ -689,7 +693,7 @@ static float h3s_imu_accel_filtered_m_s2;
 static float h3s_imu_ff_deg;
 static bool  h3s_imu_valid;
 static bool  h3s_imu_filter_initialized;
-static bool  h3s_imu_ff_enabled;   /* 组合任务（H4/H5/H6）只在加速/减速时启用 */
+static APP_BALL_IMU_ASSIST_PHASE h3s_imu_assist_phase;
 
 /* 球加速度估计：只用于遥测与离线辨识，**不进入控制律**。 */
 static float h3s_prev_velocity_mm_s;
@@ -900,22 +904,22 @@ static void H3S_UpdateAccelerationEstimate(float velocity_mm_s, float dt){
 }
 
 /**
- * 把 JY61P X 轴直线加速度转换成滚球加速度前馈。
+ * 把 JY61P Y 轴车体纵向加速度转换成滚球加速度前馈。
  *
  * 对独立 H3 Hold 与 H4/H5/H6 载球循迹同等生效：
  *   - H3 Hold：补偿桌面扰动/手推等外部加速度；
  *   - H4/H5/H6：实测车体加速度比规划值更准（含电机响应滞后、路面坡度），
  *     会覆盖 AppBallHold_SetVehicleAcceleration 此前写入的规划值。
  *
- * ⚠ JY61P X 轴须与车体纵向对齐，符号由 H3S_IMU_FORWARD_AXIS_SIGN 统一反号。
+ * ⚠ 本车 JY61P Y 轴与车体纵向对齐，符号由 H3S_IMU_FORWARD_AXIS_SIGN 统一反号。
  */
 static void H3S_UpdateImuAcceleration(float dt){
     if (h3s_mode != H3S_MODE_HOLD){
         return;
     }
-    /* 组合任务（H4/H5/H6）只在车体加速/减速时启用，巡航/制动/静止时关闭，
-     * 避免 IMU 噪声经微分放大后推动滚球。独立 Hold 忽略此门控。 */
-    if (!h3s_standalone && !h3s_imu_ff_enabled){
+    /* 组合任务只在严格标记的起步/停车阶段启用；独立 Hold 忽略此门控。 */
+    if (!h3s_standalone &&
+        (h3s_imu_assist_phase == APP_BALL_IMU_ASSIST_OFF)){
         h3s_vehicle_acceleration_mm_s2 = 0.0f;
         return;
     }
@@ -927,7 +931,7 @@ static void H3S_UpdateImuAcceleration(float dt){
                  JY61P_I2C_GetSnapshot(&sample);
     float raw_m_s2 = 0.0f;
     if (valid){
-        raw_m_s2 = H3S_IMU_FORWARD_AXIS_SIGN * sample.data.acc_g.x *
+        raw_m_s2 = H3S_IMU_FORWARD_AXIS_SIGN * sample.data.acc_g.y *
                    H3S_GRAVITY_M_S2;
         valid = isfinite(raw_m_s2);
     }
@@ -955,8 +959,37 @@ static void H3S_UpdateImuAcceleration(float dt){
     }
 
     h3s_imu_valid = valid;
-    h3s_vehicle_acceleration_mm_s2 =
-        h3s_imu_gain * h3s_imu_accel_filtered_m_s2 * 1000.0f;
+    float phase_accel_m_s2 = h3s_imu_accel_filtered_m_s2;
+    if (!h3s_standalone){
+        /*
+         * 先按车体物理加速度方向拒绝阶段外分量，再乘可正可负的 imu_gain。
+         * 这样负增益可以反转最终倾角，但不会让起步阶段采纳减速样本，或让停车
+         * 阶段采纳加速样本。
+         */
+        if ((h3s_imu_assist_phase == APP_BALL_IMU_ASSIST_START_ACCEL) &&
+            (phase_accel_m_s2 < 0.0f)){
+            phase_accel_m_s2 = 0.0f;
+        } else if ((h3s_imu_assist_phase == APP_BALL_IMU_ASSIST_STOP_DECEL) &&
+                   (phase_accel_m_s2 > 0.0f)){
+            phase_accel_m_s2 = 0.0f;
+        }
+    }
+    float active_gain = h3s_imu_gain;
+    if (!h3s_standalone){
+        if (h3s_imu_gain_profile == APP_BALL_IMU_GAIN_H4){
+            active_gain =
+                (h3s_imu_assist_phase == APP_BALL_IMU_ASSIST_STOP_DECEL)
+                    ? h3s_imu_gain_h4_stop
+                    : h3s_imu_gain_h4_start;
+        } else if (h3s_imu_gain_profile == APP_BALL_IMU_GAIN_H56){
+            active_gain =
+                (h3s_imu_assist_phase == APP_BALL_IMU_ASSIST_STOP_DECEL)
+                    ? h3s_imu_gain_h56_stop
+                    : h3s_imu_gain_h56_start;
+        }
+    }
+    float assisted_accel_m_s2 = active_gain * phase_accel_m_s2;
+    h3s_vehicle_acceleration_mm_s2 = assisted_accel_m_s2 * 1000.0f;
     h3s_imu_ff_deg = atanf(h3s_vehicle_acceleration_mm_s2 /
                            (H3S_GRAVITY_M_S2 * 1000.0f)) * H3S_RAD_TO_DEG;
 }
@@ -1010,7 +1043,7 @@ static void H3S_Enter(bool standalone){
     h3s_imu_ff_deg = 0.0f;
     h3s_imu_valid = false;
     h3s_imu_filter_initialized = false;
-    h3s_imu_ff_enabled = false;
+    h3s_imu_assist_phase = APP_BALL_IMU_ASSIST_OFF;
     if ((h3s_mode == H3S_MODE_HOLD) && h3s_standalone){
         JY61P_I2C_Init();
     }
@@ -1040,7 +1073,7 @@ static void H3S_Enter(bool standalone){
         (double)H3S_SCURVE_CONFIG.rolling_ff_speed_deadband_mm_s,
         (double)H3S_SCURVE_CONFIG.replan_error_mm);
     DebugUart_Printf(
-        "[SCVCFG] imu axis=x sign=%.0f gain=%.2f tau=%.3fs limit=%.1fmps2 age=%ums\r\n",
+        "[SCVCFG] imu axis=y sign=%.0f gain=%.2f tau=%.3fs limit=%.1fmps2 age=%ums\r\n",
         (double)H3S_IMU_FORWARD_AXIS_SIGN, (double)h3s_imu_gain,
         (double)H3S_IMU_ACCEL_FILTER_TAU_S,
         (double)H3S_IMU_ACCEL_LIMIT_M_S2,
@@ -1168,7 +1201,7 @@ static void H3S_Telemetry(uint32_t now, bool usable, STEP_MOTOR_GUARD_STATE guar
         "gm=%u bb=%.2f hb=%.2f cb=%.2f kpe=%.4f kde=%.4f ds=%.1f vc=%.1f vw=%.2f "
         /* --- 控制分量：合成前每一项 --- */
         "bias=%.3f ff=%.3f lead=%.3f rff=%.3f fb=%.3f iacc=%.3f dith=%.3f brka=%.3f u=%.3f "
-        /* --- JY61P 车体纵向加速度辅助（仅独立 H3 Hold 生效）--- */
+        /* --- JY61P 车体纵向加速度辅助 --- */
         "araw=%.3f aflt=%.3f aff=%.3f imuok=%u "
         /* --- 跟踪误差 + 单向脱困计时（判误触发 / 判释放是否太晚）--- */
         "ex=%.2f ev=%.2f etgt=%.2f brkst=%.2f brkrel=%.2f "
@@ -1471,8 +1504,36 @@ void AppBallHold_SetVehicleAcceleration(float acceleration_mps2){
         ? acceleration_mps2 * 1000.0f : 0.0f;
 }
 
-void AppBallHold_SetImuFeedforward(bool enable){
-    h3s_imu_ff_enabled = enable;
+void AppBallHold_SetImuAssistPhase(APP_BALL_IMU_ASSIST_PHASE phase){
+    if ((phase != APP_BALL_IMU_ASSIST_OFF) &&
+        (phase != APP_BALL_IMU_ASSIST_START_ACCEL) &&
+        (phase != APP_BALL_IMU_ASSIST_STOP_DECEL)){
+        phase = APP_BALL_IMU_ASSIST_OFF;
+    }
+    if (h3s_imu_assist_phase == phase){
+        return;
+    }
+
+    /*
+     * 巡航关闭期间不更新本地低通；阶段切换必须丢弃上一阶段残留，
+     * 否则停车重新开启时会短暂继承起步正加速度并给出反向倾角。
+     */
+    h3s_imu_assist_phase = phase;
+    h3s_vehicle_acceleration_mm_s2 = 0.0f;
+    h3s_imu_accel_raw_m_s2 = 0.0f;
+    h3s_imu_accel_filtered_m_s2 = 0.0f;
+    h3s_imu_ff_deg = 0.0f;
+    h3s_imu_valid = false;
+    h3s_imu_filter_initialized = false;
+}
+
+void AppBallHold_SelectImuGainProfile(APP_BALL_IMU_GAIN_PROFILE profile){
+    if ((profile != APP_BALL_IMU_GAIN_H3) &&
+        (profile != APP_BALL_IMU_GAIN_H4) &&
+        (profile != APP_BALL_IMU_GAIN_H56)){
+        profile = APP_BALL_IMU_GAIN_H3;
+    }
+    h3s_imu_gain_profile = profile;
 }
 
 APP_TASK_STATUS AppBallHold_Tick(float dt){

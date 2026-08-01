@@ -150,13 +150,13 @@ static APP_TASK_STATUS ChkGyroJy_Tick(float dt){
         AppFmt_Fixed(&l1[n], imu.gyro_deg_s.z, 1);
         n = PutStr(l2, "Yaw ");
         AppFmt_Fixed(&l2[n], imu.attitude_deg.yaw, 1);
-        /* H3 longitudinal direction: JY61P X axis, reported in m/s^2. */
-        n = PutStr(l3, "Ax m/s2 ");
-        AppFmt_Fixed(&l3[n], imu.acc_g.x * JY61P_G_TO_M_S2, 2);
+        /* H3 longitudinal direction: JY61P Y axis; sensor-positive points rearward. */
+        n = PutStr(l3, "Ay m/s2 ");
+        AppFmt_Fixed(&l3[n], imu.acc_g.y * JY61P_G_TO_M_S2, 2);
     } else {
         (void)PutStr(l1, "Gz --"); l1[5] = '\0';
         (void)PutStr(l2, "Yaw --"); l2[6] = '\0';
-        (void)PutStr(l3, "Ax m/s2 --"); l3[10] = '\0';
+        (void)PutStr(l3, "Ay m/s2 --"); l3[10] = '\0';
     }
     n = PutStr(l4, "err ");
     AppFmt_I32(&l4[n], (int32_t)JY61P_I2C_GetErrorCount());
