@@ -75,7 +75,7 @@
  * 标定方法见文件头：跑一趟本任务，对遥测的 (beam, aest) 做线性回归，
  * 零交点即真实水平角，填到这里。1 cnt ≈ 0.03°，15 cnt ≈ 0.45°。
  */
-#define H3S_LEVEL_BIAS_DEG 0.0f
+#define H3S_LEVEL_BIAS_DEG -0.26f
 #define H3S_LEVEL_BIAS_MIN_DEG (-2.0f)
 #define H3S_LEVEL_BIAS_MAX_DEG (+2.0f)
 
@@ -204,13 +204,13 @@ static BALL_SCURVE_CONFIG H3S_SCURVE_CONFIG = {
     .dither_max_speed_mm_s = 8.0f,
     .dither_dwell_s = 0.5f,
 
-    /* 3..8 mm 小误差：球静止时缓慢积分，球一动便以 0.3 deg/s 极缓清零。 */
-    .hold_integral_ki_deg_per_mm_s = 0.0025f,
-    .hold_integral_min_error_mm = 3.0f,
-    .hold_integral_max_error_mm = 8.0f,
-    .hold_integral_max_speed_mm_s = 1.0f,
-    .hold_integral_release_speed_mm_s = 15.45f,
-    .hold_integral_release_rate_deg_s = 0.3f,
+    /* 5..10 mm 小误差：球静止时积分蓄力，一动即快速清零。 */
+    .hold_integral_ki_deg_per_mm_s = 0.0925f,
+    .hold_integral_min_error_mm = 5.0f,
+    .hold_integral_max_error_mm = 10.0f,
+    .hold_integral_max_speed_mm_s = 1.2f,
+    .hold_integral_release_speed_mm_s = 0.0f,
+    .hold_integral_release_rate_deg_s = 7.045f,
     .hold_integral_motion_comp_deg_per_mm = 0.40f,
 
     /*
