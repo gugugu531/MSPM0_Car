@@ -15,6 +15,7 @@ static const MENU_ITEM device_check_items[] = {
     { .name = "H3 Static PID", .kind = MENU_ENTRY_TASK, .u.task = &APP_H3_BALL_STATIC },
     { .name = "H3 Hold 0cm",   .kind = MENU_ENTRY_TASK, .u.task = &APP_H3_BALL_HOLD },
     { .name = "Gyro JY61P",   .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GYRO_JY61P },
+    { .name = "Acc Calib",    .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_ACCEL_CALIB },
     { .name = "Gray I2C",     .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_GRAY_I2C },
     { .name = "TB6612",       .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_TB6612 },
     { .name = "Step Motor",   .kind = MENU_ENTRY_TASK, .u.task = &APP_CHK_STEP_MOTOR },

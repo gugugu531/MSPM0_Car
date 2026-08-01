@@ -19,6 +19,7 @@
 #include "wit_sdk.h"
 #include "kinematics/kinematics.h"
 
+#include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -161,6 +162,93 @@ static APP_TASK_STATUS ChkGyroJy_Tick(float dt){
     AppFmt_I32(&l4[n], (int32_t)JY61P_I2C_GetErrorCount());
 
     Ui_RenderLines("Chk Gyro JY61P", l1, l2, l3, l4, "BACK: exit", NULL);
+    return APP_TASK_RUNNING;
+}
+
+/* ============================ 加速度校准 JY61P ============================ */
+
+/* 加速度校准等待时间（传感器内部执行，须静止水平）。 */
+#define ACC_CALIB_WAIT_MS 4000U
+
+static uint32_t ga_last_ui;
+static uint32_t ga_calib_start_ms;
+static bool     ga_calib_running;
+
+static void ChkAccCal_Enter(void){
+    JY61P_I2C_SetSuspended(false);   /* 确保 JY61P 占用 I2C0 */
+    JY61P_I2C_Init();
+    ga_last_ui = 0U;
+    ga_calib_running = false;
+    ga_calib_start_ms = 0U;
+}
+
+static APP_TASK_STATUS ChkAccCal_Tick(float dt){
+    (void)dt;
+    JY61P_I2C_Poll();
+
+    uint32_t now = BSP_Time_GetMs();
+    if ((now - ga_last_ui) < CHK_UI_PERIOD_MS){
+        return APP_TASK_RUNNING;
+    }
+    ga_last_ui = now;
+
+    JY61P_I2C_SAMPLE sample;
+    bool has_data = JY61P_I2C_GetSnapshot(&sample);
+
+    /* 校准倒计时 */
+    if (ga_calib_running){
+        uint32_t elapsed = now - ga_calib_start_ms;
+        uint32_t remaining = (elapsed >= ACC_CALIB_WAIT_MS)
+            ? 0U : (ACC_CALIB_WAIT_MS - elapsed);
+
+        if (remaining == 0U){
+            /* 校准完成：退出校准模式 + 保存到 Flash */
+            JY61P_I2C_WriteReg(CALSW, NORMAL);
+            JY61P_I2C_WriteReg(SAVE, SAVE_PARAM);
+            ga_calib_running = false;
+        } else{
+            char l1[20]; char l2[20]; char l3[20]; char l4[20];
+            (void)PutStr(l1, "CALIBRATING...");
+            (void)PutStr(l2, "Keep STILL + HORIZ");
+            uint8_t n = PutStr(l3, "Wait ");
+            AppFmt_Fixed(&l3[n], (float)remaining * 0.001f, 1);
+            n += PutStr(&l3[n], "s");
+            (void)PutStr(l4, "DO NOT MOVE!");
+            Ui_RenderLines("Acc Calib", l1, l2, l3, l4, "", NULL);
+            return APP_TASK_RUNNING;
+        }
+    }
+
+    /* 正常显示模式 */
+    char l1[20]; char l2[20]; char l3[20]; char l4[20]; char l5[20];
+    uint8_t n;
+
+    if (has_data){
+        n = PutStr(l1, "Ax "); AppFmt_Fixed(&l1[n], sample.data.acc_g.x, 3);
+        n = PutStr(l2, "Ay "); AppFmt_Fixed(&l2[n], sample.data.acc_g.y, 3);
+        n = PutStr(l3, "Az "); AppFmt_Fixed(&l3[n], sample.data.acc_g.z, 3);
+        float mod = sqrtf(sample.data.acc_g.x * sample.data.acc_g.x +
+                          sample.data.acc_g.y * sample.data.acc_g.y +
+                          sample.data.acc_g.z * sample.data.acc_g.z);
+        n = PutStr(l4, "mod "); AppFmt_Fixed(&l4[n], mod, 3);
+    } else{
+        (void)PutStr(l1, "Ax --");
+        (void)PutStr(l2, "Ay --");
+        (void)PutStr(l3, "Az --");
+        (void)PutStr(l4, "mod --");
+    }
+    n = PutStr(l5, "err ");
+    AppFmt_I32(&l5[n], (int32_t)JY61P_I2C_GetErrorCount());
+
+    Ui_RenderLines("Acc Calib", l1, l2, l3, l4, l5, "ENTER:calib  BACK");
+
+    /* ENTER 短按启动校准 */
+    if (Key_GetEvent(KEY_ID_ENTER) == KEY_EVENT_SHORT_PRESS){
+        JY61P_I2C_WriteReg16(KEY, KEY_UNLOCK);
+        JY61P_I2C_WriteReg(CALSW, CALGYROACC);
+        ga_calib_running = true;
+        ga_calib_start_ms = BSP_Time_GetMs();
+    }
     return APP_TASK_RUNNING;
 }
 
@@ -1390,6 +1478,9 @@ static APP_TASK_STATUS ChkRpiUart_Tick(float dt){
 
 const APP_TASK_DESC APP_CHK_GYRO_JY61P = {
     "Gyro JY61P", ChkGyroJy_Enter, ChkGyroJy_Tick, NULL
+};
+const APP_TASK_DESC APP_CHK_ACCEL_CALIB = {
+    "Acc Calib", ChkAccCal_Enter, ChkAccCal_Tick, NULL
 };
 const APP_TASK_DESC APP_CHK_GRAY_I2C = {
     "Gray I2C", ChkGrayI2c_Enter, ChkGrayI2c_Tick, ChkGrayI2c_Exit
