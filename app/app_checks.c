@@ -207,14 +207,15 @@ static APP_TASK_STATUS ChkAccCal_Tick(float dt){
             JY61P_I2C_WriteReg(SAVE, SAVE_PARAM);
             ga_calib_running = false;
         } else{
-            char l1[20]; char l2[20]; char l3[20]; char l4[20];
+            char l1[20]; char l2[20]; char l3[20]; char l4[20]; char l5[20];
             (void)PutStr(l1, "CALIBRATING...");
-            (void)PutStr(l2, "Keep STILL + HORIZ");
-            uint8_t n = PutStr(l3, "Wait ");
-            AppFmt_Fixed(&l3[n], (float)remaining * 0.001f, 1);
-            n += PutStr(&l3[n], "s");
-            (void)PutStr(l4, "DO NOT MOVE!");
-            Ui_RenderLines("Acc Calib", l1, l2, l3, l4, "", NULL);
+            (void)PutStr(l2, "Stay STILL at");
+            (void)PutStr(l3, "work orientation");
+            uint8_t n = PutStr(l4, "Wait ");
+            AppFmt_Fixed(&l4[n], (float)remaining * 0.001f, 1);
+            n += PutStr(&l4[n], "s");
+            (void)PutStr(l5, "DO NOT MOVE!");
+            Ui_RenderLines("Acc Calib", l1, l2, l3, l4, l5, NULL);
             return APP_TASK_RUNNING;
         }
     }
