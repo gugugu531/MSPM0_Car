@@ -194,8 +194,10 @@ armasm 语法，因此 MDK 6 有一条 `A1950W` 弃用警告；这是兼容性�
 - `Gray I2C` 进入后显示 8 路数字量二进制、`act` 触发数与 `ok/er`、`W/R/s` 诊断计数；
   断开传感器应显示 `READ FAIL` 且 `er` 递增
 - TB6612 自检短按发单次脉冲、左右轮编码器计数（`encL`/`encR`）随之变化
-- `Step Motor` 须**摆杆脱开或行程内**运行；ENTER 长按在 JOG/RUN/TURN/HAND/SWEEP/SPAN
-  六个模式间循环，**进页为 JOG**（UP/DOWN 单击点动一步，长按调步长 1/5/10/20 计数）。
+- `Step Motor` 须**摆杆脱开或行程内**运行；页面含 JOG/LEVEL/RUN/TURN/HAND/SWEEP/SPAN
+  七个模式，**进页为 JOG**（UP/DOWN 单击点动一步，长按调步长 1/5/10/20 计数）。
+  JOG 长按 ENTER 进入 LEVEL；LEVEL 短按 ENTER 捕获本次上电的 H3 动力学水平点并显示
+  `LEVEL SAVED`，长按 ENTER 跳过/离开并进入 RUN。
   RUN 模式下按 UP 时 `cnt` 应增大、`err`(位置误差) 收敛不发散（`err` 就是丢步的直接指标，
   原先的开环 `est`/`slip` 已删除）；HAND 模式自动断电，手转 N 圈后 `cpr` 栏即
   `STEP_MOTOR_ENCODER_COUNTS_PER_REV` 的实测值。完整流程见

@@ -75,6 +75,8 @@
  * 零交点即真实水平角，填到这里。1 cnt ≈ 0.03°，15 cnt ≈ 0.45°。
  */
 #define H3S_LEVEL_BIAS_DEG 0.0f
+#define H3S_LEVEL_BIAS_MIN_DEG (-2.0f)
+#define H3S_LEVEL_BIAS_MAX_DEG (+2.0f)
 
 /* O 是按键前的放球起点，不是一次运动航点；计时后只执行 +5cm → −5cm。 */
 static const float H3S_WAYPOINT_MM[] = { 50.0f, -50.0f };
@@ -602,8 +604,8 @@ static const APP_BALL_TUNE_ENTRY H3S_TUNE_TABLE[] = {
     {
         .name = "lvl_bias",
         .value = &H3S_SCURVE_CONFIG.level_bias_deg,
-        .min_value = -2.0f,   /* 标定误差范围 */
-        .max_value = 2.0f,
+        .min_value = H3S_LEVEL_BIAS_MIN_DEG,   /* 标定误差范围 */
+        .max_value = H3S_LEVEL_BIAS_MAX_DEG,
         .unit = "deg",
     },
 
@@ -650,6 +652,8 @@ static float h3s_target_dwell_s;
 static bool h3s_challenge_started;
 static bool h3s_armed;
 static float h3s_hold_target_mm;
+/* Device Check 捕获状态只在本次上电的 RAM 中保留，不改编码器坐标或写 Flash。 */
+static bool h3s_level_runtime_calibrated;
 /* 组合任务提供的车辆规划加速度；H3 独立任务始终保持为 0。 */
 static float h3s_vehicle_acceleration_mm_s2;
 
@@ -727,6 +731,31 @@ static int32_t H3S_LinkageCountFromAngle(float angle_deg){
         }
     }
     return H3S_LINKAGE_TABLE[H3S_LINKAGE_POINT_COUNT - 1U].count;
+}
+
+bool AppBallLevel_SetFromEncoderCount(int32_t encoder_count){
+    if ((encoder_count < STEP_MOTOR_ENC_SOFT_MIN_COUNTS) ||
+        (encoder_count > STEP_MOTOR_ENC_SOFT_MAX_COUNTS)){
+        return false;
+    }
+
+    float bias_deg = H3S_LinkageAngleFromCount(encoder_count);
+    if ((bias_deg < H3S_LEVEL_BIAS_MIN_DEG) ||
+        (bias_deg > H3S_LEVEL_BIAS_MAX_DEG)){
+        return false;
+    }
+
+    H3S_SCURVE_CONFIG.level_bias_deg = bias_deg;
+    h3s_level_runtime_calibrated = true;
+    return true;
+}
+
+float AppBallLevel_GetBiasDeg(void){
+    return H3S_SCURVE_CONFIG.level_bias_deg;
+}
+
+bool AppBallLevel_IsRuntimeCalibrated(void){
+    return h3s_level_runtime_calibrated;
 }
 
 static float H3S_ActualBeamAngleDeg(void){
