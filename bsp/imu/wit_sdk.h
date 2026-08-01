@@ -191,6 +191,10 @@ bool JY61P_I2C_GetSnapshot(JY61P_I2C_SAMPLE *out);
 void JY61P_I2C_WriteReg(uint8_t reg, uint8_t val);
 /** 阻塞写双字节到 JY61P 寄存器（KEY unlock 用），低字节在前。 */
 void JY61P_I2C_WriteReg16(uint8_t reg, uint16_t val);
+/** 设置加速度软件零偏（g），在 I2C 快照发布时直接扣除。 */
+void JY61P_I2C_SetAccelOffset(float ox, float oy, float oz);
+/** 读取当前加速度软件零偏（g）。 */
+void JY61P_I2C_GetAccelOffset(float *ox, float *oy, float *oz);
 
 int32_t WitGetAcc(WIT_VECTOR3F *out);
 int32_t WitGetGyro(WIT_VECTOR3F *out);

@@ -681,6 +681,10 @@ static volatile JY61P_I2C_SAMPLE s_jy61p_snapshot;
 static WIT_VECTOR3F s_jy61p_staging_acc;
 static WIT_ATTITUDE s_jy61p_staging_attitude;
 static WIT_VECTOR3F s_jy61p_staging_gyro;
+/* 软件加速度零偏（g），由校准页面采集静态均值后写入，PublishAccel 中直接扣除。 */
+static float s_jy61p_acc_offset_x;
+static float s_jy61p_acc_offset_y;
+static float s_jy61p_acc_offset_z;
 
 /*
  * 中断驱动异步读状态机: Poll 只 kick 一次"读acc→读angle→读gyro"链并立即返回,
@@ -762,14 +766,31 @@ static float JY61P_I2C_ParseAngle(int16_t raw)
 static void JY61P_I2C_PublishAccel(const uint8_t *buf)
 {
     s_jy61p_staging_acc.x =
-        (float)JY61P_I2C_ParseI16(&buf[0]) / 32768.0f * 16.0f;
+        (float)JY61P_I2C_ParseI16(&buf[0]) / 32768.0f * 16.0f
+        - s_jy61p_acc_offset_x;
     s_jy61p_staging_acc.y =
-        (float)JY61P_I2C_ParseI16(&buf[2]) / 32768.0f * 16.0f;
+        (float)JY61P_I2C_ParseI16(&buf[2]) / 32768.0f * 16.0f
+        - s_jy61p_acc_offset_y;
     s_jy61p_staging_acc.z =
-        (float)JY61P_I2C_ParseI16(&buf[4]) / 32768.0f * 16.0f;
+        (float)JY61P_I2C_ParseI16(&buf[4]) / 32768.0f * 16.0f
+        - s_jy61p_acc_offset_z;
     GyroscopeChannelData[0] = (double)s_jy61p_staging_acc.x;
     GyroscopeChannelData[1] = (double)s_jy61p_staging_acc.y;
     GyroscopeChannelData[2] = (double)s_jy61p_staging_acc.z;
+}
+
+void JY61P_I2C_SetAccelOffset(float ox, float oy, float oz)
+{
+    s_jy61p_acc_offset_x = ox;
+    s_jy61p_acc_offset_y = oy;
+    s_jy61p_acc_offset_z = oz;
+}
+
+void JY61P_I2C_GetAccelOffset(float *ox, float *oy, float *oz)
+{
+    if (ox != NULL){ *ox = s_jy61p_acc_offset_x; }
+    if (oy != NULL){ *oy = s_jy61p_acc_offset_y; }
+    if (oz != NULL){ *oz = s_jy61p_acc_offset_z; }
 }
 
 /* 把接收缓冲的 6 字节 angle 帧解码并发布到 GyroscopeChannelData[6..8]。 */

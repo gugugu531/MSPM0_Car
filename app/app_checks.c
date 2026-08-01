@@ -167,19 +167,30 @@ static APP_TASK_STATUS ChkGyroJy_Tick(float dt){
 
 /* ============================ 加速度校准 JY61P ============================ */
 
-/* 加速度校准等待时间（传感器内部执行，须静止水平）。 */
-#define ACC_CALIB_WAIT_MS 4000U
+/*
+ * 软件零偏校准：静置采集加速度样本，取均值作为 Ax/Ay 零偏，Az 保留符号归一。
+ *
+ * 为什么不直接用 JY61P 内置 CALGYROACC：传感器安装方向不确定（Z 轴可能朝下），
+ * 内置校准假定传感器水平朝上（Z=+1g），校准后 Az 读数不对。软件侧只关心
+ * "静止时 Ax≈0、Ay≈0"，不依赖传感器自身的方向假设。
+ */
+#define ACC_ZERO_COLLECT_MS  3000U    /* 采集窗口，ms */
+#define ACC_ZERO_MIN_SAMPLES   20U    /* 最少有效样本数，不足则放弃 */
 
 static uint32_t ga_last_ui;
-static uint32_t ga_calib_start_ms;
-static bool     ga_calib_running;
+static uint32_t ga_collect_start_ms;
+static bool     ga_collecting;
+static float    ga_sum_x, ga_sum_y, ga_sum_z;
+static uint32_t ga_sample_count;
 
 static void ChkAccCal_Enter(void){
-    JY61P_I2C_SetSuspended(false);   /* 确保 JY61P 占用 I2C0 */
+    JY61P_I2C_SetSuspended(false);
     JY61P_I2C_Init();
     ga_last_ui = 0U;
-    ga_calib_running = false;
-    ga_calib_start_ms = 0U;
+    ga_collecting = false;
+    ga_collect_start_ms = 0U;
+    ga_sum_x = ga_sum_y = ga_sum_z = 0.0f;
+    ga_sample_count = 0U;
 }
 
 static APP_TASK_STATUS ChkAccCal_Tick(float dt){
@@ -187,40 +198,57 @@ static APP_TASK_STATUS ChkAccCal_Tick(float dt){
     JY61P_I2C_Poll();
 
     uint32_t now = BSP_Time_GetMs();
+
+    JY61P_I2C_SAMPLE sample;
+    bool has_data = JY61P_I2C_GetSnapshot(&sample);
+
+    /* 采集中：每个新样本累加。不在 UI 节流内做，每拍都可能来新样本。 */
+    if (ga_collecting && has_data){
+        ga_sum_x += sample.data.acc_g.x;
+        ga_sum_y += sample.data.acc_g.y;
+        ga_sum_z += sample.data.acc_g.z;
+        ga_sample_count++;
+
+        uint32_t elapsed = now - ga_collect_start_ms;
+        if (elapsed >= ACC_ZERO_COLLECT_MS){
+            ga_collecting = false;
+            if (ga_sample_count >= ACC_ZERO_MIN_SAMPLES){
+                float avg_x = ga_sum_x / (float)ga_sample_count;
+                float avg_y = ga_sum_y / (float)ga_sample_count;
+                float avg_z = ga_sum_z / (float)ga_sample_count;
+                /* Ax/Ay → 0；Az 保留方向只去重力分量 (sign * 1g) */
+                float sign_z = (avg_z >= 0.0f) ? 1.0f : -1.0f;
+                JY61P_I2C_SetAccelOffset(avg_x, avg_y, avg_z - sign_z);
+            }
+        }
+    }
+
+    /* UI 节流 */
     if ((now - ga_last_ui) < CHK_UI_PERIOD_MS){
         return APP_TASK_RUNNING;
     }
     ga_last_ui = now;
 
-    JY61P_I2C_SAMPLE sample;
-    bool has_data = JY61P_I2C_GetSnapshot(&sample);
-
-    /* 校准倒计时 */
-    if (ga_calib_running){
-        uint32_t elapsed = now - ga_calib_start_ms;
-        uint32_t remaining = (elapsed >= ACC_CALIB_WAIT_MS)
-            ? 0U : (ACC_CALIB_WAIT_MS - elapsed);
-
-        if (remaining == 0U){
-            /* 校准完成：退出校准模式 + 保存到 Flash */
-            JY61P_I2C_WriteReg(CALSW, NORMAL);
-            JY61P_I2C_WriteReg(SAVE, SAVE_PARAM);
-            ga_calib_running = false;
-        } else{
-            char l1[20]; char l2[20]; char l3[20]; char l4[20]; char l5[20];
-            (void)PutStr(l1, "CALIBRATING...");
-            (void)PutStr(l2, "Stay STILL at");
-            (void)PutStr(l3, "work orientation");
-            uint8_t n = PutStr(l4, "Wait ");
-            AppFmt_Fixed(&l4[n], (float)remaining * 0.001f, 1);
-            n += PutStr(&l4[n], "s");
-            (void)PutStr(l5, "DO NOT MOVE!");
-            Ui_RenderLines("Acc Calib", l1, l2, l3, l4, l5, NULL);
-            return APP_TASK_RUNNING;
-        }
+    /* 采集中：显示进度 */
+    if (ga_collecting){
+        uint32_t elapsed = now - ga_collect_start_ms;
+        uint32_t remaining = (elapsed >= ACC_ZERO_COLLECT_MS)
+            ? 0U : (ACC_ZERO_COLLECT_MS - elapsed);
+        char l1[20]; char l2[20]; char l3[20]; char l4[20]; char l5[20];
+        (void)PutStr(l1, "ZEROING...");
+        (void)PutStr(l2, "Stay STILL at");
+        (void)PutStr(l3, "work orientation");
+        uint8_t n = PutStr(l4, "n ");
+        AppFmt_I32(&l4[n], (int32_t)ga_sample_count);
+        n += PutStr(&l4[n], " wait ");
+        AppFmt_Fixed(&l4[n], (float)remaining * 0.001f, 1);
+        n += PutStr(&l4[n], "s");
+        (void)PutStr(l5, "DO NOT MOVE!");
+        Ui_RenderLines("Acc Calib", l1, l2, l3, l4, l5, NULL);
+        return APP_TASK_RUNNING;
     }
 
-    /* 正常显示模式 */
+    /* 正常显示：已校准的加速度值 + 当前偏移量 */
     char l1[20]; char l2[20]; char l3[20]; char l4[20]; char l5[20];
     uint8_t n;
 
@@ -238,18 +266,25 @@ static APP_TASK_STATUS ChkAccCal_Tick(float dt){
         (void)PutStr(l3, "Az --");
         (void)PutStr(l4, "mod --");
     }
-    n = PutStr(l5, "err ");
-    AppFmt_I32(&l5[n], (int32_t)JY61P_I2C_GetErrorCount());
+    float ox, oy, oz;
+    JY61P_I2C_GetAccelOffset(&ox, &oy, &oz);
+    n = PutStr(l5, "off ");
+    AppFmt_Fixed(&l5[n], ox, 3);
+    n += PutStr(&l5[n], "/");
+    AppFmt_Fixed(&l5[n], oy, 3);
+    l5[n] = '\0';
 
-    Ui_RenderLines("Acc Calib", l1, l2, l3, l4, l5, "ENTER:calib  BACK");
+    Ui_RenderLines("Acc Calib", l1, l2, l3, l4, l5,
+                   "ENTER:zero  BACK");
 
-    /* ENTER 短按启动校准 */
+    /* ENTER 短按启动软件零偏采集 */
     if (Key_GetEvent(KEY_ID_ENTER) == KEY_EVENT_SHORT_PRESS){
-        JY61P_I2C_WriteReg16(KEY, KEY_UNLOCK);
-        JY61P_I2C_WriteReg(CALSW, CALGYROACC);
-        ga_calib_running = true;
-        ga_calib_start_ms = BSP_Time_GetMs();
+        ga_collecting = true;
+        ga_collect_start_ms = BSP_Time_GetMs();
+        ga_sum_x = ga_sum_y = ga_sum_z = 0.0f;
+        ga_sample_count = 0U;
     }
+
     return APP_TASK_RUNNING;
 }
 
